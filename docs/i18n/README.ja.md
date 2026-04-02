@@ -96,7 +96,16 @@ stv launch youtube dQw4w9WgXcQ                       # 同じ
 stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f  # 同じ
 ```
 
-プラットフォームごとにディープリンクの形式は異なりますが、ドライバーが自動で変換します。意識する必要はありません。
+各ドライバーがコンテンツ ID をプラットフォーム固有のディープリンク形式に変換します：
+
+| TV | ディープリンクの送信方法 |
+|----|---------------------|
+| LG webOS | SSAP WebSocket: contentId (Netflix DIAL) / params.contentTarget (YouTube) |
+| Samsung | WebSocket: `run_app(id, "DEEP_LINK", meta_tag)` |
+| Android / Fire TV | ADB: `am start -d 'netflix://title/{id}'` |
+| Roku | HTTP: `POST /launch/{ch}?contentId={id}` |
+
+これらを意識する必要はありません。ドライバーが自動で処理します。
 
 ## 対応プラットフォーム
 
@@ -149,7 +158,9 @@ Claude Desktop、Cursor など MCP クライアント向け——これはオプ
 }
 ```
 
-18 個のツールを提供。設定は `~/.config/smartest-tv/config.toml` から自動で読み込みます。環境変数は不要です。
+18 個のツールを提供：`tv_on`、`tv_off`、`tv_launch`、`tv_close`、`tv_volume`、`tv_set_volume`、`tv_mute`、`tv_play`、`tv_pause`、`tv_stop`、`tv_status`、`tv_info`、`tv_notify`、`tv_apps`、`tv_volume_up`、`tv_volume_down`、`tv_screen_on`、`tv_screen_off`。
+
+設定は `~/.config/smartest-tv/config.toml` から自動で読み込みます——環境変数は不要です。
 
 ## アーキテクチャ
 
