@@ -9,15 +9,8 @@ from typing import Any
 from fastmcp import FastMCP
 
 from smartest_tv.apps import resolve_app
+from smartest_tv.config import get_tv_config
 from smartest_tv.drivers.base import TVDriver
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-TV_PLATFORM = os.environ.get("TV_PLATFORM", "lg")
-TV_IP = os.environ.get("TV_IP", "")
-TV_MAC = os.environ.get("TV_MAC", "")
-TV_KEY_FILE = os.environ.get("TV_KEY_FILE", "")
 
 # ---------------------------------------------------------------------------
 # Driver management
@@ -27,25 +20,26 @@ _driver_lock = asyncio.Lock()
 
 
 def _create_driver() -> TVDriver:
-    """Create a driver based on TV_PLATFORM env var."""
-    if TV_PLATFORM == "lg":
+    """Create a driver from config file (with env var overrides)."""
+    tv = get_tv_config()
+    platform = tv.get("platform", "")
+    ip = tv.get("ip", "")
+    mac = tv.get("mac", "")
+
+    if platform == "lg":
         from smartest_tv.drivers.lg import LGDriver
-
-        return LGDriver(ip=TV_IP, mac=TV_MAC, key_file=TV_KEY_FILE)
-    elif TV_PLATFORM == "samsung":
+        return LGDriver(ip=ip, mac=mac)
+    elif platform == "samsung":
         from smartest_tv.drivers.samsung import SamsungDriver
-
-        return SamsungDriver(ip=TV_IP, mac=TV_MAC)
-    elif TV_PLATFORM in ("android", "firetv"):
+        return SamsungDriver(ip=ip, mac=mac)
+    elif platform in ("android", "firetv"):
         from smartest_tv.drivers.android import AndroidDriver
-
-        return AndroidDriver(ip=TV_IP)
-    elif TV_PLATFORM == "roku":
+        return AndroidDriver(ip=ip)
+    elif platform == "roku":
         from smartest_tv.drivers.roku import RokuDriver
-
-        return RokuDriver(ip=TV_IP)
+        return RokuDriver(ip=ip)
     else:
-        raise ValueError(f"Unknown TV platform: {TV_PLATFORM}. Use: lg, samsung, android, roku")
+        raise ValueError(f"No TV configured. Run: stv setup")
 
 
 async def _get_driver() -> TVDriver:

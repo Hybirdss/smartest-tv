@@ -20,7 +20,7 @@ Returns up to 5 results with title + video ID pairs. Pick the best match.
 ### Step 2: Play on TV
 
 ```bash
-tv launch youtube {videoId}
+stv launch youtube {videoId}
 ```
 
 No need to close YouTube first — deep links work on an already-open app.
@@ -60,5 +60,5 @@ yt-dlp "ytsearch5:gundam witch from mercury episode 2 official gundam.info" \
   --get-id --get-title --no-download
 # → GRSbJFWP7pc (Mobile Suit Gundam the Witch from Mercury #2)
 
-tv launch youtube GRSbJFWP7pc
+stv launch youtube GRSbJFWP7pc
 ```
