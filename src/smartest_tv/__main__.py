@@ -1,5 +1,5 @@
-"""Allow running as `python -m smartest_tv`."""
+"""Allow running as `python -m smartest_tv` to start the MCP server."""
 
-from smartest_tv import mcp_main
+from smartest_tv.server import mcp
 
-mcp_main()
+mcp.run()
