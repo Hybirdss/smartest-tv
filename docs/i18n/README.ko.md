@@ -1,8 +1,10 @@
 # smartest-tv
 
 [![PyPI](https://img.shields.io/pypi/v/stv)](https://pypi.org/project/stv/)
+[![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-55%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | **한국어** | [中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt-br.md) | [Français](README.fr.md)
 
@@ -57,40 +59,58 @@ pip install "stv[all]"          # 전부 다
 ## CLI
 
 ```bash
-stv play netflix "Frieren" s2e8 --title-id 81726714   # 검색 + 한 번에 재생
-stv play youtube "baby shark"                          # 검색 + 재생
-stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # ID만 조회
-stv launch netflix 82656797         # 특정 콘텐츠로 딥링크 (ID를 알 때)
-stv status                          # 현재 상태, 볼륨, 음소거 여부
-stv volume 25                       # 볼륨 설정
-stv mute                            # 음소거 토글
-stv apps --format json              # 앱 목록 (구조화 출력)
-stv notify "밥 먹어~"               # TV 화면에 토스트 알림
-stv off                             # 잘 자
+# 이름으로 콘텐츠 재생 — stv가 ID를 자동으로 찾아줍니다
+stv play netflix "Frieren" s2e8            # 해석 + 딥링크 한 번에
+stv play youtube "baby shark"              # 검색 + 재생
+stv play spotify "Ye White Lines"          # Spotify에서 찾아서 재생
+
+# 재생 없이 검색
+stv search netflix "Stranger Things"       # 모든 시즌 + 에피소드 수 표시
+stv search youtube "lofi hip hop"          # 상위 3개 결과
+stv resolve netflix "Frieren" s2e8         # ID만 가져오기
+
+# 이어 보기
+stv next                                   # 기록에서 다음 에피소드 재생
+stv next "Frieren"                         # 특정 작품의 다음 에피소드
+stv history                                # 최근 재생 기록 및 시간
+
+# TV 제어
+stv status                                 # 현재 상태, 볼륨, 음소거 여부
+stv volume 25                              # 볼륨 설정
+stv mute                                   # 음소거 토글
+stv notify "밥 먹어~"                      # TV 화면에 토스트 알림
+stv off                                    # 잘 자
+
+# 직접 딥링크 (ID를 이미 알 때)
+stv launch netflix 82656797
 ```
 
 모든 명령에 `--format json` 사용 가능 — 스크립트와 AI 에이전트를 위한 설계.
 
-### 콘텐츠 해석
+### 콘텐츠 해석 방식
 
-`stv resolve`는 스트리밍 ID를 대신 찾아줍니다. `stv play`는 같은 작업을 하고 한 번에 TV에서도 재생합니다.
+`stv play`와 `stv resolve`는 스트리밍 ID를 대신 찾아줍니다:
 
 ```bash
-stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
-stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ (yt-dlp 이용)
-stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → 그대로 전달
+stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (yt-dlp 이용)
+stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
 
-넷플릭스 해석은 타이틀 페이지에서 에피소드 메타데이터를 단 한 번의 `curl` 요청으로 스크래핑합니다 — Playwright도, 브라우저도, 로그인도 필요 없습니다. 모든 시즌이 한 번에 해석되어 로컬에 캐시됩니다. 두 번째 조회는 즉시 완료됩니다 (~0.1초).
+넷플릭스 해석은 타이틀 페이지에 단 한 번의 `curl` 요청을 보냅니다. Netflix 서버가 `<script>` 태그 안에 `__typename:"Episode"` 메타데이터를 서버 렌더링하기 때문입니다. 시즌 내 에피소드 ID는 연속된 정수이므로, 한 번의 HTTP 요청으로 작품의 모든 시즌을 해석할 수 있습니다. Playwright도, 헤드리스 브라우저도, 로그인도 필요 없습니다.
+
+결과는 세 단계로 캐시됩니다:
+1. **로컬 캐시** — `~/.config/smartest-tv/cache.json`, 즉시 반환 (~0.1초)
+2. **커뮤니티 캐시** — GitHub raw CDN을 통한 크라우드소싱 ID (Netflix 29개 작품, YouTube 11개 영상 사전 등록), 서버 비용 없음
+3. **웹 검색 폴백** — Brave Search로 알 수 없는 타이틀 ID를 자동 발견
 
 ### 캐시
 
-ID를 한 번 찾으면 `~/.config/smartest-tv/cache.json`에 영구적으로 캐시됩니다. 수동으로 캐시를 채울 수도 있습니다:
-
 ```bash
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
 stv cache show                                # 캐시된 ID 전체 보기
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache contribute                          # 커뮤니티 캐시 PR용 내보내기
 ```
 
 ## 에이전트 스킬
@@ -247,14 +267,23 @@ MCP 클라이언트에서 연결:
   <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
 </p>
 
+## 문서
+
+| 가이드 | 내용 |
+|-------|------|
+| [설정 가이드](docs/setup-guide.md) | 브랜드별 TV 설정 (LG 페어링, Samsung 원격 접속, ADB, Roku ECP) |
+| [MCP 연동](docs/mcp-integration.md) | Claude Code, Cursor 등 MCP 클라이언트 설정 |
+| [API 레퍼런스](docs/api-reference.md) | 모든 CLI 명령어 + 20개 MCP 도구 및 파라미터 |
+| [캐시 기여하기](docs/contributing-cache.md) | Netflix ID를 찾고 커뮤니티 캐시 PR을 제출하는 방법 |
+
 ## 기여하기
 
 | 상태 | 영역 | 필요한 작업 |
 |------|------|------------|
 | **사용 가능** | LG webOS 드라이버 | 테스트 완료, 정상 작동 |
 | **테스트 필요** | Samsung, Android TV, Roku 드라이버 | 실제 기기 사용 보고 환영 |
-| **기여 환영** | Disney+ 스킬 | 딥링크 ID 해석 구현 |
-| **기여 환영** | Hulu, Prime Video 스킬 | 딥링크 ID 해석 구현 |
+| **기여 환영** | Disney+, Hulu, Prime Video | 딥링크 ID 해석 구현 |
+| **기여 환영** | 커뮤니티 캐시 항목 | [좋아하는 작품 추가하기](docs/contributing-cache.md) |
 
 [드라이버 인터페이스](src/smartest_tv/drivers/base.py)가 정의되어 있습니다 — 플랫폼에 맞게 `TVDriver`를 구현해서 PR을 열어주세요.
 

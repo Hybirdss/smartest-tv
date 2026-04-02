@@ -1,8 +1,10 @@
 # smartest-tv
 
 [![PyPI](https://img.shields.io/pypi/v/stv)](https://pypi.org/project/stv/)
+[![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-55%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | [한국어](README.ko.md) | [中文](README.zh.md) | **日本語** | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt-br.md) | [Français](README.fr.md)
 
@@ -57,40 +59,58 @@ pip install "stv[all]"          # すべて
 ## CLI
 
 ```bash
-stv play netflix "Frieren" s2e8 --title-id 81726714   # 検索 + 一発再生
-stv play youtube "baby shark"                          # 検索 + 再生
-stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # ID だけ取得
-stv launch netflix 82656797         # 直接ディープリンク（ID がわかっている場合）
-stv status                          # 現在の状態（アプリ、音量、ミュート）
-stv volume 25                       # 音量を設定
-stv mute                            # ミュートの切り替え
-stv apps --format json              # アプリ一覧（構造化出力）
-stv notify "ご飯できたよ〜"         # テレビ画面に通知を表示
-stv off                             # おやすみ
+# 名前でコンテンツを再生 — stv が ID を自動検索
+stv play netflix "Frieren" s2e8            # 解決 + ディープリンクを一発
+stv play youtube "baby shark"              # 検索 + 再生
+stv play spotify "Ye White Lines"          # Spotify で検索 + 再生
+
+# 再生せずに検索
+stv search netflix "Stranger Things"       # 全シーズン + 話数を表示
+stv search youtube "lofi hip hop"          # 上位 3 件を表示
+stv resolve netflix "Frieren" s2e8         # エピソード ID だけ取得
+
+# 続きを再生
+stv next                                   # 履歴から次のエピソードを再生
+stv next "Frieren"                         # 特定作品の次のエピソード
+stv history                                # 最近の再生履歴とタイムスタンプ
+
+# TV 操作
+stv status                                 # 現在の状態（アプリ、音量、ミュート）
+stv volume 25                              # 音量を設定
+stv mute                                   # ミュートの切り替え
+stv notify "ご飯できたよ〜"                # テレビ画面に通知を表示
+stv off                                    # おやすみ
+
+# 直接ディープリンク（ID がわかっている場合）
+stv launch netflix 82656797
 ```
 
 すべてのコマンドで `--format json` が使えます——スクリプトや AI エージェント向け設計です。
 
-### コンテンツ解決
+### コンテンツ解決の仕組み
 
-`stv resolve` はストリーミング ID を代わりに見つけてくれます。`stv play` は同じ処理をして、そのまま一ステップで TV でも再生します。
+`stv play` と `stv resolve` はストリーミング ID を代わりに見つけてくれます：
 
 ```bash
-stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
-stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ（yt-dlp 経由）
-stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → そのまま渡す
+stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ（yt-dlp 経由）
+stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
 
-Netflix の解決はタイトルページから 1 回の `curl` リクエストでエピソードのメタデータを取得します——Playwright もブラウザも、ログインも不要です。全シーズンを一度に解決してローカルにキャッシュします。2 回目以降の検索は即時（約 0.1 秒）です。
+Netflix の解決はタイトルページへの 1 回の `curl` リクエストのみです。Netflix がサーバーサイドで `<script>` タグ内に `__typename:"Episode"` メタデータをレンダリングしているためです。シーズン内のエピソード ID は連続した整数なので、1 回の HTTP リクエストで作品の全シーズンを解決できます。Playwright もヘッドレスブラウザも、ログインも不要です。
+
+結果は 3 段階でキャッシュされます：
+1. **ローカルキャッシュ** — `~/.config/smartest-tv/cache.json`、即時返却（約 0.1 秒）
+2. **コミュニティキャッシュ** — GitHub raw CDN 経由のクラウドソーシング ID（Netflix 29 作品、YouTube 11 動画をあらかじめ登録済み）、サーバーコストなし
+3. **ウェブ検索フォールバック** — Brave Search で未知のタイトル ID を自動発見
 
 ### キャッシュ
 
-ID が一度見つかると、`~/.config/smartest-tv/cache.json` に永久にキャッシュされます。手動でキャッシュに追加することもできます：
-
 ```bash
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
 stv cache show                                # キャッシュ済み ID を全件表示
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache contribute                          # コミュニティキャッシュ PR 用にエクスポート
 ```
 
 ## エージェントスキル
@@ -247,14 +267,23 @@ MCP クライアントから接続：
   <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
 </p>
 
+## ドキュメント
+
+| ガイド | 内容 |
+|-------|------|
+| [セットアップガイド](docs/setup-guide.md) | TV ブランド別の設定手順（LG ペアリング、Samsung リモートアクセス、ADB、Roku ECP） |
+| [MCP 連携](docs/mcp-integration.md) | Claude Code、Cursor などの MCP クライアント設定 |
+| [API リファレンス](docs/api-reference.md) | 全 CLI コマンド + 20 の MCP ツールとパラメーター |
+| [キャッシュへの貢献](docs/contributing-cache.md) | Netflix ID の見つけ方とコミュニティキャッシュへの PR 提出方法 |
+
 ## コントリビューション
 
 | ステータス | 対象 | 必要なこと |
 |-----------|------|-----------|
 | **動作確認済み** | LG webOS ドライバー | テスト済み、動作中 |
 | **テスト募集中** | Samsung、Android TV、Roku ドライバー | 実機での動作報告を歓迎 |
-| **募集中** | Disney+ スキル | ディープリンク ID の解決 |
-| **募集中** | Hulu、Prime Video スキル | ディープリンク ID の解決 |
+| **募集中** | Disney+、Hulu、Prime Video | ディープリンク ID の解決 |
+| **募集中** | コミュニティキャッシュのエントリー | [お気に入り作品を追加する](docs/contributing-cache.md) |
 
 [ドライバーインターフェース](src/smartest_tv/drivers/base.py)は定義済みです——`TVDriver` を実装して PR を送ってください。
 

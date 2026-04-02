@@ -1,8 +1,10 @@
 # smartest-tv
 
 [![PyPI](https://img.shields.io/pypi/v/stv)](https://pypi.org/project/stv/)
+[![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-55%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | [한국어](README.ko.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt-br.md) | **Français**
 
@@ -57,40 +59,58 @@ pip install "stv[all]"          # Tout
 ## CLI
 
 ```bash
-stv play netflix "Frieren" s2e8 --title-id 81726714   # Rechercher + lancer en une étape
-stv play youtube "baby shark"                          # Rechercher + lancer
-stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # Juste récupérer l'ID
-stv launch netflix 82656797         # Deep link direct (si tu connais déjà l'ID)
-stv status                          # Ce qui tourne, volume, sourdine
-stv volume 25                       # Régler le volume
-stv mute                            # Activer/désactiver la sourdine
-stv apps --format json              # Lister les apps (sortie structurée)
-stv notify "Le dîner est prêt"      # Notification toast à l'écran
-stv off                             # Bonne nuit
+# Lancer du contenu par nom — stv trouve l'ID automatiquement
+stv play netflix "Frieren" s2e8            # Résolution + deep link en une seule étape
+stv play youtube "baby shark"              # Rechercher + lancer
+stv play spotify "Ye White Lines"          # Trouver sur Spotify + lancer
+
+# Rechercher sans lancer
+stv search netflix "Stranger Things"       # Affiche toutes les saisons + nombre d'épisodes
+stv search youtube "lofi hip hop"          # Top 3 résultats
+stv resolve netflix "Frieren" s2e8         # Juste récupérer l'ID de l'épisode
+
+# Continuer à regarder
+stv next                                   # Lancer l'épisode suivant depuis l'historique
+stv next "Frieren"                         # Épisode suivant d'une série spécifique
+stv history                                # Lectures récentes avec horodatage
+
+# Contrôle de la TV
+stv status                                 # Ce qui tourne, volume, sourdine
+stv volume 25                              # Régler le volume
+stv mute                                   # Activer/désactiver la sourdine
+stv notify "Le dîner est prêt"            # Notification toast à l'écran
+stv off                                    # Bonne nuit
+
+# Deep link direct (si tu connais déjà l'ID)
+stv launch netflix 82656797
 ```
 
 Chaque commande accepte `--format json` — conçu pour les scripts et les agents IA.
 
-### Résolution de contenu
+### Comment fonctionne la résolution de contenu
 
-`stv resolve` trouve les IDs de streaming à ta place. `stv play` fait la même chose et lance directement sur la TV en une seule étape.
+`stv play` et `stv resolve` trouvent les IDs de streaming à ta place :
 
 ```bash
-stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
-stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ (via yt-dlp)
-stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → transmis tel quel
+stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (via yt-dlp)
+stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
 
-La résolution Netflix fonctionne en extrayant les métadonnées de l'épisode depuis la page du titre avec une seule requête `curl` — sans Playwright, sans navigateur, sans connexion. Toutes les saisons sont résolues en une fois et mises en cache localement. La deuxième recherche est instantanée (~0,1 s).
+La résolution Netflix est une unique requête `curl` vers la page du titre. Netflix rend côté serveur les métadonnées `__typename:"Episode"` dans des balises `<script>`. Les IDs d'épisode au sein d'une saison sont des entiers consécutifs, donc une seule requête HTTP résout chaque saison d'une série. Pas de Playwright, pas de navigateur, pas de connexion.
+
+Les résultats sont mis en cache en trois niveaux :
+1. **Cache local** — `~/.config/smartest-tv/cache.json`, instantané (~0,1 s)
+2. **Cache communautaire** — IDs collaboratifs via GitHub raw CDN (29 séries Netflix, 11 vidéos YouTube pré-chargées), sans coût serveur
+3. **Recherche web de secours** — Brave Search découvre automatiquement les IDs de titres inconnus
 
 ### Cache
 
-Une fois un ID trouvé, il est mis en cache définitivement dans `~/.config/smartest-tv/cache.json`. Tu peux aussi alimenter le cache manuellement :
-
 ```bash
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
 stv cache show                                # Afficher tous les IDs en cache
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache contribute                          # Exporter pour une PR de cache communautaire
 ```
 
 ## Skills d'agent
@@ -247,14 +267,23 @@ Toi (langage naturel)
   <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
 </p>
 
+## Documentation
+
+| Guide | Contenu |
+|-------|---------|
+| [Guide d'installation](docs/setup-guide.md) | Configuration TV par marque (jumelage LG, accès distant Samsung, ADB, Roku ECP) |
+| [Intégration MCP](docs/mcp-integration.md) | Configuration de Claude Code, Cursor et autres clients MCP |
+| [Référence API](docs/api-reference.md) | Toutes les commandes CLI + les 20 outils MCP avec paramètres |
+| [Contribuer au cache](docs/contributing-cache.md) | Comment trouver les IDs Netflix et soumettre une PR au cache communautaire |
+
 ## Contribuer
 
 | Statut | Domaine | Ce qu'il faut |
 |--------|---------|--------------|
 | **Prêt** | Driver LG webOS | Testé et fonctionnel |
 | **À tester** | Drivers Samsung, Android TV, Roku | Retours sur matériel réel bienvenus |
-| **Recherché** | Skill Disney+ | Résolution d'ID de deep link |
-| **Recherché** | Skills Hulu, Prime Video | Résolution d'ID de deep link |
+| **Recherché** | Disney+, Hulu, Prime Video | Résolution d'ID de deep link |
+| **Recherché** | Entrées de cache communautaire | [Ajoute tes séries préférées](docs/contributing-cache.md) |
 
 L'[interface driver](src/smartest_tv/drivers/base.py) est définie — implémente `TVDriver` pour ta plateforme et ouvre une PR.
 
