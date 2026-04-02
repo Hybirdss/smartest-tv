@@ -7,7 +7,7 @@ description: "smartest-tv CLI reference: auth, config, commands, output formats,
 
 ## Prerequisites
 
-The `tv` CLI must be on `$PATH`. Install: `pip install "smartest-tv[lg]"` (or `[samsung]`, `[android]`, `[all]`).
+The `stv` CLI must be on `$PATH`. Install: `pip install "stv[lg]"` (or `[samsung]`, `[android]`, `[all]`).
 
 ## Environment
 
@@ -20,25 +20,25 @@ export TV_MAC=AA:BB:CC:DD:EE  # For Wake-on-LAN (optional)
 ## CLI Syntax
 
 ```bash
-tv <command> [args] [--format json|text]
+stv <command> [args] [--format json|text]
 ```
 
 ## Commands
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `tv status` | — | Current app, volume, mute |
-| `tv launch <app> [content_id]` | app name + optional deep link | Launch app with deep link |
-| `tv close <app>` | app name | Close running app |
-| `tv volume [level]` | 0-100 or empty to read | Get or set volume |
-| `tv mute` | — | Toggle mute |
-| `tv apps` | — | List installed apps |
-| `tv play` | — | Resume playback |
-| `tv pause` | — | Pause playback |
-| `tv on` | — | Wake-on-LAN |
-| `tv off` | — | Power off |
-| `tv notify <message>` | text | Toast notification on TV |
-| `tv info` | — | Model, firmware, platform |
+| `stv status` | — | Current app, volume, mute |
+| `stv launch <app> [content_id]` | app name + optional deep link | Launch app with deep link |
+| `stv close <app>` | app name | Close running app |
+| `stv volume [level]` | 0-100 or empty to read | Get or set volume |
+| `stv mute` | — | Toggle mute |
+| `stv apps` | — | List installed apps |
+| `stv play` | — | Resume playback |
+| `stv pause` | — | Pause playback |
+| `stv on` | — | Wake-on-LAN |
+| `stv off` | — | Power off |
+| `stv notify <message>` | text | Toast notification on TV |
+| `stv info` | — | Model, firmware, platform |
 
 ## App Name Aliases
 
@@ -65,9 +65,9 @@ Content IDs are the same across all TV platforms. The driver formats them:
 Netflix requires close-then-relaunch for deep links to work:
 
 ```bash
-tv close netflix
+stv close netflix
 sleep 2
-tv launch netflix 82656797
+stv launch netflix 82656797
 ```
 
 YouTube and Spotify work without closing first.

@@ -16,9 +16,9 @@ Combine multiple `tv` commands to handle complex requests in one shot.
 User: "Movie night" / "영화 모드"
 
 ```bash
-tv volume 20
-tv launch netflix {contentId}     # if they named a title
-# Or just: tv launch netflix      # if no specific title
+stv volume 20
+stv launch netflix {contentId}     # if they named a title
+# Or just: stv launch netflix      # if no specific title
 ```
 
 ### Kids Mode
@@ -32,8 +32,8 @@ User: "Put on something for the kids"
 2. Pick the best result
 3. Launch:
    ```bash
-   tv volume 15
-   tv launch youtube {videoId}
+   stv volume 15
+   stv launch youtube {videoId}
    ```
 
 ### Music Mode
@@ -41,8 +41,8 @@ User: "Put on something for the kids"
 User: "Screen off, play music"
 
 ```bash
-tv launch spotify {uri}
-tv screen-off                  # screen off, audio continues
+stv launch spotify {uri}
+stv screen-off                  # screen off, audio continues
 ```
 
 ### Sleep Timer
@@ -50,17 +50,17 @@ tv screen-off                  # screen off, audio continues
 User: "Turn off TV in 30 minutes"
 
 ```bash
-sleep 1800 && tv off
+sleep 1800 && stv off
 ```
 
-Run in background if needed: `(sleep 1800 && tv off) &`
+Run in background if needed: `(sleep 1800 && stv off) &`
 
 ### Game Mode
 
 User: "Switch to game mode on HDMI 2"
 
 ```bash
-tv launch hdmi2
+stv launch hdmi2
 # Picture mode may require platform-specific commands
 ```
 
@@ -69,7 +69,7 @@ tv launch hdmi2
 User: "Good night"
 
 ```bash
-tv off
+stv off
 ```
 
 ### Morning Routine
@@ -77,10 +77,10 @@ tv off
 User: "TV 켜고 뉴스 틀어줘"
 
 ```bash
-tv on
+stv on
 sleep 5                        # wait for boot
-tv volume 15
-tv launch youtube {newsVideoId}
+stv volume 15
+stv launch youtube {newsVideoId}
 ```
 
 ## Pattern

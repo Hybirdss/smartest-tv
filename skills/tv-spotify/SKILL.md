@@ -24,7 +24,7 @@ Convert URL to URI: `spotify:album:5poA9SAx0Xiz1cd17fWBLS`
 ### Step 2: Play on TV
 
 ```bash
-tv launch spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS
+stv launch spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS
 ```
 
 ## URI Formats
@@ -44,11 +44,11 @@ User: "Play Ye's BULLY album on Spotify"
 # Web search: "Ye BULLY album Spotify"
 # → https://open.spotify.com/album/5poA9SAx0Xiz1cf17fWBLS
 
-tv launch spotify spotify:album:5poA9SAx0Xiz1cf17fWBLS
+stv launch spotify spotify:album:5poA9SAx0Xiz1cf17fWBLS
 ```
 
 ## Tips
 
-- "Screen off, play jazz" → `tv screen-off && tv launch spotify spotify:playlist:{id}`
+- "Screen off, play jazz" → `stv screen-off && stv launch spotify spotify:playlist:{id}`
 - Spotify deep links work without closing the app first
 - For "play some jazz" or vague requests, search for popular curated playlists

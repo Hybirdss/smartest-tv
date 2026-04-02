@@ -65,9 +65,9 @@ Find the sequential cluster. First sequential ID = Episode 1.
 ### Step 5: Play on TV
 
 ```bash
-tv close netflix
+stv close netflix
 sleep 2
-tv launch netflix {episodeId}
+stv launch netflix {episodeId}
 ```
 
 ## Example
@@ -78,13 +78,13 @@ User: "Play Frieren season 2 episode 8"
 2. Playwright → select Season 2 → extract videoIds
 3. Sequential cluster: `82656790`–`82656799`
 4. S2E8 = `82656790 + 7` = `82656797`
-5. `tv close netflix && sleep 2 && tv launch netflix 82656797`
+5. `stv close netflix && sleep 2 && stv launch netflix 82656797`
 
 ## Movies
 
 Movies are simpler — the title ID is also the watch ID:
 
 1. Search → `netflix.com/title/{id}`
-2. `tv launch netflix {id}`
+2. `stv launch netflix {id}`
 
 No need for the Playwright step.

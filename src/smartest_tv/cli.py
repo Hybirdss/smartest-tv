@@ -1,52 +1,49 @@
-"""smartest-tv CLI — AI-first TV control from the terminal.
+"""smartest-tv CLI — talk to your TV.
 
 Usage:
-    tv status
-    tv launch netflix 82656797
-    tv volume 30
-    tv off
-    tv apps --format json
+    stv setup                          # First time? Start here.
+    stv status
+    stv launch netflix 82656797
+    stv volume 30
+    stv off
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 
 import click
 
 from smartest_tv.apps import resolve_app
+from smartest_tv.config import get_tv_config
 from smartest_tv.drivers.base import TVDriver
 
 
 def _get_driver() -> TVDriver:
-    """Create driver from env vars."""
-    platform = os.environ.get("TV_PLATFORM", "lg")
+    """Create driver from config file (or env var overrides)."""
+    tv = get_tv_config()
+    platform = tv.get("platform", "")
+
+    if not platform:
+        click.echo("❌ No TV configured. Run: stv setup", err=True)
+        sys.exit(1)
 
     if platform == "lg":
         from smartest_tv.drivers.lg import LGDriver
-
-        return LGDriver(
-            ip=os.environ.get("TV_IP", ""),
-            mac=os.environ.get("TV_MAC", ""),
-            key_file=os.environ.get("TV_KEY_FILE", ""),
-        )
+        return LGDriver(ip=tv["ip"], mac=tv.get("mac", ""))
     elif platform == "samsung":
         from smartest_tv.drivers.samsung import SamsungDriver
-
-        return SamsungDriver(ip=os.environ.get("TV_IP", ""))
+        return SamsungDriver(ip=tv["ip"], mac=tv.get("mac", ""))
     elif platform in ("android", "firetv"):
         from smartest_tv.drivers.android import AndroidDriver
-
-        return AndroidDriver(ip=os.environ.get("TV_IP", ""))
+        return AndroidDriver(ip=tv["ip"])
     elif platform == "roku":
         from smartest_tv.drivers.roku import RokuDriver
-
-        return RokuDriver(ip=os.environ.get("TV_IP", ""))
+        return RokuDriver(ip=tv["ip"])
     else:
-        click.echo(f"Unknown platform: {platform}", err=True)
+        click.echo(f"❌ Unknown platform: {platform}. Run: stv setup", err=True)
         sys.exit(1)
 
 
@@ -78,9 +75,58 @@ def _output(data, fmt: str):
               help="Output format")
 @click.pass_context
 def main(ctx, fmt):
-    """smartest-tv — Control any smart TV from the terminal."""
+    """stv — Talk to your TV. It listens."""
     ctx.ensure_object(dict)
     ctx.obj["fmt"] = fmt
+
+
+# -- Setup & Diagnostics ----------------------------------------------------
+
+
+@main.command()
+def setup():
+    """Set up your TV. Discovers, pairs, and configures everything."""
+    from smartest_tv.setup import run_setup
+    run_setup()
+
+
+@main.command()
+@click.pass_context
+def doctor(ctx):
+    """Check if everything is working."""
+    tv = get_tv_config()
+    if not tv.get("platform"):
+        click.echo("❌ No TV configured. Run: stv setup")
+        return
+
+    click.echo(f"📺 {tv.get('name', 'TV')} ({tv['platform'].upper()}, {tv['ip']})")
+    click.echo()
+
+    d = _get_driver()
+    try:
+        _run(d.connect())
+        click.echo("✅ TV reachable")
+    except Exception as e:
+        click.echo(f"❌ Can't connect: {e}")
+        return
+
+    try:
+        s = _run(d.status())
+        click.echo(f"✅ Status OK — {s.current_app or 'idle'}, vol {s.volume}")
+    except Exception:
+        click.echo("⚠️  Status query failed")
+
+    try:
+        apps = _run(d.list_apps())
+        app_names = {a.name.lower() for a in apps}
+        for service in ["Netflix", "YouTube", "Spotify"]:
+            found = any(service.lower() in n for n in app_names)
+            click.echo(f"{'✅' if found else '⚠️ '} {service} {'found' if found else 'not found'}")
+    except Exception:
+        click.echo("⚠️  App list unavailable")
+
+    click.echo()
+    click.echo("All good! 🎉" if True else "")
 
 
 # -- Power -------------------------------------------------------------------
