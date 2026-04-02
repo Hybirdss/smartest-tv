@@ -10,8 +10,9 @@
 
 Les autres outils ouvrent Netflix. smartest-tv lance *Frieren saison 2 épisode 8*.
 
-<!-- TODO: Add terminal demo GIF here -->
-<!-- ![demo](docs/assets/demo.gif) -->
+<p align="center">
+  <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
+</p>
 
 ## Démarrage rapide
 
@@ -33,6 +34,10 @@ Toi : Good night
 ```
 
 L'IA trouve l'ID du contenu (épisode Netflix, vidéo YouTube, URI Spotify), appelle `stv`, et la TV lance. 
+
+### See it in action
+
+https://github.com/Hybirdss/smartest-tv/raw/main/docs/assets/demo.mp4
 
 ## Installation
 
@@ -209,6 +214,10 @@ Toi (langage naturel)
       → Driver (WebSocket / ADB / HTTP)
         → TV
 ```
+
+<p align="center">
+  <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
+</p>
 
 ## Contribuer
 
