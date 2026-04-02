@@ -262,3 +262,76 @@ async def tv_screen_on() -> str:
     d = await _get_driver()
     await d.screen_on()
     return "Screen on."
+
+
+# -- Resolve & Play ----------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_resolve(
+    platform: str,
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+    title_id: int | None = None,
+) -> str:
+    """Resolve a content name to a platform-specific ID.
+
+    Finds the streaming ID without launching anything.
+    Uses local cache (instant) with HTTP scraping fallback.
+
+    Args:
+        platform: netflix, youtube, or spotify.
+        query: Content name (e.g. "Frieren", "baby shark").
+        season: Season number (Netflix TV shows only).
+        episode: Episode number (Netflix TV shows only).
+        title_id: Netflix title ID if known (e.g. 81726714). Skips search.
+
+    Returns:
+        Content ID string (e.g. "82656797" for Netflix, "dQw4w9WgXcQ" for YouTube).
+    """
+    from smartest_tv.resolve import resolve
+    return resolve(platform, query, season, episode, title_id)
+
+
+@mcp.tool()
+async def tv_play_content(
+    platform: str,
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+    title_id: int | None = None,
+) -> str:
+    """Find content by name and play it on TV in one step.
+
+    Resolves the content ID, then launches it. For Netflix, automatically
+    closes the app first (required for deep links to work).
+
+    Args:
+        platform: netflix, youtube, or spotify.
+        query: Content name (e.g. "Frieren", "baby shark").
+        season: Season number (Netflix TV shows only).
+        episode: Episode number (Netflix TV shows only).
+        title_id: Netflix title ID if known (e.g. 81726714). Skips search.
+    """
+    import asyncio
+    from smartest_tv.resolve import resolve
+
+    content_id = resolve(platform, query, season, episode, title_id)
+
+    d = await _get_driver()
+    app_id, name = resolve_app(platform, d.platform)
+
+    if platform.lower() == "netflix":
+        try:
+            await d.close_app(app_id)
+            await asyncio.sleep(2)
+        except Exception:
+            pass
+
+    await d.launch_app_deep(app_id, content_id)
+
+    desc = query
+    if season and episode:
+        desc += f" S{season}E{episode}"
+    return f"Playing {desc} on {name} (content: {content_id})"

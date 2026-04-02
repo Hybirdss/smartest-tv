@@ -327,5 +327,213 @@ def notify(message):
     click.echo(f"Sent: {message}")
 
 
+# -- Resolve & Play ----------------------------------------------------------
+
+
+def _parse_season_episode(text: str) -> tuple[int | None, int | None]:
+    """Parse season/episode from strings like 's2e8', 'S02E08', '2x8'."""
+    import re
+
+    m = re.match(r"[sS](\d+)[eExX](\d+)", text)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = re.match(r"(\d+)[xX](\d+)", text)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return None, None
+
+
+@main.command()
+@click.argument("platform")
+@click.argument("query", nargs=-1, required=True)
+@click.option("--season", "-s", type=int, help="Season number")
+@click.option("--episode", "-e", type=int, help="Episode number")
+@click.option("--title-id", type=int, help="Netflix title ID (skips search)")
+@click.pass_context
+def resolve(ctx, platform, query, season, episode, title_id):
+    """Resolve content to a platform-specific ID.
+
+    Examples:
+        stv resolve netflix Frieren -s 2 -e 8
+        stv resolve netflix Frieren s2e8
+        stv resolve youtube "baby shark"
+        stv resolve netflix "The Glory" --title-id 81519223 -s 1 -e 1
+    """
+    from smartest_tv.resolve import resolve as do_resolve
+
+    query_parts = list(query)
+
+    # Try to parse s2e8 from the last argument
+    if query_parts and not season and not episode:
+        s, e = _parse_season_episode(query_parts[-1])
+        if s is not None:
+            season, episode = s, e
+            query_parts = query_parts[:-1]
+
+    query_str = " ".join(query_parts)
+    if not query_str:
+        click.echo("❌ No query provided.", err=True)
+        sys.exit(1)
+
+    try:
+        content_id = do_resolve(platform, query_str, season, episode, title_id)
+    except ValueError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
+
+    _output(content_id, ctx.obj["fmt"])
+
+
+@main.command()
+@click.argument("platform")
+@click.argument("query", nargs=-1, required=True)
+@click.option("--season", "-s", type=int, help="Season number")
+@click.option("--episode", "-e", type=int, help="Episode number")
+@click.option("--title-id", type=int, help="Netflix title ID (skips search)")
+def play(platform, query, season, episode, title_id):
+    """Find content and play it on TV in one step.
+
+    Resolves the content ID, then launches it. For Netflix, automatically
+    closes the app first (required for deep links).
+
+    Examples:
+        stv play netflix Frieren s2e8
+        stv play netflix Frieren -s 2 -e 8 --title-id 81726714
+        stv play youtube "baby shark"
+        stv play spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS
+    """
+    from smartest_tv.resolve import resolve as do_resolve
+
+    query_parts = list(query)
+
+    # Parse s2e8 from last argument
+    if query_parts and not season and not episode:
+        s, e = _parse_season_episode(query_parts[-1])
+        if s is not None:
+            season, episode = s, e
+            query_parts = query_parts[:-1]
+
+    query_str = " ".join(query_parts)
+    if not query_str:
+        click.echo("❌ No query provided.", err=True)
+        sys.exit(1)
+
+    # Step 1: Resolve content ID
+    try:
+        content_id = do_resolve(platform, query_str, season, episode, title_id)
+    except ValueError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
+
+    # Step 2: Launch on TV
+    d = _get_driver()
+    app_id, name = resolve_app(platform, d.platform)
+
+    async def _do():
+        await d.connect()
+        # Netflix requires close-then-relaunch for deep links
+        if platform.lower() == "netflix":
+            try:
+                await d.close_app(app_id)
+                import asyncio
+                await asyncio.sleep(2)
+            except Exception:
+                pass
+        await d.launch_app_deep(app_id, content_id)
+
+    _run(_do())
+    desc = f"{query_str}"
+    if season and episode:
+        desc += f" S{season}E{episode}"
+    click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
+
+
+# -- Cache -------------------------------------------------------------------
+
+
+@main.group("cache")
+def cache_group():
+    """Manage the content ID cache."""
+
+
+@cache_group.command("set")
+@click.argument("platform")
+@click.argument("query")
+@click.option("--season", "-s", type=int, help="Season number (Netflix)")
+@click.option("--first-ep-id", type=int, help="First episode videoId of the season")
+@click.option("--count", type=int, help="Number of episodes in the season")
+@click.option("--title-id", type=int, help="Netflix title ID")
+@click.option("--content-id", type=str, help="Direct content ID (YouTube/Spotify)")
+def cache_set(platform, query, season, first_ep_id, count, title_id, content_id):
+    """Save a content ID to the local cache.
+
+    For Netflix episodes (AI or user discovers IDs once, instant forever):
+        stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10 --title-id 81726714
+
+    For YouTube/Spotify:
+        stv cache set youtube "baby shark" --content-id dQw4w9WgXcQ
+        stv cache set spotify "Ye Vultures" --content-id spotify:album:xxx
+    """
+    from smartest_tv import cache
+    from smartest_tv.resolve import _slugify
+
+    slug = _slugify(query)
+    p = platform.lower()
+
+    if p == "netflix" and season and first_ep_id and count:
+        cache.put_netflix_show(slug, title_id or 0, season, first_ep_id, count)
+        last_ep_id = first_ep_id + count - 1
+        click.echo(f"Cached: {query} S{season} episodes {first_ep_id}–{last_ep_id} ({count} eps)")
+    elif content_id:
+        cache.put(p, slug, content_id)
+        click.echo(f"Cached: {query} → {content_id}")
+    else:
+        click.echo("❌ Need --content-id or (--season + --first-ep-id + --count)", err=True)
+        sys.exit(1)
+
+
+@cache_group.command("get")
+@click.argument("platform")
+@click.argument("query")
+@click.option("--season", "-s", type=int)
+@click.option("--episode", "-e", type=int)
+@click.pass_context
+def cache_get(ctx, platform, query, season, episode):
+    """Look up a cached content ID.
+
+    Examples:
+        stv cache get netflix Frieren -s 2 -e 8
+        stv cache get youtube "baby shark"
+    """
+    from smartest_tv import cache
+    from smartest_tv.resolve import _slugify
+
+    slug = _slugify(query)
+
+    if platform.lower() == "netflix" and season and episode:
+        result = cache.get_netflix_episode(slug, season, episode)
+    else:
+        result = cache.get(platform.lower(), slug)
+
+    if result:
+        _output(result, ctx.obj["fmt"])
+    else:
+        click.echo("(not cached)", err=True)
+        sys.exit(1)
+
+
+@cache_group.command("show")
+@click.pass_context
+def cache_show(ctx):
+    """Show all cached content IDs."""
+    from smartest_tv import cache
+
+    data = cache._load()
+    if not data:
+        click.echo("Cache is empty.")
+        return
+    _output(data, ctx.obj["fmt"])
+
+
 if __name__ == "__main__":
     main()
