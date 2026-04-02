@@ -46,42 +46,45 @@ def resolve_netflix(
     if title_id and not season:
         return str(title_id)
 
-    # --- Episode with title_id → try HTTP scrape (works for S1) ---
+    # --- Episode with title_id → HTTP scrape (all seasons at once) ---
     if title_id and season and episode:
         try:
-            episode_ids = _scrape_netflix_episodes(title_id)
-            if episode_ids and episode <= len(episode_ids):
-                video_id = episode_ids[episode - 1]
-                cache.put_netflix_show(slug, title_id, season, episode_ids[0], len(episode_ids))
-                return str(video_id)
+            seasons = _scrape_netflix_all_seasons(title_id)
+            if season <= len(seasons):
+                ep_ids = seasons[season - 1]
+
+                # Cache all seasons
+                for i, s_ids in enumerate(seasons, 1):
+                    cache.put_netflix_show(slug, title_id, i, s_ids[0], len(s_ids))
+
+                if episode <= len(ep_ids):
+                    return str(ep_ids[episode - 1])
+                raise ValueError(
+                    f"{query} S{season} has {len(ep_ids)} episodes, "
+                    f"episode {episode} requested."
+                )
+        except ValueError:
+            raise
         except Exception:
-            pass  # Fall through to helpful error
+            pass
 
-    # --- Can't resolve automatically ---
-    hint = f'stv resolve netflix "{query}"'
-    if season:
-        hint += f" -s {season}"
-    if episode:
-        hint += f" -e {episode}"
-
-    parts = []
+    # --- Can't resolve ---
     if not title_id:
-        parts.append("pass --title-id (from netflix.com/title/XXXXX URL)")
-    if season and season > 1:
-        parts.append(
-            f"for S{season}+, pre-cache with: "
-            f'stv cache netflix "{query}" -s {season} --first-ep-id <ID> --count <N>'
+        raise ValueError(
+            "Pass --title-id (from netflix.com/title/XXXXX URL). "
+            f'Example: stv resolve netflix "{query}" --title-id 81726714 -s {season or 1} -e {episode or 1}'
         )
-    advice = " or ".join(parts) if parts else "check the title ID"
-
-    raise ValueError(f"Can't auto-resolve: {advice}")
+    raise ValueError(f"Could not resolve {query} S{season}E{episode} from Netflix page.")
 
 
-def _scrape_netflix_episodes(title_id: int) -> list[int]:
-    """Scrape episode videoIds from Netflix title page via curl.
+def _scrape_netflix_all_seasons(title_id: int) -> list[list[int]]:
+    """Scrape ALL season episode IDs from Netflix title page via curl.
 
-    Only returns Season 1 episodes (Netflix server-renders S1 only).
-    Returns empty list if scraping fails.
+    Netflix embeds videoIds for all seasons in the initial HTML (in <script>
+    tags). No Playwright needed.
+
+    Returns a list of lists: seasons[0] = [S1E1_id, S1E2_id, ...], etc.
+    Sorted by first episode ID (earlier seasons have lower IDs).
     """
     url = f"https://www.netflix.com/title/{title_id}"
     try:
@@ -101,9 +104,34 @@ def _scrape_netflix_episodes(title_id: int) -> list[int]:
     if not html:
         return []
 
-    raw_ids = [int(m) for m in re.findall(r'"videoId"\s*:\s*(\d+)', html)]
-    unique = list(dict.fromkeys(vid for vid in raw_ids if vid != title_id))
-    return _find_sequential_cluster(unique)
+    # Netflix embeds __typename with each videoId:
+    #   "Episode" = actual episode, "Season" = season container, "Show" = the show
+    # Filter to Episodes only — this perfectly excludes season IDs.
+    episode_ids = set()
+    season_ids = set()
+    for m in re.finditer(
+        r'"__typename":"(Episode|Season|Show)","videoId":(\d+)', html
+    ):
+        typename, vid = m.group(1), int(m.group(2))
+        if typename == "Episode":
+            episode_ids.add(vid)
+        elif typename == "Season":
+            season_ids.add(vid)
+
+    # If __typename parsing found episodes, use those (precise).
+    # Otherwise fall back to raw videoId extraction (less precise).
+    if episode_ids:
+        unique = sorted(episode_ids)
+    else:
+        raw_ids = [int(m) for m in re.findall(r'"videoId"\s*:\s*(\d+)', html)]
+        unique = sorted(set(vid for vid in raw_ids if vid != title_id and vid not in season_ids))
+
+    # Find ALL sequential clusters (each cluster = one season)
+    clusters = _find_all_sequential_clusters(unique)
+
+    # Sort by first ID (earlier seasons have lower IDs)
+    clusters.sort(key=lambda c: c[0])
+    return clusters
 
 
 # ---------------------------------------------------------------------------
@@ -187,29 +215,36 @@ def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower().strip()).strip("-")
 
 
-def _find_sequential_cluster(ids: list[int]) -> list[int]:
-    """Find the longest consecutive run in a list of IDs."""
+def _find_all_sequential_clusters(ids: list[int], min_length: int = 3) -> list[list[int]]:
+    """Find all consecutive runs of at least min_length in a sorted list.
+
+    Netflix episode IDs are consecutive (e.g., 81726715-81726725 for S1,
+    82656790-82656799 for S2). Non-episode IDs (recommendations, season IDs)
+    are scattered and won't form long runs.
+
+    Args:
+        ids: Sorted, deduplicated list of integer IDs.
+        min_length: Minimum cluster length to include (default 3 filters noise).
+
+    Returns:
+        List of clusters, each cluster is a list of consecutive IDs.
+    """
     if not ids:
         return []
 
     sorted_ids = sorted(set(ids))
-    best_start = 0
-    best_len = 1
-    cur_start = 0
-    cur_len = 1
+    clusters: list[list[int]] = []
+    current = [sorted_ids[0]]
 
     for i in range(1, len(sorted_ids)):
         if sorted_ids[i] == sorted_ids[i - 1] + 1:
-            cur_len += 1
+            current.append(sorted_ids[i])
         else:
-            if cur_len > best_len:
-                best_start = cur_start
-                best_len = cur_len
-            cur_start = i
-            cur_len = 1
+            if len(current) >= min_length:
+                clusters.append(current)
+            current = [sorted_ids[i]]
 
-    if cur_len > best_len:
-        best_start = cur_start
-        best_len = cur_len
+    if len(current) >= min_length:
+        clusters.append(current)
 
-    return sorted_ids[best_start : best_start + best_len] if best_len >= 2 else []
+    return clusters
