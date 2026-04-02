@@ -5,3 +5,4 @@ dist/
 build/
 *.db
 *.mp4
+.env
