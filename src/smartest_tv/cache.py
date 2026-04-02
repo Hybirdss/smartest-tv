@@ -80,3 +80,91 @@ def put_netflix_show(
         "episode_count": episode_count,
     }
     _save(data)
+
+
+# ---------------------------------------------------------------------------
+# Play history
+# ---------------------------------------------------------------------------
+
+def record_play(platform: str, query: str, content_id: str,
+                season: int | None = None, episode: int | None = None) -> None:
+    """Record a play event to history."""
+    import time
+    data = _load()
+    if "_history" not in data:
+        data["_history"] = []
+
+    entry = {
+        "platform": platform,
+        "query": query,
+        "content_id": content_id,
+        "time": int(time.time()),
+    }
+    if season:
+        entry["season"] = season
+    if episode:
+        entry["episode"] = episode
+
+    # Keep last 50 entries
+    data["_history"] = [entry] + data["_history"][:49]
+    _save(data)
+
+
+def get_history(limit: int = 10) -> list[dict]:
+    """Get recent play history."""
+    data = _load()
+    return data.get("_history", [])[:limit]
+
+
+def get_last_played(query: str | None = None, platform: str | None = None) -> dict | None:
+    """Get the most recent play for a query or platform."""
+    for entry in get_history(50):
+        if query and query.lower() in entry.get("query", "").lower():
+            return entry
+        if platform and not query and entry.get("platform") == platform:
+            return entry
+        if not query and not platform:
+            return entry
+    return None
+
+
+def get_next_episode(query: str) -> tuple[str, int, int] | None:
+    """Get the next episode to watch for a Netflix show.
+
+    Returns (query, season, episode) or None if no history.
+    """
+    last = get_last_played(query=query)
+    if not last or last.get("platform") != "netflix":
+        return None
+
+    season = last.get("season")
+    episode = last.get("episode")
+    if not season or not episode:
+        return None
+
+    slug = _slugify(query)
+    data = _load()
+    show = data.get("netflix", {}).get(slug)
+    if not show:
+        return (query, season, episode + 1)
+
+    season_data = show.get("seasons", {}).get(str(season))
+    if not season_data:
+        return (query, season, episode + 1)
+
+    ep_count = season_data.get("episode_count", 0)
+    if episode < ep_count:
+        return (query, season, episode + 1)
+
+    # Next season?
+    next_season = str(season + 1)
+    if next_season in show.get("seasons", {}):
+        return (query, season + 1, 1)
+
+    return None  # Finished all seasons
+
+
+def _slugify(text: str) -> str:
+    """Normalize text to cache key."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "-", text.lower().strip()).strip("-")

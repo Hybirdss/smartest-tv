@@ -331,7 +331,61 @@ async def tv_play_content(
 
     await d.launch_app_deep(app_id, content_id)
 
+    # Record to history
+    from smartest_tv import cache as _cache
+    _cache.record_play(platform, query, content_id, season, episode)
+
     desc = query
     if season and episode:
         desc += f" S{season}E{episode}"
     return f"Playing {desc} on {name} (content: {content_id})"
+
+
+@mcp.tool()
+async def tv_history(limit: int = 10) -> list[dict]:
+    """Show recent play history.
+
+    Returns the last N items played on the TV.
+    """
+    from smartest_tv import cache as _cache
+    return _cache.get_history(limit)
+
+
+@mcp.tool()
+async def tv_next(query: str | None = None) -> str:
+    """Play the next episode of a Netflix show.
+
+    Continues from where the user left off. If no query given,
+    continues the most recently watched Netflix show.
+
+    Args:
+        query: Show name (optional). If omitted, uses most recent.
+    """
+    from smartest_tv import cache as _cache
+    from smartest_tv.resolve import resolve
+
+    if not query:
+        last = _cache.get_last_played(platform="netflix")
+        if not last:
+            return "No Netflix history. Play something first."
+        query = last["query"]
+
+    result = _cache.get_next_episode(query)
+    if not result:
+        return f"No next episode for '{query}'. Finished or not in history."
+
+    q, season, episode = result
+    content_id = resolve("netflix", q, season, episode)
+
+    d = await _get_driver()
+    app_id, name = resolve_app("netflix", d.platform)
+
+    try:
+        await d.close_app(app_id)
+        await asyncio.sleep(2)
+    except Exception:
+        pass
+
+    await d.launch_app_deep(app_id, content_id)
+    _cache.record_play("netflix", q, content_id, season, episode)
+    return f"Playing {q} S{season}E{episode} on Netflix (content: {content_id})"

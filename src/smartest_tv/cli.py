@@ -532,10 +532,102 @@ def play(platform, query, season, episode, title_id):
         await d.launch_app_deep(app_id, content_id)
 
     _run(_do())
+
+    # Record to history
+    from smartest_tv import cache as _cache
+    _cache.record_play(platform, query_str, content_id, season, episode)
+
     desc = f"{query_str}"
     if season and episode:
         desc += f" S{season}E{episode}"
     click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
+
+
+# -- History -----------------------------------------------------------------
+
+
+@main.command()
+@click.option("--limit", "-n", default=10, help="Number of entries")
+@click.pass_context
+def history(ctx, limit):
+    """Show recent play history.
+
+    Examples:
+        stv history
+        stv history -n 5
+    """
+    from smartest_tv import cache as _cache
+    import time as _time
+
+    entries = _cache.get_history(limit)
+    if not entries:
+        click.echo("No play history yet.")
+        return
+
+    if ctx.obj["fmt"] == "json":
+        _output(entries, "json")
+    else:
+        for e in entries:
+            ts = _time.strftime("%m/%d %H:%M", _time.localtime(e["time"]))
+            desc = e["query"]
+            if e.get("season") and e.get("episode"):
+                desc += f" S{e['season']}E{e['episode']}"
+            click.echo(f"  {ts}  {e['platform']:8s}  {desc}")
+
+
+@main.command()
+@click.argument("query", nargs=-1)
+def next(query):
+    """Play the next episode of a Netflix show.
+
+    Uses play history to determine where you left off.
+
+    Examples:
+        stv next Frieren        # → plays next episode after last watched
+        stv next                # → continues the most recent Netflix show
+    """
+    from smartest_tv import cache as _cache
+    from smartest_tv.resolve import resolve as do_resolve
+
+    query_str = " ".join(query) if query else None
+
+    if not query_str:
+        # Find most recent Netflix play
+        last = _cache.get_last_played(platform="netflix")
+        if not last:
+            click.echo("❌ No Netflix history. Play something first.", err=True)
+            sys.exit(1)
+        query_str = last["query"]
+
+    result = _cache.get_next_episode(query_str)
+    if not result:
+        click.echo(f"❌ No next episode for '{query_str}'. Finished or not in history.", err=True)
+        sys.exit(1)
+
+    q, season, episode = result
+
+    try:
+        content_id = do_resolve("netflix", q, season, episode)
+    except ValueError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
+
+    d = _get_driver()
+    app_id, name = resolve_app("netflix", d.platform)
+
+    async def _do():
+        await d.connect()
+        try:
+            await d.close_app(app_id)
+            import asyncio
+            await asyncio.sleep(2)
+        except Exception:
+            pass
+        await d.launch_app_deep(app_id, content_id)
+
+    _run(_do())
+    _cache.record_play("netflix", q, content_id, season, episode)
+    click.echo(f"▶ Playing {q} S{season}E{episode} on Netflix (content: {content_id})")
 
 
 # -- Cache -------------------------------------------------------------------

@@ -68,17 +68,21 @@ def resolve_netflix(
         except Exception:
             pass
 
-    # --- Auto-discover title ID via DuckDuckGo ---
+    # --- Auto-discover title ID via web search ---
     if not title_id:
         title_id = _search_netflix_title_id(query)
         if title_id:
-            # Retry with discovered title_id
             return resolve_netflix(query, season, episode, title_id)
         raise ValueError(
-            f"Could not find Netflix title ID for '{query}'. "
-            f"Pass --title-id (from netflix.com/title/XXXXX URL)."
+            f"Could not find '{query}' on Netflix. Try:\n"
+            f"  stv search netflix \"{query}\"   (check the title exists)\n"
+            f"  stv play netflix \"{query}\" --title-id XXXXX   (manual ID)"
         )
-    raise ValueError(f"Could not resolve {query} S{season}E{episode} from Netflix page.")
+    raise ValueError(
+        f"Found Netflix title {title_id} but could not extract S{season}E{episode}. Try:\n"
+        f"  stv search netflix \"{query}\"   (check season/episode count)\n"
+        f"  stv cache set netflix \"{query}\" -s {season} --first-ep-id ID --count N"
+    )
 
 
 def _search_netflix_title_id(query: str) -> int | None:
