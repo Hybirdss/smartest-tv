@@ -7,3 +7,6 @@ build/
 *.mp4
 .env
 .gstack/
+request.token
+.mcpregistry_*
+launch-posts.md

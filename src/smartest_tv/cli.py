@@ -17,13 +17,18 @@ import sys
 import click
 
 from smartest_tv.apps import resolve_app
-from smartest_tv.config import get_tv_config
+from smartest_tv.config import get_tv_config, list_tvs, add_tv, remove_tv, set_default_tv
 from smartest_tv.drivers.base import TVDriver
 
 
-def _get_driver() -> TVDriver:
+def _get_driver(tv_name: str | None = None) -> TVDriver:
     """Create driver from config file (or env var overrides)."""
-    tv = get_tv_config()
+    try:
+        tv = get_tv_config(tv_name)
+    except KeyError as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
+
     platform = tv.get("platform", "")
 
     if not platform:
@@ -73,11 +78,13 @@ def _output(data, fmt: str):
 @click.group()
 @click.option("--format", "fmt", default="text", type=click.Choice(["text", "json"]),
               help="Output format")
+@click.option("--tv", "tv_name", default=None, help="Target TV name (default: primary TV)")
 @click.pass_context
-def main(ctx, fmt):
+def main(ctx, fmt, tv_name):
     """stv — Talk to your TV. It listens."""
     ctx.ensure_object(dict)
     ctx.obj["fmt"] = fmt
+    ctx.obj["tv_name"] = tv_name
 
 
 # -- Remote MCP Server -------------------------------------------------------
@@ -117,7 +124,12 @@ def setup(ip):
 @click.pass_context
 def doctor(ctx):
     """Check if everything is working."""
-    tv = get_tv_config()
+    tv_name = ctx.obj["tv_name"]
+    try:
+        tv = get_tv_config(tv_name)
+    except KeyError as e:
+        click.echo(f"❌ {e}")
+        return
     if not tv.get("platform"):
         click.echo("❌ No TV configured. Run: stv setup")
         return
@@ -125,7 +137,7 @@ def doctor(ctx):
     click.echo(f"📺 {tv.get('name', 'TV')} ({tv['platform'].upper()}, {tv['ip']})")
     click.echo()
 
-    d = _get_driver()
+    d = _get_driver(tv_name)
     try:
         _run(d.connect())
         click.echo("✅ TV reachable")
@@ -156,18 +168,20 @@ def doctor(ctx):
 
 
 @main.command()
-def on():
+@click.pass_context
+def on(ctx):
     """Turn on the TV."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
     _run(d.connect())
     _run(d.power_on())
     click.echo("TV turning on.")
 
 
 @main.command()
-def off():
+@click.pass_context
+def off(ctx):
     """Turn off the TV."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -185,7 +199,7 @@ def off():
 @click.pass_context
 def volume(ctx, level):
     """Get or set volume. No argument = show current."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -203,9 +217,10 @@ def volume(ctx, level):
 
 
 @main.command()
-def mute():
+@click.pass_context
+def mute(ctx):
     """Toggle mute."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -223,9 +238,10 @@ def mute():
 @main.command()
 @click.argument("app")
 @click.argument("content_id", required=False)
-def launch(app, content_id):
+@click.pass_context
+def launch(ctx, app, content_id):
     """Launch an app, optionally with deep link content ID."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -242,9 +258,10 @@ def launch(app, content_id):
 
 @main.command()
 @click.argument("app")
-def close(app):
+@click.pass_context
+def close(ctx, app):
     """Close a running app."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -260,7 +277,7 @@ def close(app):
 @click.pass_context
 def apps(ctx):
     """List installed apps."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -273,18 +290,20 @@ def apps(ctx):
 
 
 @main.command()
-def play():
+@click.pass_context
+def play(ctx):
     """Resume playback."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
     _run(d.connect())
     _run(d.play())
     click.echo("Playing.")
 
 
 @main.command()
-def pause():
+@click.pass_context
+def pause(ctx):
     """Pause playback."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
     _run(d.connect())
     _run(d.pause())
     click.echo("Paused.")
@@ -297,7 +316,7 @@ def pause():
 @click.pass_context
 def status(ctx):
     """Show TV status."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -317,7 +336,7 @@ def status(ctx):
 @click.pass_context
 def info(ctx):
     """Show TV system info."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -338,9 +357,10 @@ def info(ctx):
 
 @main.command()
 @click.argument("message")
-def notify(message):
+@click.pass_context
+def notify(ctx, message):
     """Show a notification on the TV."""
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
@@ -348,6 +368,78 @@ def notify(message):
 
     _run(_do())
     click.echo(f"Sent: {message}")
+
+
+# -- What's On ---------------------------------------------------------------
+
+
+@main.command("whats-on")
+@click.argument("platform", required=False, default=None,
+                type=click.Choice(["netflix", "youtube"]))
+@click.option("--limit", "-n", default=10, type=int, help="Number of results")
+@click.pass_context
+def whats_on(ctx, platform, limit):
+    """Show trending content on Netflix or YouTube.
+
+    Examples:
+        stv whats-on
+        stv whats-on netflix
+        stv whats-on youtube
+        stv whats-on netflix -n 5
+    """
+    from smartest_tv.resolve import fetch_netflix_trending, fetch_youtube_trending
+
+    def _fmt_views(n) -> str:
+        if n is None:
+            return ""
+        if n >= 1_000_000:
+            return f"{n / 1_000_000:.1f}M views"
+        if n >= 1_000:
+            return f"{n / 1_000:.0f}K views"
+        return f"{n} views"
+
+    fmt = ctx.obj["fmt"]
+    show_netflix = platform in (None, "netflix")
+    show_youtube = platform in (None, "youtube")
+
+    result = {}
+
+    if show_netflix:
+        items = fetch_netflix_trending(limit)
+        result["netflix"] = items
+        if fmt != "json":
+            click.echo("Netflix Top 10:")
+            if items:
+                for item in items:
+                    rank = item.get("rank", "")
+                    title = item.get("title", "")
+                    cat = item.get("category", "")
+                    cat_str = f"  — {cat}" if cat else ""
+                    click.echo(f"  {rank:>2}. {title}{cat_str}")
+            else:
+                click.echo("  (Could not fetch trending data)")
+            if show_youtube:
+                click.echo()
+
+    if show_youtube:
+        items = fetch_youtube_trending(limit)
+        result["youtube"] = items
+        if fmt != "json":
+            click.echo("YouTube Trending:")
+            if items:
+                for item in items:
+                    rank = item.get("rank", "")
+                    title = item.get("title", "")
+                    channel = item.get("channel", "")
+                    views = _fmt_views(item.get("view_count"))
+                    channel_str = f"[{channel}] " if channel else ""
+                    views_str = f"  — {views}" if views else ""
+                    click.echo(f"  {rank:>2}. {channel_str}{title}{views_str}")
+            else:
+                click.echo("  (Could not fetch trending data)")
+
+    if fmt == "json":
+        _output(result, "json")
 
 
 # -- Search ------------------------------------------------------------------
@@ -440,6 +532,118 @@ def search(ctx, platform, query):
         sys.exit(1)
 
 
+# -- Cast --------------------------------------------------------------------
+
+
+def _parse_cast_url(url: str) -> tuple[str, str]:
+    """Parse a streaming URL into (platform, content_id).
+
+    Supported:
+      netflix.com/watch/12345        → ("netflix", "12345")
+      netflix.com/title/12345        → ("netflix", "title:12345")  # needs resolve
+      youtube.com/watch?v=ID         → ("youtube", "ID")
+      youtu.be/ID                    → ("youtube", "ID")
+      open.spotify.com/track/ID      → ("spotify", "spotify:track:ID")
+      open.spotify.com/album/ID      → ("spotify", "spotify:album:ID")
+      open.spotify.com/playlist/ID   → ("spotify", "spotify:playlist:ID")
+
+    Raises ValueError for unrecognised URLs.
+    """
+    import re
+    from urllib.parse import urlparse, parse_qs
+
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().lstrip("www.")
+    path = parsed.path
+
+    # --- Netflix ---
+    if "netflix.com" in host:
+        m = re.match(r"/watch/(\d+)", path)
+        if m:
+            return "netflix", m.group(1)
+        m = re.match(r"/title/(\d+)", path)
+        if m:
+            return "netflix", f"title:{m.group(1)}"
+        raise ValueError(f"Unrecognised Netflix URL: {url}")
+
+    # --- YouTube ---
+    if "youtube.com" in host:
+        qs = parse_qs(parsed.query)
+        vid = qs.get("v", [None])[0]
+        if vid:
+            return "youtube", vid
+        raise ValueError(f"Unrecognised YouTube URL: {url}")
+
+    if host == "youtu.be":
+        vid = path.lstrip("/").split("/")[0]
+        if vid:
+            return "youtube", vid
+        raise ValueError(f"Unrecognised youtu.be URL: {url}")
+
+    # --- Spotify ---
+    if "spotify.com" in host:
+        m = re.match(r"/(track|album|playlist|artist)/([A-Za-z0-9]+)", path)
+        if m:
+            return "spotify", f"spotify:{m.group(1)}:{m.group(2)}"
+        raise ValueError(f"Unrecognised Spotify URL: {url}")
+
+    raise ValueError(
+        f"Unsupported URL: {url}\n"
+        "Supported: netflix.com, youtube.com, youtu.be, open.spotify.com"
+    )
+
+
+@main.command()
+@click.argument("url")
+@click.pass_context
+def cast(ctx, url):
+    """Cast a URL to your TV. Supports Netflix, YouTube, Spotify links.
+
+    Examples:
+        stv cast https://www.netflix.com/watch/82656797
+        stv cast https://www.netflix.com/title/81726714
+        stv cast https://www.youtube.com/watch?v=dQw4w9WgXcQ
+        stv cast https://youtu.be/dQw4w9WgXcQ
+        stv cast https://open.spotify.com/track/3bbjDFVu9BtFtGD2fZpVfz
+    """
+    try:
+        platform, content_id = _parse_cast_url(url)
+    except ValueError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
+
+    # Netflix title URL → resolve to an actual video/episode ID
+    if platform == "netflix" and content_id.startswith("title:"):
+        title_id = int(content_id.split(":", 1)[1])
+        from smartest_tv.resolve import resolve as do_resolve
+        try:
+            content_id = do_resolve("netflix", str(title_id), title_id=title_id)
+        except ValueError as exc:
+            click.echo(f"❌ {exc}", err=True)
+            sys.exit(1)
+
+    d = _get_driver(ctx.obj["tv_name"])
+    app_id, name = resolve_app(platform, d.platform)
+
+    async def _do():
+        await d.connect()
+        if platform == "netflix":
+            try:
+                await d.close_app(app_id)
+                import asyncio as _asyncio
+                await _asyncio.sleep(2)
+            except Exception:
+                pass
+        await d.launch_app_deep(app_id, content_id)
+
+    _run(_do())
+
+    from smartest_tv import cache as _cache
+    _cache.record_play(platform, url, content_id, None, None)
+
+    click.echo(f"▶ Casting {url} on {name} (content: {content_id})")
+
+
 # -- Resolve & Play ----------------------------------------------------------
 
 
@@ -503,7 +707,8 @@ def resolve(ctx, platform, query, season, episode, title_id):
 @click.option("--season", "-s", type=int, help="Season number")
 @click.option("--episode", "-e", type=int, help="Episode number")
 @click.option("--title-id", type=int, help="Netflix title ID (skips search)")
-def play(platform, query, season, episode, title_id):
+@click.pass_context
+def play(ctx, platform, query, season, episode, title_id):
     """Find content and play it on TV in one step.
 
     Resolves the content ID, then launches it. For Netflix, automatically
@@ -539,7 +744,7 @@ def play(platform, query, season, episode, title_id):
         sys.exit(1)
 
     # Step 2: Launch on TV
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
     app_id, name = resolve_app(platform, d.platform)
 
     async def _do():
@@ -600,7 +805,8 @@ def history(ctx, limit):
 
 @main.command()
 @click.argument("query", nargs=-1)
-def next(query):
+@click.pass_context
+def next(ctx, query):
     """Play the next episode of a Netflix show.
 
     Uses play history to determine where you left off.
@@ -635,7 +841,7 @@ def next(query):
         click.echo(f"❌ {exc}", err=True)
         sys.exit(1)
 
-    d = _get_driver()
+    d = _get_driver(ctx.obj["tv_name"])
     app_id, name = resolve_app("netflix", d.platform)
 
     async def _do():
@@ -651,6 +857,134 @@ def next(query):
     _run(_do())
     _cache.record_play("netflix", q, content_id, season, episode)
     click.echo(f"▶ Playing {q} S{season}E{episode} on Netflix (content: {content_id})")
+
+
+# -- Queue -------------------------------------------------------------------
+
+
+@main.group("queue")
+def queue_group():
+    """Manage the play queue."""
+
+
+@queue_group.command("add")
+@click.argument("platform", type=click.Choice(["netflix", "youtube", "spotify"]))
+@click.argument("query")
+@click.option("-s", "--season", type=int, help="Season number")
+@click.option("-e", "--episode", type=int, help="Episode number")
+def queue_add_cmd(platform, query, season, episode):
+    """Add content to the play queue.
+
+    Examples:
+        stv queue add netflix "Bridgerton" -s 3 -e 4
+        stv queue add youtube "Despacito"
+        stv queue add spotify "Ye White Lines"
+    """
+    from smartest_tv import cache as _cache
+    item = _cache.queue_add(platform, query, season, episode)
+    desc = item["query"]
+    if item.get("season") and item.get("episode"):
+        desc += f" S{item['season']}E{item['episode']}"
+    click.echo(f"Added to queue: [{platform}] {desc}")
+
+
+@queue_group.command("show")
+@click.pass_context
+def queue_show_cmd(ctx):
+    """Show the current play queue."""
+    from smartest_tv import cache as _cache
+    items = _cache.queue_show()
+    if not items:
+        click.echo("Queue is empty.")
+        return
+    if ctx.obj["fmt"] == "json":
+        _output(items, "json")
+    else:
+        for i, item in enumerate(items, 1):
+            desc = item["query"]
+            if item.get("season") and item.get("episode"):
+                desc += f" S{item['season']}E{item['episode']}"
+            click.echo(f"  {i}. [{item['platform']}] {desc}")
+
+
+@queue_group.command("play")
+@click.pass_context
+def queue_play_cmd(ctx):
+    """Play the next item in the queue."""
+    from smartest_tv import cache as _cache
+    from smartest_tv.resolve import resolve as do_resolve
+
+    item = _cache.queue_pop()
+    if not item:
+        click.echo("Queue is empty.")
+        return
+
+    platform = item["platform"]
+    query = item["query"]
+    season = item.get("season")
+    episode = item.get("episode")
+
+    try:
+        content_id = do_resolve(platform, query, season, episode)
+    except ValueError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
+
+    d = _get_driver(ctx.obj["tv_name"])
+    app_id, name = resolve_app(platform, d.platform)
+
+    async def _do():
+        await d.connect()
+        if platform.lower() == "netflix":
+            try:
+                await d.close_app(app_id)
+                import asyncio
+                await asyncio.sleep(2)
+            except Exception:
+                pass
+        await d.launch_app_deep(app_id, content_id)
+
+    _run(_do())
+    _cache.record_play(platform, query, content_id, season, episode)
+
+    desc = query
+    if season and episode:
+        desc += f" S{season}E{episode}"
+    click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
+
+
+@queue_group.command("skip")
+def queue_skip_cmd():
+    """Skip the current queue item (remove without playing)."""
+    from smartest_tv import cache as _cache
+    items = _cache.queue_show()
+    if not items:
+        click.echo("Queue is empty.")
+        return
+    skipped = items[0]
+    _cache.queue_skip()
+    desc = skipped["query"]
+    if skipped.get("season") and skipped.get("episode"):
+        desc += f" S{skipped['season']}E{skipped['episode']}"
+    click.echo(f"Skipped: [{skipped['platform']}] {desc}")
+
+    remaining = _cache.queue_show()
+    if remaining:
+        next_item = remaining[0]
+        next_desc = next_item["query"]
+        if next_item.get("season") and next_item.get("episode"):
+            next_desc += f" S{next_item['season']}E{next_item['episode']}"
+        click.echo(f"Next: [{next_item['platform']}] {next_desc}")
+    else:
+        click.echo("Queue is now empty.")
+
+
+@queue_group.command("clear")
+def queue_clear_cmd():
+    """Clear the entire play queue."""
+    from smartest_tv import cache as _cache
+    _cache.queue_clear()
+    click.echo("Queue cleared.")
 
 
 # -- Cache -------------------------------------------------------------------
@@ -765,6 +1099,86 @@ def cache_contribute():
     click.echo("☝ Copy this and submit a PR to:", err=True)
     click.echo("  https://github.com/Hybirdss/smartest-tv", err=True)
     click.echo("  Add entries to community-cache.json", err=True)
+
+
+# -- Multi TV Management -----------------------------------------------------
+
+
+@main.group("multi")
+def multi_group():
+    """Manage multiple TVs."""
+
+
+@multi_group.command("list")
+@click.pass_context
+def multi_list(ctx):
+    """List all configured TVs and their status."""
+    tvs = list_tvs()
+    if not tvs:
+        click.echo("No TVs configured. Run: stv setup")
+        return
+    if ctx.obj["fmt"] == "json":
+        _output(tvs, "json")
+    else:
+        for tv in tvs:
+            default_marker = " (default)" if tv.get("default") else ""
+            mac_str = f"  mac={tv['mac']}" if tv.get("mac") else ""
+            click.echo(f"  {tv['name']}: {tv['platform'].upper()} @ {tv['ip']}{mac_str}{default_marker}")
+
+
+@multi_group.command("add")
+@click.argument("name")
+@click.option("--platform", required=True, type=click.Choice(["lg", "samsung", "android", "firetv", "roku"]),
+              help="TV platform")
+@click.option("--ip", required=True, help="TV IP address")
+@click.option("--mac", default="", help="MAC address for Wake-on-LAN")
+@click.option("--default", "is_default", is_flag=True, help="Set as default TV")
+def multi_add(name, platform, ip, mac, is_default):
+    """Add a TV to the config.
+
+    Examples:
+        stv multi add bedroom --platform samsung --ip 192.168.1.101
+        stv multi add living-room --platform lg --ip 192.168.1.100 --mac AA:BB:CC:DD:EE:FF --default
+    """
+    try:
+        add_tv(name, platform, ip, mac=mac, default=is_default)
+        default_str = " (set as default)" if is_default else ""
+        click.echo(f"Added TV '{name}': {platform.upper()} @ {ip}{default_str}")
+    except Exception as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
+
+
+@multi_group.command("remove")
+@click.argument("name")
+def multi_remove(name):
+    """Remove a TV from the config.
+
+    Example:
+        stv multi remove bedroom
+    """
+    try:
+        remove_tv(name)
+        click.echo(f"Removed TV '{name}'.")
+    except KeyError as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
+
+
+@multi_group.command("default")
+@click.argument("name")
+def multi_default(name):
+    """Set the default TV.
+
+    Example:
+        stv multi default living-room
+    """
+    try:
+        set_default_tv(name)
+        click.echo(f"Default TV set to '{name}'.")
+    except KeyError as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

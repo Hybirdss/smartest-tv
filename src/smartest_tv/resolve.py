@@ -267,6 +267,189 @@ def _search_spotify(query: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Trending
+# ---------------------------------------------------------------------------
+
+def fetch_netflix_trending(limit: int = 10) -> list[dict]:
+    """Fetch Netflix Top 10 from top10.netflix.com.
+
+    Falls back to Brave Search if the scrape yields nothing.
+    Returns: [{"rank": 1, "title": "...", "category": "TV"}, ...]
+    """
+    import time as _time
+
+    # --- Cache check (24h TTL) ---
+    from smartest_tv import cache as _cache
+    cached = _cache.get("_trending", "netflix")
+    if cached and isinstance(cached, dict):
+        ts = cached.get("ts", 0)
+        if _time.time() - ts < 86400:
+            return cached.get("items", [])[:limit]
+
+    items: list[dict] = []
+
+    # --- 1st attempt: top10.netflix.com ---
+    try:
+        result = subprocess.run(
+            [
+                "curl", "-s", "-L", "--compressed", "--max-time", "10",
+                "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                "-H", "Accept-Language: en-US,en;q=0.9",
+                "https://top10.netflix.com/",
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        html = result.stdout or ""
+
+        # top10.netflix.com uses JSON-LD or inline JSON: {"rank":1,"title":"...","category":"..."}
+        # Try to extract from script tag with JSON data
+        json_match = re.search(r'"weekly_top10":\s*(\[.*?\])', html, re.DOTALL)
+        if json_match:
+            import json
+            rows = json.loads(json_match.group(1))
+            for row in rows:
+                items.append({
+                    "rank": row.get("rank", len(items) + 1),
+                    "title": row.get("show_title", row.get("title", "")),
+                    "category": row.get("category", ""),
+                })
+
+        # Fallback: look for structured title list in HTML
+        if not items:
+            # top10.netflix.com renders titles in <td> cells with rank numbers
+            # Pattern: rank number followed by show title
+            ranks = re.findall(r'<td[^>]*class="[^"]*rank[^"]*"[^>]*>(\d+)</td>', html)
+            titles = re.findall(r'<td[^>]*class="[^"]*show-title[^"]*"[^>]*>\s*([^<]+)\s*</td>', html)
+            categories = re.findall(r'<td[^>]*class="[^"]*category[^"]*"[^>]*>\s*([^<]+)\s*</td>', html)
+            for i, title in enumerate(titles):
+                rank = int(ranks[i]) if i < len(ranks) else i + 1
+                cat = categories[i].strip() if i < len(categories) else ""
+                items.append({"rank": rank, "title": title.strip(), "category": cat})
+    except (subprocess.TimeoutExpired, OSError, ValueError, KeyError, IndexError):
+        pass
+
+    # --- 2nd attempt: Brave Search fallback ---
+    if not items:
+        try:
+            from urllib.parse import quote
+            query = "Netflix top 10 this week TV shows movies"
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-L", "--compressed", "--max-time", "10",
+                    "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                    f"https://search.brave.com/search?q={quote(query)}",
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            html = result.stdout or ""
+            # Extract numbered list items from search snippets
+            found = re.findall(r'(\d+)\.\s+([A-Z][^\n<]{3,60}?)(?:\s*[-–—]\s*(TV|Film|Series|Movie))?', html)
+            seen: set[str] = set()
+            for rank_str, title, cat in found:
+                title = title.strip()
+                if title and title not in seen and len(title) > 2:
+                    seen.add(title)
+                    items.append({"rank": int(rank_str), "title": title, "category": cat or ""})
+                    if len(items) >= limit:
+                        break
+        except (subprocess.TimeoutExpired, OSError, ValueError, KeyError, IndexError):
+            pass
+
+    # Cache results
+    if items:
+        from smartest_tv import cache as _cache
+        _cache.put("_trending", "netflix", {"ts": _time.time(), "items": items})
+
+    return items[:limit]
+
+
+def fetch_youtube_trending(limit: int = 10) -> list[dict]:
+    """Fetch YouTube trending videos via yt-dlp or RSS feed.
+
+    Returns: [{"rank": 1, "title": "...", "channel": "...", "video_id": "..."}, ...]
+    """
+    import time as _time
+
+    # --- Cache check (1h TTL) ---
+    from smartest_tv import cache as _cache
+    cached = _cache.get("_trending", "youtube")
+    if cached and isinstance(cached, dict):
+        ts = cached.get("ts", 0)
+        if _time.time() - ts < 3600:
+            return cached.get("items", [])[:limit]
+
+    items: list[dict] = []
+
+    # --- 1st attempt: yt-dlp flat-playlist ---
+    if shutil.which("yt-dlp"):
+        try:
+            result = subprocess.run(
+                [
+                    "yt-dlp",
+                    "--flat-playlist",
+                    "--dump-single-json",
+                    "--no-warnings",
+                    "--playlist-items", f"1-{limit}",
+                    "https://www.youtube.com/feed/trending",
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.stdout.strip():
+                import json
+                data = json.loads(result.stdout.strip())
+                entries = data.get("entries", [])
+                for i, entry in enumerate(entries, 1):
+                    items.append({
+                        "rank": i,
+                        "title": entry.get("title", ""),
+                        "channel": entry.get("uploader") or entry.get("channel", ""),
+                        "video_id": entry.get("id", ""),
+                        "view_count": entry.get("view_count"),
+                    })
+        except (subprocess.TimeoutExpired, OSError, ValueError, KeyError, IndexError):
+            pass
+
+    # --- 2nd attempt: YouTube RSS trending feed ---
+    if not items:
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-L", "--compressed", "--max-time", "10",
+                    "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                    "https://www.youtube.com/feeds/videos.xml?chart=trending",
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            xml = result.stdout or ""
+            titles = re.findall(r"<title>([^<]+)</title>", xml)
+            video_ids = re.findall(r"<yt:videoId>([^<]+)</yt:videoId>", xml)
+            channels = re.findall(r"<name>([^<]+)</name>", xml)
+            # Skip first title (feed title) and first channel (feed author)
+            titles = titles[1:]
+            channels = channels[1:]
+            for i, (title, vid) in enumerate(zip(titles, video_ids), 1):
+                channel = channels[i - 1] if i - 1 < len(channels) else ""
+                items.append({
+                    "rank": i,
+                    "title": title.strip(),
+                    "channel": channel.strip(),
+                    "video_id": vid.strip(),
+                    "view_count": None,
+                })
+                if len(items) >= limit:
+                    break
+        except (subprocess.TimeoutExpired, OSError, ValueError, KeyError, IndexError):
+            pass
+
+    # Cache results
+    if items:
+        from smartest_tv import cache as _cache
+        _cache.put("_trending", "youtube", {"ts": _time.time(), "items": items})
+
+    return items[:limit]
+
+
+# ---------------------------------------------------------------------------
 # Unified
 # ---------------------------------------------------------------------------
 

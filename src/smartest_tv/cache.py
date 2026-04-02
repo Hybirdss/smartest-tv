@@ -158,9 +158,9 @@ def record_play(platform: str, query: str, content_id: str,
         "content_id": content_id,
         "time": int(time.time()),
     }
-    if season:
+    if season is not None:
         entry["season"] = season
-    if episode:
+    if episode is not None:
         entry["episode"] = episode
 
     # Keep last 50 entries
@@ -226,3 +226,70 @@ def _slugify(text: str) -> str:
     """Normalize text to cache key."""
     import re
     return re.sub(r"[^a-z0-9]+", "-", text.lower().strip()).strip("-")
+
+
+# ---------------------------------------------------------------------------
+# Play queue
+# ---------------------------------------------------------------------------
+
+QUEUE_FILE = CONFIG_DIR / "queue.json"
+
+
+def _load_queue() -> list[dict]:
+    if QUEUE_FILE.exists():
+        try:
+            return json.loads(QUEUE_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            return []
+    return []
+
+
+def _save_queue(data: list[dict]) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    QUEUE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def queue_add(platform: str, query: str, season: int | None = None, episode: int | None = None) -> dict:
+    """Add an item to the play queue. Returns the new item."""
+    from datetime import datetime, timezone
+    item = {
+        "platform": platform,
+        "query": query,
+        "added_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if season is not None:
+        item["season"] = season
+    if episode is not None:
+        item["episode"] = episode
+    data = _load_queue()
+    data.append(item)
+    _save_queue(data)
+    return item
+
+
+def queue_show() -> list[dict]:
+    """Return the current queue."""
+    return _load_queue()
+
+
+def queue_pop() -> dict | None:
+    """Remove and return the first item in the queue."""
+    data = _load_queue()
+    if not data:
+        return None
+    item = data.pop(0)
+    _save_queue(data)
+    return item
+
+
+def queue_skip() -> None:
+    """Remove the first item in the queue without returning it."""
+    data = _load_queue()
+    if data:
+        data.pop(0)
+        _save_queue(data)
+
+
+def queue_clear() -> None:
+    """Clear the entire queue."""
+    _save_queue([])
