@@ -6,3 +6,4 @@ build/
 *.db
 *.mp4
 .env
+.gstack/
