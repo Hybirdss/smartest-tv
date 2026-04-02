@@ -151,7 +151,12 @@ class LGDriver(TVDriver):
 
     async def close_app(self, app_id: str) -> None:
         c = await self._ensure()
-        await c.close_app(app_id)
+        try:
+            await c.close_app(app_id)
+        except Exception:
+            # webOS firmware may return 403 for LAUNCHER_CLOSE on some models.
+            # Fall back to launching the home screen to "close" the app.
+            await c.request(ep.LAUNCH, {"id": "com.webos.app.home"})
 
     async def list_apps(self) -> list[App]:
         c = await self._ensure()
