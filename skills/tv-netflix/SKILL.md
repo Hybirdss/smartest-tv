@@ -1,90 +1,67 @@
 ---
 name: tv-netflix
-description: "Play specific Netflix content on TV — finds episode IDs automatically via page scraping. Use when the user asks to play a Netflix show, specific episode, or movie on their TV. Triggers on: 'play X on Netflix', 'Netflix episode', show name + episode number, any language requesting Netflix playback on TV."
+description: "Play Netflix content on TV — resolves episode IDs automatically via HTTP scraping. Use when the user asks to play a Netflix show, specific episode, or movie on their TV. Triggers on: 'play X on Netflix', 'Netflix episode', show name + episode number."
 ---
 
-# tv-netflix — Netflix Deep Link Resolver
+# tv-netflix — Netflix Content Resolver
 
-> **PREREQUISITE:** Read `../tv-shared/SKILL.md` for CLI reference and deep link rules.
+> **PREREQUISITE:** Read `../tv-shared/SKILL.md` for CLI reference.
 
-Play specific Netflix episodes or movies on the TV by finding their internal IDs.
+Play specific Netflix episodes or movies on the TV.
 
-## The Problem
-
-Netflix doesn't expose episode IDs publicly. You can't just say "Frieren S2E8" — you need the numeric ID `82656797`. This skill teaches you how to find it.
-
-## Workflow
-
-### Step 1: Find the show's title ID
-
-Web search for `{show name} netflix` to find `netflix.com/title/{titleId}`.
-
-### Step 2: Get episode videoIds via Playwright
-
-Navigate to the title page (works without login):
-
-```
-mcp__playwright__browser_navigate(url="https://www.netflix.com/title/{titleId}")
-```
-
-For multi-season shows, select the season:
-
-```
-mcp__playwright__browser_select_option(
-  element="Season selector dropdown",
-  ref="{combobox_ref}",
-  values=["Season 2"]       # Or localized: "시즌 2", "シーズン 2", etc.
-)
-```
-
-### Step 3: Extract IDs from page JavaScript
-
-```javascript
-mcp__playwright__browser_evaluate(function=`() => {
-  const scripts = document.querySelectorAll('script');
-  let ids = [];
-  scripts.forEach(s => {
-    const text = s.textContent || '';
-    const matches = text.match(/"videoId":(\d+)/g);
-    if (matches) ids.push(...matches.map(m => m.match(/(\d+)/)[0]));
-  });
-  return [...new Set(ids)];
-}`)
-```
-
-### Step 4: Map episode number to ID
-
-Episode IDs are sequential. Filter out:
-- The show's title ID (e.g. `81726714`)
-- Recommended title IDs (random, non-sequential)
-
-Find the sequential cluster. First sequential ID = Episode 1.
-
-**Shortcut:** `first_episode_id + (episode_number - 1)`
-
-### Step 5: Play on TV
+## The Simple Way
 
 ```bash
-stv close netflix
-sleep 2
-stv launch netflix {episodeId}
+stv play netflix "Frieren" s2e8 --title-id 81726714
 ```
 
-## Example
+One command. Resolves the episode ID, closes Netflix, relaunches with deep link. Done.
 
-User: "Play Frieren season 2 episode 8"
+## How It Works
 
-1. Search → `netflix.com/title/81726714`
-2. Playwright → select Season 2 → extract videoIds
-3. Sequential cluster: `82656790`–`82656799`
-4. S2E8 = `82656790 + 7` = `82656797`
-5. `stv close netflix && sleep 2 && stv launch netflix 82656797`
+### Step 1: Find the title ID
 
-## Movies
+Web search for `{show name} site:netflix.com` → extract from URL `netflix.com/title/{titleId}`.
 
-Movies are simpler — the title ID is also the watch ID:
+### Step 2: Play
 
-1. Search → `netflix.com/title/{id}`
-2. `stv launch netflix {id}`
+```bash
+# Episodes
+stv play netflix "Frieren" s2e8 --title-id 81726714
+stv play netflix "Jujutsu Kaisen" s3e10 --title-id 81278456
 
-No need for the Playwright step.
+# Movies (title ID = video ID)
+stv play netflix "Inception" --title-id 70131314
+```
+
+### Step 3: There is no step 3
+
+`stv` handles everything:
+1. Fetches Netflix title page via `curl` (no browser needed)
+2. Parses `__typename:"Episode"` from embedded JSON to find episode IDs
+3. Groups sequential IDs into seasons automatically
+4. Caches all seasons — second play is instant (0.1s)
+5. Closes Netflix and relaunches with deep link
+
+## Cached Playback
+
+After first resolve, the title ID is no longer needed:
+
+```bash
+stv play netflix "Frieren" s2e8     # cached, 0.1s
+stv cache show                       # see all cached shows
+```
+
+## Manual Cache (fallback)
+
+If auto-resolve fails for a specific show:
+
+```bash
+stv cache set netflix "Show Name" -s 2 --first-ep-id 82656790 --count 10 --title-id 81726714
+```
+
+## Notes
+
+- User must select Netflix profile on TV (can't be bypassed externally)
+- After profile selection, content plays automatically
+- Deep links require close-then-relaunch — `stv play` handles this automatically
