@@ -46,10 +46,11 @@ pip install "stv[all]"          # 全部平台
 ## CLI
 
 ```bash
+stv play netflix "Frieren" s2e8 --title-id 81726714   # 搜索 + 一步播放
+stv play youtube "baby shark"                          # 搜索 + 播放
+stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # 仅获取 ID
+stv launch netflix 82656797         # 已知 ID 时直接深度链接
 stv status                          # 当前状态、音量、静音
-stv launch netflix 82656797         # 播放 Netflix 指定内容
-stv launch youtube dQw4w9WgXcQ     # 播放 YouTube 视频
-stv launch spotify spotify:album:x  # 播放 Spotify
 stv volume 25                       # 设置音量
 stv mute                            # 切换静音
 stv apps --format json              # 查看应用列表（结构化输出）
@@ -58,6 +59,28 @@ stv off                             # 晚安
 ```
 
 所有命令均支持 `--format json`——专为脚本和 AI 助手调用设计。
+
+### 内容解析
+
+`stv resolve` 帮你找到流媒体 ID，省去手动查找的麻烦。`stv play` 在此基础上一步完成播放。
+
+```bash
+stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
+stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ（通过 yt-dlp）
+stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → 直接透传
+```
+
+Netflix 解析通过单次 `curl` 请求抓取剧集元数据——无需 Playwright、无需浏览器、无需登录。所有季集一次性解析并本地缓存，第二次查询即时返回（约 0.1 秒）。
+
+### 缓存
+
+ID 一旦找到，会永久缓存到 `~/.config/smartest-tv/cache.json`。也可以手动填充缓存：
+
+```bash
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
+stv cache show                                # 查看所有已缓存 ID
+```
 
 ## AI 助手技能
 
@@ -70,7 +93,7 @@ cd smartest-tv && ./install-skills.sh
 | 技能 | 功能 |
 |------|------|
 | `tv-shared` | CLI 参考、认证、配置、通用模式 |
-| `tv-netflix` | 通过 Playwright 抓取剧集 ID |
+| `tv-netflix` | 通过 HTTP 抓取剧集 ID |
 | `tv-youtube` | 通过 yt-dlp 搜索视频并解析格式 |
 | `tv-spotify` | 解析专辑/曲目/播放列表 URI |
 | `tv-workflow` | 组合操作：观影模式、儿童模式、定时关机 |
@@ -181,8 +204,8 @@ mac = "AA:BB:CC:DD:EE:FF"   # optional, for Wake-on-LAN
 
 ```
 用户（自然语言）
-  → AI + 技能（通过 yt-dlp / Playwright / 网络搜索查找内容 ID）
-    → stv CLI（格式化并分发）
+  → AI + stv resolve（通过 HTTP 抓取 / yt-dlp / 缓存查找内容 ID）
+    → stv play（格式化并分发）
       → 驱动（WebSocket / ADB / HTTP）
         → 电视
 ```

@@ -46,10 +46,11 @@ pip install "stv[all]"          # すべて
 ## CLI
 
 ```bash
+stv play netflix "Frieren" s2e8 --title-id 81726714   # 検索 + 一発再生
+stv play youtube "baby shark"                          # 検索 + 再生
+stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # ID だけ取得
+stv launch netflix 82656797         # 直接ディープリンク（ID がわかっている場合）
 stv status                          # 現在の状態（アプリ、音量、ミュート）
-stv launch netflix 82656797         # Netflix で特定コンテンツを再生
-stv launch youtube dQw4w9WgXcQ     # YouTube 動画を再生
-stv launch spotify spotify:album:x  # Spotify を再生
 stv volume 25                       # 音量を設定
 stv mute                            # ミュートの切り替え
 stv apps --format json              # アプリ一覧（構造化出力）
@@ -58,6 +59,28 @@ stv off                             # おやすみ
 ```
 
 すべてのコマンドで `--format json` が使えます——スクリプトや AI エージェント向け設計です。
+
+### コンテンツ解決
+
+`stv resolve` はストリーミング ID を代わりに見つけてくれます。`stv play` は同じ処理をして、そのまま一ステップで TV でも再生します。
+
+```bash
+stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
+stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ（yt-dlp 経由）
+stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → そのまま渡す
+```
+
+Netflix の解決はタイトルページから 1 回の `curl` リクエストでエピソードのメタデータを取得します——Playwright もブラウザも、ログインも不要です。全シーズンを一度に解決してローカルにキャッシュします。2 回目以降の検索は即時（約 0.1 秒）です。
+
+### キャッシュ
+
+ID が一度見つかると、`~/.config/smartest-tv/cache.json` に永久にキャッシュされます。手動でキャッシュに追加することもできます：
+
+```bash
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
+stv cache show                                # キャッシュ済み ID を全件表示
+```
 
 ## エージェントスキル
 
@@ -70,7 +93,7 @@ cd smartest-tv && ./install-skills.sh
 | スキル | 役割 |
 |--------|------|
 | `tv-shared` | CLI リファレンス、認証、設定、共通パターン |
-| `tv-netflix` | Playwright でエピソード ID を取得 |
+| `tv-netflix` | HTTP スクレイピングでエピソード ID を取得 |
 | `tv-youtube` | yt-dlp で動画検索・解決 |
 | `tv-spotify` | アルバム/トラック/プレイリスト URI の解決 |
 | `tv-workflow` | 複合アクション：映画モード、子どもモード、スリープタイマー |
@@ -181,8 +204,8 @@ Claude Desktop、Cursor などの MCP クライアント向け——オプショ
 
 ```
 あなた（自然言語）
-  → AI + スキル（yt-dlp / Playwright / Web 検索でコンテンツ ID を取得）
-    → stv CLI（フォーマット変換と送信）
+  → AI + stv resolve（HTTP スクレイピング / yt-dlp / キャッシュでコンテンツ ID を取得）
+    → stv play（ディープリンクに変換して送信）
       → ドライバー（WebSocket / ADB / HTTP）
         → テレビ
 ```

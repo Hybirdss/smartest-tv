@@ -46,10 +46,11 @@ pip install "stv[all]"          # Tudo junto
 ## CLI
 
 ```bash
+stv play netflix "Frieren" s2e8 --title-id 81726714   # Buscar + reproduzir em um passo
+stv play youtube "baby shark"                          # Buscar + reproduzir
+stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # Só pegar o ID
+stv launch netflix 82656797         # Deep link direto (se já souber o ID)
 stv status                          # O que tá tocando, volume, estado de mudo
-stv launch netflix 82656797         # Deep link pra conteúdo específico
-stv launch youtube dQw4w9WgXcQ     # Reproduzir um vídeo do YouTube
-stv launch spotify spotify:album:x  # Tocar no Spotify
 stv volume 25                       # Ajustar volume
 stv mute                            # Alternar mudo
 stv apps --format json              # Listar apps (saída estruturada)
@@ -58,6 +59,28 @@ stv off                             # Boa noite
 ```
 
 Todo comando suporta `--format json` — feito para scripts e agentes de IA.
+
+### Resolução de conteúdo
+
+`stv resolve` encontra os IDs de streaming pra você. `stv play` faz a mesma coisa e já lança na TV em um passo só.
+
+```bash
+stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
+stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ (via yt-dlp)
+stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → passa direto
+```
+
+A resolução do Netflix funciona fazendo scraping dos metadados do episódio na página do título com uma única requisição `curl` — sem Playwright, sem navegador, sem login. Todas as temporadas são resolvidas de uma vez e cacheadas localmente. A segunda consulta é instantânea (~0,1 s).
+
+### Cache
+
+Quando um ID é encontrado, fica cacheado para sempre em `~/.config/smartest-tv/cache.json`. Você também pode popular o cache manualmente:
+
+```bash
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
+stv cache show                                # Mostrar todos os IDs cacheados
+```
 
 ## Agent Skills
 
@@ -70,7 +93,7 @@ cd smartest-tv && ./install-skills.sh
 | Skill | O que faz |
 |-------|-----------|
 | `tv-shared` | Referência do CLI, autenticação, configuração, padrões comuns |
-| `tv-netflix` | Busca de IDs de episódios via Playwright |
+| `tv-netflix` | Busca de IDs de episódios via scraping HTTP |
 | `tv-youtube` | Busca de vídeos via yt-dlp, resolução de formato |
 | `tv-spotify` | Resolução de URIs de álbuns, músicas e playlists |
 | `tv-workflow` | Ações compostas: noite de cinema, modo criança, timer pra dormir |
@@ -181,8 +204,8 @@ Para Claude Desktop, Cursor ou outros clientes MCP — opcional, o CLI é a inte
 
 ```
 Você (linguagem natural)
-  → IA + Skills (encontra o ID do conteúdo via yt-dlp / Playwright / busca)
-    → stv CLI (formata e despacha)
+  → IA + stv resolve (encontra o ID do conteúdo via scraping HTTP / yt-dlp / cache)
+    → stv play (formata o deep link e despacha)
       → Driver (WebSocket / ADB / HTTP)
         → TV
 ```
