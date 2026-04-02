@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Hybirdss/smartest-tv",
+  "title": "smartest-tv",
+  "description": "Talk to your TV. Resolve Netflix/YouTube/Spotify by name and deep-link to any smart TV. 20+ MCP tools for play, search, volume, power, history.",
+  "repository": {
+    "url": "https://github.com/Hybirdss/smartest-tv",
+    "source": "github"
+  },
+  "version": "0.4.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "stv",
+      "version": "0.4.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "TV platform: lg, samsung, roku, or android",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false,
+          "name": "TV_PLATFORM"
+        },
+        {
+          "description": "TV IP address on your local network",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false,
+          "name": "TV_IP"
+        },
+        {
+          "description": "TV MAC address for Wake-on-LAN (optional)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "TV_MAC"
+        }
+      ]
+    }
+  ]
+}

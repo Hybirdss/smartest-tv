@@ -299,3 +299,5 @@ python -m pytest tests/ -v
 ## License
 
 MIT
+
+<!-- mcp-name: io.github.Hybirdss/smartest-tv -->
