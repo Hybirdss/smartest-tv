@@ -25,13 +25,19 @@ except ImportError:
     raise ImportError("Install Android driver: pip install 'smartest-tv[android]'")
 
 
-# Deep link URI schemes per app package
-_DEEP_LINK_SCHEMES: dict[str, str] = {
-    "com.netflix.ninja": "netflix://title/{id}",
-    "com.google.android.youtube.tv": "vnd.youtube:{id}",
-    "com.spotify.tv.android": "spotify:{id}",  # id is already full URI
-    "com.disney.disneyplus": "disneyplus://content/{id}",
-    "com.amazon.amazonvideo.livingroom": "aiv://aiv/play?sourceType=Content&id={id}",
+# Deep link intent templates per app package
+_DEEP_LINK_INTENTS: dict[str, str] = {
+    "com.netflix.ninja": "am start -a android.intent.action.VIEW -d 'netflix://title/{id}'",
+    "com.google.android.youtube.tv": "am start -a android.intent.action.VIEW -d 'vnd.youtube:{id}'",
+    "com.google.android.youtube": "am start -a android.intent.action.VIEW -d 'vnd.youtube:{id}'",
+    "com.spotify.tv.android": "am start -a android.intent.action.VIEW -d '{id}'",
+    "com.spotify.music": "am start -a android.intent.action.VIEW -d '{id}'",
+    "com.disney.disneyplus": "am start -a android.intent.action.VIEW -d 'https://www.disneyplus.com/video/{id}'",
+    "com.amazon.amazonvideo.livingroom": "am start -a android.intent.action.VIEW -n com.amazon.amazonvideo.livingroom/com.amazon.ignition.IgnitionActivity --es 'contentId' '{id}'",
+    "com.apple.atve.androidtv.appletv": "am start -a android.intent.action.VIEW -d 'https://tv.apple.com/us/show/{id}'",
+    "com.hulu.livingroomplus": "am start -n com.hulu.livingroomplus/.WKWelcomeActivity --es 'deepLink' 'https://www.hulu.com/watch/{id}'",
+    "net.cj.cjhv.gs.tving": "am start -a android.intent.action.VIEW -d 'tving://detail/{id}'",
+    "com.coupang.play": "am start -a android.intent.action.VIEW -d 'coupangplay://watch/{id}'",
 }
 
 
@@ -110,17 +116,33 @@ class AndroidDriver(TVDriver):
         )
 
     async def launch_app_deep(self, app_id: str, content_id: str) -> None:
-        scheme = _DEEP_LINK_SCHEMES.get(app_id)
-        if scheme:
-            uri = scheme.replace("{id}", content_id)
-            await self._shell(
-                f"am start -a android.intent.action.VIEW -d '{uri}'"
-            )
+        # Normalize content IDs (strip URLs to bare IDs)
+        content_id = self._normalize_content_id(app_id, content_id)
+
+        if app_id in _DEEP_LINK_INTENTS:
+            cmd = _DEEP_LINK_INTENTS[app_id].replace("{id}", content_id)
+            await self._shell(cmd)
         else:
-            # Fallback: try generic VIEW intent
             await self._shell(
-                f"am start -a android.intent.action.VIEW -d '{content_id}' {app_id}"
+                f"am start -a android.intent.action.VIEW -d '{content_id}'"
             )
+
+    @staticmethod
+    def _normalize_content_id(app_id: str, content_id: str) -> str:
+        """Strip URLs to bare IDs for known apps."""
+        if "netflix" in app_id and "netflix.com" in content_id:
+            m = re.search(r"/(?:watch|title)/(\d+)", content_id)
+            if m:
+                return m.group(1)
+        if "youtube" in app_id and ("youtube.com" in content_id or "youtu.be" in content_id):
+            m = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", content_id)
+            if m:
+                return m.group(1)
+        if "spotify" in app_id and "open.spotify.com" in content_id:
+            m = re.search(r"open\.spotify\.com/(track|album|artist|playlist)/([A-Za-z0-9]+)", content_id)
+            if m:
+                return f"spotify:{m.group(1)}:{m.group(2)}"
+        return content_id
 
     async def close_app(self, app_id: str) -> None:
         await self._shell(f"am force-stop {app_id}")
@@ -148,20 +170,21 @@ class AndroidDriver(TVDriver):
     # -- Status & Info --------------------------------------------------------
 
     async def status(self) -> TVStatus:
-        # Get current foreground app
-        output = await self._shell("dumpsys window | grep -m1 mCurrentFocus")
+        # Run queries in parallel
+        app_raw, vol_raw, muted_raw = await asyncio.gather(
+            self._shell("dumpsys window windows | grep -m1 mCurrentFocus"),
+            self.get_volume(),
+            self.get_muted(),
+        )
         current_app = None
-        match = re.search(r"u0\s+(\S+)/", output)
+        match = re.search(r"([a-zA-Z][a-zA-Z0-9_.]+\.[a-zA-Z0-9_.]+)", app_raw)
         if match:
             current_app = match.group(1)
 
-        vol = await self.get_volume()
-        muted = await self.get_muted()
-
         return TVStatus(
             current_app=current_app,
-            volume=vol,
-            muted=muted,
+            volume=vol_raw,
+            muted=muted_raw,
             powered=True,
         )
 
