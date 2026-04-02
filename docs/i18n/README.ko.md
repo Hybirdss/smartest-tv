@@ -37,7 +37,10 @@ AI가 콘텐츠 ID(넷플릭스 에피소드, 유튜브 영상, Spotify URI)를 
 
 ### See it in action
 
-https://github.com/Hybirdss/smartest-tv/raw/main/docs/assets/demo.mp4
+<p align="center">
+  <video src="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4" controls width="720">
+  </video>
+</p>
 
 ## 설치
 

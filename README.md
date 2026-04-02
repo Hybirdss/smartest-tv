@@ -37,7 +37,10 @@ The AI finds the content ID (Netflix episode, YouTube video, Spotify URI), calls
 
 ### See it in action
 
-https://github.com/Hybirdss/smartest-tv/raw/main/docs/assets/demo.mp4
+<p align="center">
+  <video src="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4" controls width="720">
+  </video>
+</p>
 
 ## Install
 
