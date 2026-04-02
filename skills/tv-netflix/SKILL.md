@@ -24,13 +24,13 @@ Web search for `{show name} netflix` to find `netflix.com/title/{titleId}`.
 Navigate to the title page (works without login):
 
 ```
-mcp__playwright-plus__browser_navigate(url="https://www.netflix.com/title/{titleId}")
+mcp__playwright__browser_navigate(url="https://www.netflix.com/title/{titleId}")
 ```
 
 For multi-season shows, select the season:
 
 ```
-mcp__playwright-plus__browser_select_option(
+mcp__playwright__browser_select_option(
   element="Season selector dropdown",
   ref="{combobox_ref}",
   values=["Season 2"]       # Or localized: "시즌 2", "シーズン 2", etc.
@@ -40,7 +40,7 @@ mcp__playwright-plus__browser_select_option(
 ### Step 3: Extract IDs from page JavaScript
 
 ```javascript
-mcp__playwright-plus__browser_evaluate(function=`() => {
+mcp__playwright__browser_evaluate(function=`() => {
   const scripts = document.querySelectorAll('script');
   let ids = [];
   scripts.forEach(s => {
