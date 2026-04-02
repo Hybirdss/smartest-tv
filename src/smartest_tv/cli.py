@@ -717,5 +717,32 @@ def cache_show(ctx):
     _output(data, ctx.obj["fmt"])
 
 
+@cache_group.command("contribute")
+def cache_contribute():
+    """Show your local cache as community-cache.json format.
+
+    Copy the output and submit as a PR or GitHub Issue to share
+    your resolved content IDs with all stv users.
+
+    Example:
+        stv cache contribute > my-cache.json
+        # Then open a PR adding entries to community-cache.json
+    """
+    from smartest_tv import cache
+
+    data = cache._load()
+    # Strip private data (_history)
+    clean = {k: v for k, v in data.items() if not k.startswith("_")}
+    if not clean:
+        click.echo("Nothing to contribute. Play some content first.", err=True)
+        sys.exit(1)
+
+    click.echo(json.dumps(clean, ensure_ascii=False, indent=2))
+    click.echo("", err=True)
+    click.echo("☝ Copy this and submit a PR to:", err=True)
+    click.echo("  https://github.com/Hybirdss/smartest-tv", err=True)
+    click.echo("  Add entries to community-cache.json", err=True)
+
+
 if __name__ == "__main__":
     main()

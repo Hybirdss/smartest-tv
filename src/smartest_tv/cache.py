@@ -1,9 +1,12 @@
-"""Local content ID cache for smartest-tv.
+"""Local + community content ID cache for smartest-tv.
 
-Once a Netflix episode ID, YouTube video, or Spotify URI is resolved,
-it's cached locally so the next lookup is instant (0ms vs 2-10 seconds).
+Three-tier cache:
+  1. Local cache (~/.config/smartest-tv/cache.json) — instant
+  2. Community cache (GitHub raw) — ~0.3s, shared across all users
+  3. Web search + scraping — 2-3s fallback
 
 Cache lives at ~/.config/smartest-tv/cache.json
+Community cache: https://raw.githubusercontent.com/Hybirdss/smartest-tv/main/community-cache.json
 """
 
 from __future__ import annotations
@@ -15,6 +18,8 @@ from typing import Any
 from smartest_tv.config import CONFIG_DIR
 
 CACHE_FILE = CONFIG_DIR / "cache.json"
+COMMUNITY_CACHE_URL = "https://raw.githubusercontent.com/Hybirdss/smartest-tv/main/community-cache.json"
+_community_cache: dict | None = None  # in-memory cache for session
 
 
 def _load() -> dict[str, Any]:
@@ -32,9 +37,41 @@ def _save(data: dict[str, Any]) -> None:
 
 
 def get(platform: str, key: str) -> Any | None:
-    """Get a cached value. Returns None on miss."""
+    """Get a cached value. Checks local, then community cache."""
     data = _load()
-    return data.get(platform, {}).get(key)
+    result = data.get(platform, {}).get(key)
+    if result is not None:
+        return result
+
+    # Try community cache
+    cc = _load_community()
+    result = cc.get(platform, {}).get(key)
+    if result is not None:
+        # Promote to local cache
+        put(platform, key, result)
+    return result
+
+
+def _load_community() -> dict:
+    """Fetch community cache from GitHub. Cached in-memory per session."""
+    global _community_cache
+    if _community_cache is not None:
+        return _community_cache
+
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "3", COMMUNITY_CACHE_URL],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.stdout:
+            _community_cache = json.loads(result.stdout)
+            return _community_cache
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+        pass
+
+    _community_cache = {}
+    return _community_cache
 
 
 def put(platform: str, key: str, value: Any) -> None:
@@ -47,9 +84,30 @@ def put(platform: str, key: str, value: Any) -> None:
 
 
 def get_netflix_episode(title_slug: str, season: int, episode: int) -> str | None:
-    """Look up a cached Netflix episode ID."""
-    data = _load()
-    show = data.get("netflix", {}).get(title_slug)
+    """Look up a cached Netflix episode ID. Checks local, then community."""
+    # Try local first
+    result = _lookup_netflix_episode(_load(), title_slug, season, episode)
+    if result:
+        return result
+
+    # Try community cache
+    cc = _load_community()
+    result = _lookup_netflix_episode(cc, title_slug, season, episode)
+    if result:
+        # Promote show to local cache
+        show = cc.get("netflix", {}).get(title_slug)
+        if show:
+            data = _load()
+            if "netflix" not in data:
+                data["netflix"] = {}
+            data["netflix"][title_slug] = show
+            _save(data)
+    return result
+
+
+def _lookup_netflix_episode(data: dict, slug: str, season: int, episode: int) -> str | None:
+    """Look up episode from a cache dict."""
+    show = data.get("netflix", {}).get(slug)
     if not show:
         return None
     season_data = show.get("seasons", {}).get(str(season))

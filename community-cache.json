@@ -1,0 +1,36 @@
+{
+  "netflix": {
+    "frieren": {
+      "title_id": 81726714,
+      "seasons": {
+        "1": {"first_episode_id": 81726716, "episode_count": 10},
+        "2": {"first_episode_id": 82656790, "episode_count": 10}
+      }
+    },
+    "jujutsu-kaisen": {
+      "title_id": 81278456,
+      "seasons": {
+        "1": {"first_episode_id": 81342624, "episode_count": 10},
+        "2": {"first_episode_id": 81705281, "episode_count": 10},
+        "3": {"first_episode_id": 82656758, "episode_count": 10}
+      }
+    },
+    "one-piece": {
+      "title_id": 80217863,
+      "seasons": {
+        "1": {"first_episode_id": 81037630, "episode_count": 7},
+        "2": {"first_episode_id": 81677444, "episode_count": 7}
+      }
+    },
+    "squid-game": {
+      "title_id": 81040344,
+      "seasons": {
+        "1": {"first_episode_id": 81188691, "episode_count": 9},
+        "2": {"first_episode_id": 81716862, "episode_count": 7}
+      }
+    }
+  },
+  "youtube": {
+    "baby-shark": "XqZsoesa55w"
+  }
+}
