@@ -68,13 +68,51 @@ def resolve_netflix(
         except Exception:
             pass
 
-    # --- Can't resolve ---
+    # --- Auto-discover title ID via DuckDuckGo ---
     if not title_id:
+        title_id = _search_netflix_title_id(query)
+        if title_id:
+            # Retry with discovered title_id
+            return resolve_netflix(query, season, episode, title_id)
         raise ValueError(
-            "Pass --title-id (from netflix.com/title/XXXXX URL). "
-            f'Example: stv resolve netflix "{query}" --title-id 81726714 -s {season or 1} -e {episode or 1}'
+            f"Could not find Netflix title ID for '{query}'. "
+            f"Pass --title-id (from netflix.com/title/XXXXX URL)."
         )
     raise ValueError(f"Could not resolve {query} S{season}E{episode} from Netflix page.")
+
+
+def _search_netflix_title_id(query: str) -> int | None:
+    """Search for a Netflix title ID via Brave Search."""
+    return _web_search_first_match(
+        f"{query} site:netflix.com/title",
+        r"netflix\.com/title/(\d+)",
+        cast=int,
+    )
+
+
+def _web_search_first_match(query: str, pattern: str, cast=str):
+    """Search Brave (fallback DuckDuckGo) and return first regex match."""
+    from urllib.parse import quote
+
+    for search_url in [
+        f"https://search.brave.com/search?q={quote(query)}",
+        f"https://html.duckduckgo.com/html/?q={quote(query)}",
+    ]:
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-L", "--compressed", "--max-time", "10",
+                    "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                    search_url,
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            matches = re.findall(pattern, result.stdout or "")
+            if matches:
+                return cast(matches[0]) if cast else matches[0]
+        except (subprocess.TimeoutExpired, OSError):
+            continue
+    return None
 
 
 def _scrape_netflix_all_seasons(title_id: int) -> list[list[int]]:
@@ -165,7 +203,13 @@ def resolve_youtube(query: str) -> str:
 # ---------------------------------------------------------------------------
 
 def resolve_spotify(query: str) -> str:
-    """Resolve Spotify content to a URI."""
+    """Resolve Spotify content to a URI.
+
+    Accepts:
+      - Direct URI: spotify:track:xxx
+      - Direct URL: https://open.spotify.com/track/xxx
+      - Search query: "Ye White Lines" → searches DuckDuckGo for Spotify URL
+    """
     if query.startswith("spotify:"):
         return query
     if "open.spotify.com" in query:
@@ -178,10 +222,44 @@ def resolve_spotify(query: str) -> str:
     if cached:
         return cached
 
-    raise ValueError(
-        f"Pass a Spotify URL or URI directly. "
-        f"Example: stv play spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS"
-    )
+    # Search web for Spotify URL
+    uri = _search_spotify(query)
+    if uri:
+        cache.put("spotify", slug, uri)
+        return uri
+
+    raise ValueError(f"No Spotify results for: {query}")
+
+
+def _search_spotify(query: str) -> str | None:
+    """Search for a Spotify track/album via Brave Search."""
+    from urllib.parse import quote
+
+    for search_url in [
+        f"https://search.brave.com/search?q={quote(query)}+site:open.spotify.com",
+        f"https://html.duckduckgo.com/html/?q={quote(query)}+site:open.spotify.com",
+    ]:
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-L", "--compressed", "--max-time", "10",
+                    "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                    search_url,
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            matches = re.findall(
+                r"open\.spotify\.com/(track|album|playlist)/([A-Za-z0-9]+)",
+                result.stdout or "",
+            )
+            if matches:
+                # Prefer track > album > playlist
+                priority = {"track": 0, "album": 1, "playlist": 2}
+                matches.sort(key=lambda m: priority.get(m[0], 99))
+                return f"spotify:{matches[0][0]}:{matches[0][1]}"
+        except (subprocess.TimeoutExpired, OSError):
+            continue
+    return None
 
 
 # ---------------------------------------------------------------------------
