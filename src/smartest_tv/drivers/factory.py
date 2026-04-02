@@ -1,0 +1,76 @@
+"""Driver factory for smartest-tv.
+
+Creates TVDriver instances from config. Raises ValueError on failure
+(never calls sys.exit) so it is safe to use from both CLI and MCP server.
+"""
+
+from __future__ import annotations
+
+from smartest_tv.config import get_tv_config
+from smartest_tv.drivers.base import TVDriver
+
+
+def create_driver(tv_name: str | None = None) -> TVDriver:
+    """Create a TVDriver from config.
+
+    Args:
+        tv_name: Target TV name. None selects the default TV.
+
+    Returns:
+        An unconnected TVDriver instance.
+
+    Raises:
+        ValueError: TV not found, not configured, or unknown platform.
+        ImportError: Required driver package is not installed.
+    """
+    try:
+        tv = get_tv_config(tv_name)
+    except KeyError as e:
+        raise ValueError(str(e)) from e
+
+    platform = tv.get("platform", "")
+
+    if not platform:
+        raise ValueError("No TV configured. Run: stv setup")
+
+    ip = tv.get("ip", "")
+    mac = tv.get("mac", "")
+
+    if platform == "lg":
+        try:
+            from smartest_tv.drivers.lg import LGDriver
+        except ImportError as e:
+            raise ImportError(
+                "LG driver requires bscpylgtv. Install with: pip install 'stv[lg]'"
+            ) from e
+        return LGDriver(ip=ip, mac=mac)
+
+    elif platform == "samsung":
+        try:
+            from smartest_tv.drivers.samsung import SamsungDriver
+        except ImportError as e:
+            raise ImportError(
+                "Samsung driver requires samsungtvws. Install with: pip install 'stv[samsung]'"
+            ) from e
+        return SamsungDriver(ip=ip, mac=mac)
+
+    elif platform in ("android", "firetv"):
+        try:
+            from smartest_tv.drivers.android import AndroidDriver
+        except ImportError as e:
+            raise ImportError(
+                "Android driver requires adb-shell. Install with: pip install 'stv[android]'"
+            ) from e
+        return AndroidDriver(ip=ip)
+
+    elif platform == "roku":
+        try:
+            from smartest_tv.drivers.roku import RokuDriver
+        except ImportError as e:
+            raise ImportError(
+                "Roku driver requires aiohttp. Install with: pip install 'stv[roku]'"
+            ) from e
+        return RokuDriver(ip=ip)
+
+    else:
+        raise ValueError(f"Unknown platform: {platform}. Run: stv setup")

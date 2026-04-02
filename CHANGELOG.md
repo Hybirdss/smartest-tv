@@ -1,56 +1,76 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/).
+
+## [Unreleased]
+
+## [0.6.0] - 2026-04-03
+
+### Added
+- `stv scene`: Preset system with movie-night, kids, sleep, music built-in scenes + custom scene support
+- `stv recommend`: AI-powered content recommendations based on watch history (optional Ollama LLM enhancement)
+- OpenClaw/ClawHub skill integration (`clawhub install smartest-tv`)
+- `docs/` restructured into 3-layer hierarchy (getting-started, guides, reference, integrations, contributing)
+- Driver factory pattern (`drivers/factory.py`) for clean driver instantiation
+
+### Fixed
+- scenes.py dependency on cli.py's `_get_driver` (now uses `drivers/factory.py`)
+- Incorrect `stv screen-off` reference in SKILL.md
+
+## [0.5.0] - 2026-04-03
+
+### Added
+- `stv cast <URL>`: Paste Netflix/YouTube/Spotify URLs to play on TV
+- `stv queue`: Play queue system (add/show/play/skip/clear)
+- `stv whats-on`: Netflix and YouTube trending content
+- `stv multi`: Multi-TV management with `--tv` flag on all commands
+- 62 new unit tests (55 → 117 total)
+
+### Fixed
+- Season 0 (specials) silently dropped in `record_play` (`if season:` → `if season is not None:`)
+- TV name TOML injection vulnerability in `config.py`
+- Overly broad exception handling in trending fetch
+
+## [0.4.1] - 2026-04-03
+
+### Added
+- MCP Registry metadata (`server.json`)
+- `mcp-name` comment in README for PyPI ownership verification
+
 ## [0.4.0] - 2026-04-03
 
 ### Added
+- `stv setup`: Interactive TV setup wizard with SSDP multi-platform discovery
+- `stv serve`: Remote MCP server mode (SSE/streamable-http)
+- 55 unit tests with CI workflow
+- Community cache expanded to 40 entries (29 Netflix, 11 YouTube)
+- `docs/` folder with setup guide, MCP integration, API reference, contributing guide
+- CHANGELOG.md
 
-- **`stv setup` wizard** — zero-config first-time setup. Auto-discovers LG, Samsung, Roku, and Android/Fire TV on the local network via SSDP + ADB port scan. Detects platform, pairs, saves config, sends a test notification, and detects installed AI clients (Claude Code, Cursor) — all in one command. `--ip` flag skips discovery for manual IP entry.
-- **`stv serve` remote MCP server** — run stv as an HTTP MCP server (`stv serve --host 0.0.0.0 --port 8910`). Supports both `sse` and `streamable-http` transports, enabling remote AI agent access over the network.
-- **Multi-platform SSDP discovery** — `discovery.py` now searches for LG (`urn:lge-com:service:webos-second-screen:1`), Samsung (`urn:samsung.com:device:RemoteControlReceiver:1`), and Roku (`roku:ecp`) simultaneously. Android/Fire TV discovered via ADB port 5555 scan.
-- **Unit tests** — `pytest` test suite covering `resolve`, `cache`, and CLI commands.
-- **Community cache expansion** — `community-cache.json` seeded with 50+ popular Netflix shows.
-- **`docs/` folder** — structured documentation: setup guide, MCP integration guide, demo script, and i18n README files.
-
-### Changed
-
-- `discovery.py` timeout reduced from 5s to 3s for faster setup UX.
-- `setup.py` `_detect_platform()` consolidated into `discovery.py` `_extract_name()`.
-
-## [0.3.0] - 2026-04-03
+## [0.3.0] - 2026-04-02
 
 ### Added
+- `stv search`: Content search without playing
+- `stv next`: Continue watching
+- `stv history`: Play history
+- Community cache system (GitHub raw CDN)
+- Web search fallback (Brave Search)
+- CLAUDE.md for AI agent context
+- PyPI publication (`pip install stv`)
 
-- `stv next` — play the next episode of a Netflix show using play history.
-- `stv history` — show recent play history.
-- `stv cache contribute` — export local cache as community-cache.json format for sharing.
-- Community cache (`community-cache.json`) — pre-resolved content IDs contributed by users.
-- 7-language README translations (ko, zh, ja, es, de, pt-br, fr).
-- Agent skill (`skills/tv/`) — single unified Markdown skill for AI assistants.
-
-### Changed
-
-- Netflix resolution: switched from DuckDuckGo (rate-limited) to Brave Search with DDG fallback.
-- `stv play` now records to history automatically.
-
-## [0.2.0]
+## [0.2.0] - 2026-04-02
 
 ### Added
+- Netflix content resolution via `__typename` HTML parsing
+- YouTube resolution via yt-dlp
+- Spotify resolution via web search
+- Deep linking for LG, Samsung, Roku, Android TV
 
-- Samsung Tizen driver (`samsungtvws`).
-- Android TV / Fire TV driver (`adb-shell`).
-- Roku driver (HTTP ECP).
-- `stv doctor` — connection diagnostics.
-- `stv cache set/get/show` — manual cache management.
-
-## [0.1.0]
+## [0.1.0] - 2026-04-01
 
 ### Added
-
-- Initial release. LG webOS driver via `bscpylgtv`.
-- `stv play`, `stv resolve`, `stv launch`, `stv status`, `stv volume`, `stv mute`, `stv off`.
-- Netflix deep link resolver (curl + `__typename` parsing, no Playwright).
-- YouTube resolver via `yt-dlp`.
-- Spotify resolver via Brave Search.
-- FastMCP server (`stv` as MCP tool provider).
-- TOML config (`~/.config/smartest-tv/config.toml`).
-- JSON cache (`~/.config/smartest-tv/cache.json`).
+- Initial release
+- LG webOS driver
+- Basic CLI (play, launch, status, volume, off)

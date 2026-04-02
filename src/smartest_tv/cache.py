@@ -174,6 +174,40 @@ def get_history(limit: int = 10) -> list[dict]:
     return data.get("_history", [])[:limit]
 
 
+def analyze_history() -> dict:
+    """Analyze watch history for recommendation patterns.
+
+    Returns a dict with:
+      - top_platform: most-watched platform (or None)
+      - recent_shows: list of recent unique show queries (last 10)
+      - watch_count: {platform: count} across last 50 entries
+    """
+    entries = get_history(50)
+    if not entries:
+        return {"top_platform": None, "recent_shows": [], "watch_count": {}}
+
+    watch_count: dict[str, int] = {}
+    recent_shows: list[str] = []
+    seen_shows: set[str] = set()
+
+    for entry in entries:
+        platform = entry.get("platform", "")
+        if platform:
+            watch_count[platform] = watch_count.get(platform, 0) + 1
+
+        query = entry.get("query", "")
+        if query and query not in seen_shows and len(recent_shows) < 10:
+            recent_shows.append(query)
+            seen_shows.add(query)
+
+    top_platform = max(watch_count, key=watch_count.get) if watch_count else None
+    return {
+        "top_platform": top_platform,
+        "recent_shows": recent_shows,
+        "watch_count": watch_count,
+    }
+
+
 def get_last_played(query: str | None = None, platform: str | None = None) -> dict | None:
     """Get the most recent play for a query or platform."""
     for entry in get_history(50):

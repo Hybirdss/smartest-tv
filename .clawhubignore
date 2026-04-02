@@ -1,0 +1,6 @@
+tests/
+.github/
+.env
+dist/
+community-cache.json
+launch-posts.md

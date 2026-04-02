@@ -7,7 +7,6 @@ import asyncio
 from fastmcp import FastMCP
 
 from smartest_tv.apps import resolve_app
-from smartest_tv.config import get_tv_config
 from smartest_tv.drivers.base import TVDriver
 
 # ---------------------------------------------------------------------------
@@ -19,29 +18,8 @@ _driver_lock = asyncio.Lock()
 
 def _create_driver(tv_name: str | None = None) -> TVDriver:
     """Create a driver from config file (with env var overrides)."""
-    try:
-        tv = get_tv_config(tv_name)
-    except KeyError as e:
-        raise ValueError(str(e))
-
-    platform = tv.get("platform", "")
-    ip = tv.get("ip", "")
-    mac = tv.get("mac", "")
-
-    if platform == "lg":
-        from smartest_tv.drivers.lg import LGDriver
-        return LGDriver(ip=ip, mac=mac)
-    elif platform == "samsung":
-        from smartest_tv.drivers.samsung import SamsungDriver
-        return SamsungDriver(ip=ip, mac=mac)
-    elif platform in ("android", "firetv"):
-        from smartest_tv.drivers.android import AndroidDriver
-        return AndroidDriver(ip=ip)
-    elif platform == "roku":
-        from smartest_tv.drivers.roku import RokuDriver
-        return RokuDriver(ip=ip)
-    else:
-        raise ValueError("No TV configured. Run: stv setup")
+    from smartest_tv.drivers.factory import create_driver
+    return create_driver(tv_name)
 
 
 async def _get_driver(tv_name: str | None = None) -> TVDriver:
@@ -663,6 +641,45 @@ async def tv_next(query: str | None = None, tv_name: str | None = None) -> str:
 
 
 @mcp.tool()
+async def tv_recommend(mood: str | None = None, limit: int = 5) -> str:
+    """Get personalized content recommendations based on watch history.
+
+    Combines watch history patterns with trending content.
+    Set STV_LLM_URL env var to enable AI-powered reasons.
+
+    Args:
+        mood: Optional filter — "chill", "action", "kids", or "random".
+        limit: Number of recommendations (default 5).
+
+    Returns:
+        Formatted list of recommendations with title, platform, and reason.
+    """
+    from smartest_tv.resolve import get_recommendations
+    from smartest_tv import cache as _cache
+
+    history_data = _cache.analyze_history()
+    recent = history_data["recent_shows"]
+    results = get_recommendations(mood=mood, limit=limit)
+
+    if not results:
+        return "No recommendations available. Try tv_whats_on for trending content."
+
+    lines: list[str] = []
+    if recent:
+        lines.append(f"Based on your recent watching ({', '.join(recent[:3])}):\n")
+    else:
+        lines.append("Trending now (no watch history yet):\n")
+
+    for i, rec in enumerate(results, 1):
+        title = rec["title"]
+        platform = rec["platform"].capitalize()
+        reason = rec["reason"]
+        lines.append(f"  {i}. {title:<30s}  {platform:<8s}  — {reason}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
 async def tv_list_tvs() -> list[dict]:
     """List all configured TVs.
 
@@ -671,3 +688,40 @@ async def tv_list_tvs() -> list[dict]:
     """
     from smartest_tv.config import list_tvs
     return list_tvs()
+
+
+# -- Scene Presets -----------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_scene_list() -> list[dict]:
+    """List all available scene presets (built-in and custom).
+
+    Returns a list of scenes with name, description, and steps.
+    Built-in scenes: movie-night, kids, sleep, music.
+    """
+    from smartest_tv.scenes import list_scenes
+    scenes = list_scenes()
+    return [
+        {"name": name, "description": s.get("description", ""), "steps": s.get("steps", [])}
+        for name, s in scenes.items()
+    ]
+
+
+@mcp.tool()
+async def tv_scene_run(name: str, tv_name: str | None = None) -> str:
+    """Run a scene preset — executes all steps in order.
+
+    Built-in scenes: movie-night, kids, sleep, music.
+    Custom scenes are defined in ~/.config/smartest-tv/scenes.json.
+
+    Args:
+        name: Scene name (e.g. "movie-night", "sleep").
+        tv_name: Target TV name (default: primary TV).
+    """
+    from smartest_tv.scenes import run_scene
+    try:
+        results = await run_scene(name, tv_name)
+    except KeyError as exc:
+        return f"Error: {exc}"
+    return "\n".join(results) + f"\nScene '{name}' done."

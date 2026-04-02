@@ -130,6 +130,14 @@ Any AI agent that can run shell commands:
 
 **Claude Code** · **OpenCode** · **Cursor** · **Codex** · **OpenClaw** · **Goose** · **Gemini CLI** · or just `bash`
 
+### OpenClaw
+
+```bash
+clawhub install smartest-tv
+```
+
+See the [OpenClaw integration guide](docs/integrations/openclaw.md) for MCP config and usage examples.
+
 ## Real World
 
 **It's 2am.** You're in bed. You tell Claude: "Play where I left off on Stranger Things." The living room TV turns on, Netflix opens, the episode starts. You never touched the remote. You barely opened your eyes.
@@ -272,10 +280,12 @@ You (natural language)
 
 | Guide | What's inside |
 |-------|---------------|
-| [Setup Guide](docs/setup-guide.md) | Brand-specific TV setup (LG pairing, Samsung remote access, ADB, Roku ECP) |
-| [MCP Integration](docs/mcp-integration.md) | Claude Code, Cursor, and other MCP client configuration |
-| [API Reference](docs/api-reference.md) | All CLI commands + all 20 MCP tools with parameters |
-| [Contributing Cache](docs/contributing-cache.md) | How to find Netflix IDs and submit a PR to the community cache |
+| [Installation](docs/getting-started/installation.md) | First-time setup for LG, Samsung, Roku, Android TV |
+| [Playing Content](docs/guides/playing-content.md) | play, cast, search, queue |
+| [AI Agents](docs/guides/ai-agents.md) | MCP server setup for Claude, Cursor, OpenClaw |
+| [CLI Reference](docs/reference/cli.md) | All commands and options |
+| [MCP Tools](docs/reference/mcp-tools.md) | All 32 MCP tools with parameters |
+| [Contributing](docs/contributing/cache-contributions.md) | Add shows to community cache |
 
 ## Contributing
 

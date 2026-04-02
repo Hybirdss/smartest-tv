@@ -56,6 +56,7 @@ src/smartest_tv/
   setup.py        — Interactive setup wizard (auto-discover + pair)
   drivers/
     base.py       — TVDriver ABC (22 methods)
+    factory.py    — Driver factory (create_driver() used by CLI + scenes)
     lg.py         — LG webOS via bscpylgtv (WebSocket SSAP)
     samsung.py    — Samsung Tizen via samsungtvws
     android.py    — Android TV / Fire TV via ADB TCP
@@ -63,11 +64,14 @@ src/smartest_tv/
 skills/tv/        — Single unified AI agent skill (Markdown)
 tests/            — Unit tests (pytest, no TV required)
 docs/
-  setup-guide.md        — First-time setup walkthrough
-  mcp-integration.md    — MCP server config (Claude Code, Cursor, etc.)
-  api-reference.md      — All CLI commands + MCP tools
-  contributing-cache.md — How to contribute content IDs
-  i18n/               — 7 language README translations
+  getting-started/      — First-time setup and quickstart
+  guides/               — How-to guides (cast, queue, scenes, multi-TV, etc.)
+  reference/            — API reference (all CLI commands + MCP tools)
+  integrations/         — MCP integration guides (Claude Code, Cursor, etc.)
+  contributing/         — Contributing cache, drivers, and skill guides
+  i18n/                 — 7 language README translations
+  setup-guide.md        — First-time setup walkthrough (legacy, kept for links)
+  mcp-integration.md    — MCP server config (legacy, kept for links)
 ```
 
 ## Key Architecture

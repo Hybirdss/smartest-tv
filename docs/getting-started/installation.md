@@ -1,4 +1,4 @@
-# Setup Guide
+# Installation
 
 This guide walks through first-time setup for each supported TV platform.
 After completing setup for your platform, run `stv status` to confirm the connection.

@@ -450,6 +450,187 @@ def fetch_youtube_trending(limit: int = 10) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Recommendations
+# ---------------------------------------------------------------------------
+
+_MOOD_CATEGORIES = {
+    "chill": {"netflix": ["documentary", "reality", "comedy"], "youtube": ["music", "relaxing", "lo-fi"]},
+    "action": {"netflix": ["thriller", "action", "crime"], "youtube": ["action", "sports", "highlights"]},
+    "kids": {"netflix": ["animation", "family", "kids"], "youtube": ["animation", "kids", "cartoons"]},
+    "random": {"netflix": [], "youtube": []},
+}
+
+
+def get_recommendations(mood: str | None = None, limit: int = 5) -> list[dict]:
+    """Get content recommendations based on history + trending.
+
+    Rules:
+    - Uses history to determine top platform (falls back to Netflix)
+    - Filters trending by mood keywords when mood is given
+    - Prefers content not already in recent history
+    - Falls back to trending-only if history is empty
+
+    LLM enhancement:
+    - If STV_LLM_URL env var is set, calls an Ollama/OpenAI-compatible API
+      for natural language recommendation reasons.
+    """
+    import os
+    import time as _time
+    from smartest_tv import cache as _cache
+
+    history_data = _cache.analyze_history()
+    top_platform = history_data["top_platform"] or "netflix"
+    recent_shows = set(history_data["recent_shows"])
+
+    trending_nf = fetch_netflix_trending(20)
+    trending_yt = fetch_youtube_trending(20)
+
+    # Build candidate pool
+    candidates: list[dict] = []
+
+    def _score_netflix(item: dict) -> int:
+        title = item.get("title", "").lower()
+        cat = item.get("category", "").lower()
+        already_watched = any(s.lower() in title or title in s.lower() for s in recent_shows)
+        score = 0
+        if not already_watched:
+            score += 2
+        if mood and mood != "random":
+            keywords = _MOOD_CATEGORIES.get(mood, {}).get("netflix", [])
+            if any(kw in title or kw in cat for kw in keywords):
+                score += 3
+        if top_platform == "netflix":
+            score += 1
+        return score
+
+    def _score_youtube(item: dict) -> int:
+        title = item.get("title", "").lower()
+        channel = item.get("channel", "").lower()
+        already_watched = any(s.lower() in title or title in s.lower() for s in recent_shows)
+        score = 0
+        if not already_watched:
+            score += 2
+        if mood and mood != "random":
+            keywords = _MOOD_CATEGORIES.get(mood, {}).get("youtube", [])
+            if any(kw in title or kw in channel for kw in keywords):
+                score += 3
+        if top_platform == "youtube":
+            score += 1
+        return score
+
+    scored_nf = sorted(
+        [{"item": it, "score": _score_netflix(it), "platform": "netflix"} for it in trending_nf],
+        key=lambda x: x["score"], reverse=True,
+    )
+    scored_yt = sorted(
+        [{"item": it, "score": _score_youtube(it), "platform": "youtube"} for it in trending_yt],
+        key=lambda x: x["score"], reverse=True,
+    )
+
+    # Interleave, top-platform first
+    if top_platform == "youtube":
+        merged = _interleave(scored_yt, scored_nf, limit)
+    else:
+        merged = _interleave(scored_nf, scored_yt, limit)
+
+    # Build result dicts with rule-based reasons
+    results: list[dict] = []
+    for entry in merged[:limit]:
+        item = entry["item"]
+        platform = entry["platform"]
+        title = item.get("title", "")
+
+        already_watched = any(s.lower() in title.lower() or title.lower() in s.lower() for s in recent_shows)
+        if already_watched:
+            reason = "In your history"
+        elif mood and mood != "random":
+            reason = f"Matches {mood} mood"
+        elif platform == top_platform:
+            reason = f"Your most-watched platform"
+        else:
+            reason = "Trending now"
+
+        if platform == "netflix":
+            cat = item.get("category", "")
+            if cat:
+                reason = f"{cat} — {reason}"
+
+        results.append({"title": title, "platform": platform, "reason": reason})
+
+    # Optional LLM enhancement
+    llm_url = os.environ.get("STV_LLM_URL")
+    if llm_url and results:
+        results = _enhance_with_llm(llm_url, results, history_data["recent_shows"], mood)
+
+    return results
+
+
+def _interleave(primary: list[dict], secondary: list[dict], limit: int) -> list[dict]:
+    """Interleave two scored lists, primary first, alternating."""
+    out: list[dict] = []
+    pi, si = 0, 0
+    primary_turn = True
+    while len(out) < limit and (pi < len(primary) or si < len(secondary)):
+        if primary_turn and pi < len(primary):
+            out.append(primary[pi])
+            pi += 1
+        elif not primary_turn and si < len(secondary):
+            out.append(secondary[si])
+            si += 1
+        elif pi < len(primary):
+            out.append(primary[pi])
+            pi += 1
+        elif si < len(secondary):
+            out.append(secondary[si])
+            si += 1
+        primary_turn = not primary_turn
+    return out
+
+
+def _enhance_with_llm(llm_url: str, results: list[dict], recent_shows: list[str], mood: str | None) -> list[dict]:
+    """Optionally enhance recommendation reasons via LLM (Ollama-compatible API).
+
+    If the LLM call fails for any reason, returns results unchanged.
+    """
+    import json as _json
+
+    titles_str = ", ".join(r["title"] for r in results)
+    history_str = ", ".join(recent_shows[:5]) if recent_shows else "nothing yet"
+    mood_str = mood or "no specific mood"
+
+    prompt = (
+        f"User recently watched: {history_str}. "
+        f"Mood: {mood_str}. "
+        f"Give a short (5-10 word) personalized reason for each of these titles: {titles_str}. "
+        f"Respond as a JSON array of strings in the same order, e.g. [\"reason1\", \"reason2\"]."
+    )
+
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "10",
+             "-H", "Content-Type: application/json",
+             "-d", _json.dumps({"model": "qwen3.5:9b", "prompt": prompt, "stream": False}),
+             llm_url],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.stdout:
+            data = _json.loads(result.stdout)
+            response_text = data.get("response", "")
+            # Extract JSON array from response
+            m = re.search(r'\[.*?\]', response_text, re.DOTALL)
+            if m:
+                reasons = _json.loads(m.group(0))
+                if isinstance(reasons, list) and len(reasons) == len(results):
+                    for i, reason in enumerate(reasons):
+                        if isinstance(reason, str) and reason.strip():
+                            results[i]["reason"] = reason.strip()
+    except Exception:
+        pass  # LLM enhancement is best-effort
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Unified
 # ---------------------------------------------------------------------------
 

@@ -23,33 +23,11 @@ from smartest_tv.drivers.base import TVDriver
 
 def _get_driver(tv_name: str | None = None) -> TVDriver:
     """Create driver from config file (or env var overrides)."""
+    from smartest_tv.drivers.factory import create_driver
     try:
-        tv = get_tv_config(tv_name)
-    except KeyError as e:
-        click.echo(f"❌ {e}", err=True)
-        sys.exit(1)
-
-    platform = tv.get("platform", "")
-
-    if not platform:
-        click.echo("❌ No TV configured. Run: stv setup", err=True)
-        sys.exit(1)
-
-    if platform == "lg":
-        from smartest_tv.drivers.lg import LGDriver
-        return LGDriver(ip=tv["ip"], mac=tv.get("mac", ""))
-    elif platform == "samsung":
-        from smartest_tv.drivers.samsung import SamsungDriver
-        return SamsungDriver(ip=tv["ip"], mac=tv.get("mac", ""))
-    elif platform in ("android", "firetv"):
-        from smartest_tv.drivers.android import AndroidDriver
-        return AndroidDriver(ip=tv["ip"])
-    elif platform == "roku":
-        from smartest_tv.drivers.roku import RokuDriver
-        return RokuDriver(ip=tv["ip"])
-    else:
-        click.echo(f"❌ Unknown platform: {platform}. Run: stv setup", err=True)
-        sys.exit(1)
+        return create_driver(tv_name)
+    except (ValueError, ImportError) as e:
+        raise click.ClickException(str(e))
 
 
 def _run(coro):
@@ -804,6 +782,53 @@ def history(ctx, limit):
 
 
 @main.command()
+@click.option("--mood", "-m", default=None,
+              type=click.Choice(["chill", "action", "kids", "random"]),
+              help="Filter by mood")
+@click.option("--limit", "-n", default=5, type=int, help="Number of results")
+@click.pass_context
+def recommend(ctx, mood, limit):
+    """Get personalized content recommendations.
+
+    Uses watch history + trending to suggest what to watch.
+    Set STV_LLM_URL to enable AI-powered reasons (e.g. http://localhost:11434/api/generate).
+
+    Examples:
+        stv recommend
+        stv recommend --mood chill
+        stv recommend --mood action -n 3
+    """
+    from smartest_tv.resolve import get_recommendations
+    from smartest_tv import cache as _cache
+
+    history_data = _cache.analyze_history()
+    recent = history_data["recent_shows"]
+
+    results = get_recommendations(mood=mood, limit=limit)
+
+    if not results:
+        click.echo("No recommendations available. Try: stv whats-on")
+        return
+
+    fmt = ctx.obj["fmt"]
+    if fmt == "json":
+        import json
+        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
+        return
+
+    if recent:
+        click.echo(f"Based on your recent watching ({', '.join(recent[:3])}):\n")
+    else:
+        click.echo("Trending now (no watch history yet):\n")
+
+    for i, rec in enumerate(results, 1):
+        title = rec["title"]
+        platform = rec["platform"].capitalize()
+        reason = rec["reason"]
+        click.echo(f"  {i}. {title:<30s}  {platform:<8s}  — {reason}")
+
+
+@main.command()
 @click.argument("query", nargs=-1)
 @click.pass_context
 def next(ctx, query):
@@ -1099,6 +1124,154 @@ def cache_contribute():
     click.echo("☝ Copy this and submit a PR to:", err=True)
     click.echo("  https://github.com/Hybirdss/smartest-tv", err=True)
     click.echo("  Add entries to community-cache.json", err=True)
+
+
+# -- Scene Presets -----------------------------------------------------------
+
+
+@main.group("scene")
+def scene_group():
+    """Run or manage scene presets (movie-night, kids, sleep, music, ...)."""
+
+
+@scene_group.command("list")
+@click.pass_context
+def scene_list_cmd(ctx):
+    """List all available scenes (built-in and custom).
+
+    Example:
+        stv scene list
+    """
+    from smartest_tv.scenes import list_scenes, BUILTIN_SCENES
+
+    scenes = list_scenes()
+    if ctx.obj["fmt"] == "json":
+        _output(scenes, "json")
+        return
+
+    for name, scene in scenes.items():
+        tag = "" if name in BUILTIN_SCENES else " [custom]"
+        click.echo(f"  {name}{tag}")
+        click.echo(f"    {scene.get('description', '')}")
+        for step in scene.get("steps", []):
+            action = step.get("action")
+            if action == "volume":
+                click.echo(f"      volume -> {step.get('value')}")
+            elif action == "notify":
+                click.echo(f"      notify -> {step.get('message')}")
+            elif action == "screen_off":
+                click.echo(f"      screen off")
+            elif action == "screen_on":
+                click.echo(f"      screen on")
+            elif action == "play":
+                click.echo(f"      play {step.get('platform')} \"{step.get('query')}\"")
+            elif action == "webhook":
+                click.echo(f"      webhook -> {step.get('url')}")
+            else:
+                click.echo(f"      {action}")
+
+
+@scene_group.command("run")
+@click.argument("name")
+@click.pass_context
+def scene_run_cmd(ctx, name):
+    """Run a scene preset.
+
+    Examples:
+        stv scene run movie-night
+        stv scene run sleep
+        stv scene run my-custom-scene
+    """
+    from smartest_tv.scenes import run_scene
+
+    tv_name = ctx.obj["tv_name"]
+
+    async def _do():
+        return await run_scene(name, tv_name)
+
+    try:
+        results = _run(_do())
+    except KeyError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
+
+    for msg in results:
+        click.echo(f"  {msg}")
+    click.echo(f"Scene '{name}' done.")
+
+
+@scene_group.command("create")
+@click.argument("name")
+@click.option("--description", "-d", default="", help="Short description")
+def scene_create_cmd(name, description):
+    """Create a custom scene interactively.
+
+    Example:
+        stv scene create my-scene --description "My custom scene"
+    """
+    from smartest_tv.scenes import BUILTIN_SCENES, save_custom_scene
+
+    if name in BUILTIN_SCENES:
+        click.echo(f"❌ '{name}' is a built-in scene. Choose a different name.", err=True)
+        sys.exit(1)
+
+    click.echo(f"Creating scene '{name}'. Add steps one by one (empty action to finish).")
+    click.echo("Actions: volume, notify, screen_off, screen_on, play, webhook")
+    click.echo()
+
+    steps = []
+    while True:
+        action = click.prompt("  action", default="", show_default=False).strip()
+        if not action:
+            break
+
+        step: dict = {"action": action}
+
+        if action == "volume":
+            step["value"] = click.prompt("  value (0-100)", type=int)
+        elif action == "notify":
+            step["message"] = click.prompt("  message")
+        elif action == "play":
+            step["platform"] = click.prompt("  platform (netflix/youtube/spotify)")
+            step["query"] = click.prompt("  query")
+            season = click.prompt("  season (optional)", default="", show_default=False).strip()
+            if season:
+                step["season"] = int(season)
+                step["episode"] = click.prompt("  episode", type=int)
+        elif action == "webhook":
+            step["url"] = click.prompt("  url")
+        elif action in ("screen_off", "screen_on"):
+            pass  # no extra fields
+        else:
+            click.echo(f"  Unknown action '{action}' — adding as-is.")
+
+        steps.append(step)
+        click.echo(f"  Step added: {step}")
+
+    if not steps:
+        click.echo("No steps added. Scene not saved.")
+        return
+
+    save_custom_scene(name, description, steps)
+    click.echo(f"Scene '{name}' saved with {len(steps)} step(s).")
+
+
+@scene_group.command("delete")
+@click.argument("name")
+def scene_delete_cmd(name):
+    """Delete a custom scene.
+
+    Example:
+        stv scene delete my-scene
+    """
+    from smartest_tv.scenes import delete_custom_scene
+
+    try:
+        delete_custom_scene(name)
+        click.echo(f"Scene '{name}' deleted.")
+    except KeyError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(1)
 
 
 # -- Multi TV Management -----------------------------------------------------
