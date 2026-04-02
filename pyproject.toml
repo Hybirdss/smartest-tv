@@ -1,6 +1,6 @@
 [project]
 name = "stv"
-version = "0.2.0"
+version = "0.3.0"
 description = "Talk to your TV. Control any smart TV with natural language."
 readme = "README.md"
 license = "MIT"
