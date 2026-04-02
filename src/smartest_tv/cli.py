@@ -327,6 +327,96 @@ def notify(message):
     click.echo(f"Sent: {message}")
 
 
+# -- Search ------------------------------------------------------------------
+
+
+@main.command()
+@click.argument("platform")
+@click.argument("query", nargs=-1, required=True)
+@click.pass_context
+def search(ctx, platform, query):
+    """Search for content and show what stv found.
+
+    Examples:
+        stv search netflix Frieren
+        stv search spotify "Ye White Lines"
+        stv search youtube "baby shark"
+    """
+    from smartest_tv.resolve import (
+        _search_netflix_title_id, _scrape_netflix_all_seasons,
+        _search_spotify, _slugify,
+    )
+
+    query_str = " ".join(query)
+    p = platform.lower()
+
+    if p == "netflix":
+        title_id = _search_netflix_title_id(query_str)
+        if not title_id:
+            click.echo(f"❌ No Netflix results for: {query_str}", err=True)
+            sys.exit(1)
+
+        result = {"title_id": title_id, "url": f"https://www.netflix.com/title/{title_id}"}
+        try:
+            seasons = _scrape_netflix_all_seasons(title_id)
+            result["seasons"] = len(seasons)
+            result["episodes"] = {
+                f"S{i}": f"{s[0]}–{s[-1]} ({len(s)} eps)"
+                for i, s in enumerate(seasons, 1)
+            }
+        except Exception:
+            pass
+
+        if ctx.obj["fmt"] == "json":
+            _output(result, "json")
+        else:
+            click.echo(f"📺 {query_str}")
+            click.echo(f"   Netflix ID: {title_id}")
+            click.echo(f"   URL: https://www.netflix.com/title/{title_id}")
+            if "seasons" in result:
+                click.echo(f"   {result['seasons']} seasons:")
+                for sn, info in result["episodes"].items():
+                    click.echo(f"     {sn}: {info}")
+
+    elif p == "spotify":
+        uri = _search_spotify(query_str)
+        if not uri:
+            click.echo(f"❌ No Spotify results for: {query_str}", err=True)
+            sys.exit(1)
+        if ctx.obj["fmt"] == "json":
+            _output({"uri": uri}, "json")
+        else:
+            click.echo(f"🎵 {query_str}")
+            click.echo(f"   URI: {uri}")
+
+    elif p == "youtube":
+        import shutil, subprocess as sp
+        if not shutil.which("yt-dlp"):
+            click.echo("❌ yt-dlp not found", err=True)
+            sys.exit(1)
+        r = sp.run(
+            ["yt-dlp", f"ytsearch3:{query_str}", "--get-id", "--get-title", "--no-download"],
+            capture_output=True, text=True, timeout=30,
+        )
+        lines = r.stdout.strip().split("\n")
+        if len(lines) < 2:
+            click.echo(f"❌ No YouTube results for: {query_str}", err=True)
+            sys.exit(1)
+        # yt-dlp alternates: title, id, title, id, ...
+        results = []
+        for i in range(0, len(lines) - 1, 2):
+            results.append({"title": lines[i], "id": lines[i + 1]})
+        if ctx.obj["fmt"] == "json":
+            _output(results, "json")
+        else:
+            click.echo(f"🔍 YouTube: {query_str}")
+            for r in results:
+                click.echo(f"   {r['id']}  {r['title']}")
+    else:
+        click.echo(f"❌ Unsupported: {platform}", err=True)
+        sys.exit(1)
+
+
 # -- Resolve & Play ----------------------------------------------------------
 
 

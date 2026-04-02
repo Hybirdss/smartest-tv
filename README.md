@@ -10,8 +10,9 @@
 
 Other tools open Netflix. smartest-tv plays *Frieren season 2 episode 8*.
 
-<!-- TODO: Add terminal demo GIF here -->
-<!-- ![demo](docs/assets/demo.gif) -->
+<p align="center">
+  <img src="docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
+</p>
 
 ## Quick Start
 
@@ -33,6 +34,10 @@ You: Good night
 ```
 
 The AI finds the content ID (Netflix episode, YouTube video, Spotify URI), calls `stv`, and your TV plays it.
+
+### See it in action
+
+https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO
 
 ## Install
 
@@ -209,6 +214,10 @@ You (natural language)
       → Driver (WebSocket / ADB / HTTP)
         → TV
 ```
+
+<p align="center">
+  <img src="docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
+</p>
 
 ## Contributing
 
