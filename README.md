@@ -46,10 +46,11 @@ pip install "stv[all]"          # Everything
 ## CLI
 
 ```bash
+stv play netflix "Frieren" s2e8 --title-id 81726714   # Find + play in one shot
+stv play youtube "baby shark"                          # Search + play
+stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # Just get the ID
+stv launch netflix 82656797         # Direct deep link (if you know the ID)
 stv status                          # What's on, volume, mute state
-stv launch netflix 82656797         # Deep link to specific content
-stv launch youtube dQw4w9WgXcQ     # Play a YouTube video
-stv launch spotify spotify:album:x  # Play on Spotify
 stv volume 25                       # Set volume
 stv mute                            # Toggle mute
 stv apps --format json              # List apps (structured output)
@@ -58,6 +59,28 @@ stv off                             # Goodnight
 ```
 
 Every command supports `--format json` — designed for scripts and AI agents.
+
+### Content Resolution
+
+`stv resolve` finds streaming IDs so you don't have to. `stv play` does the same and launches on TV in one step.
+
+```bash
+stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
+stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ (via yt-dlp)
+stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → passthrough
+```
+
+Netflix resolution works by scraping episode metadata from the title page with a single `curl` request — no Playwright, no browser, no login. All seasons are resolved at once and cached locally. Second lookup is instant (~0.1s).
+
+### Cache
+
+Once an ID is found, it's cached forever at `~/.config/smartest-tv/cache.json`. You can also seed the cache manually:
+
+```bash
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
+stv cache show                                # Show all cached IDs
+```
 
 ## Agent Skills
 
@@ -70,7 +93,7 @@ cd smartest-tv && ./install-skills.sh
 | Skill | What it does |
 |-------|-------------|
 | `tv-shared` | CLI reference, auth, config, common patterns |
-| `tv-netflix` | Episode ID lookup via Playwright scraping |
+| `tv-netflix` | Episode ID lookup via HTTP scraping |
 | `tv-youtube` | Video search via yt-dlp, format resolution |
 | `tv-spotify` | Album/track/playlist URI resolution |
 | `tv-workflow` | Composite actions: movie night, kids mode, sleep timer |
@@ -181,8 +204,8 @@ For Claude Desktop, Cursor, or other MCP clients — optional, the CLI is the pr
 
 ```
 You (natural language)
-  → AI + Skills (finds content ID via yt-dlp / Playwright / web search)
-    → stv CLI (formats and dispatches)
+  → AI + stv resolve (finds content ID via HTTP scraping / yt-dlp / cache)
+    → stv play (formats deep link and dispatches)
       → Driver (WebSocket / ADB / HTTP)
         → TV
 ```
