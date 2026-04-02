@@ -96,7 +96,16 @@ stv launch youtube dQw4w9WgXcQ                       # Igual
 stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f  # Igual
 ```
 
-Cada plataforma tiene su propio formato de deep link, pero el driver lo traduce por ti. Tú no tienes que pensar en eso.
+Cada driver traduce el ID de contenido al formato de deep link nativo de la plataforma:
+
+| TV | Cómo envía el deep link |
+|----|------------------------|
+| LG webOS | SSAP WebSocket: contentId (Netflix DIAL) / params.contentTarget (YouTube) |
+| Samsung | WebSocket: `run_app(id, "DEEP_LINK", meta_tag)` |
+| Android / Fire TV | ADB: `am start -d 'netflix://title/{id}'` |
+| Roku | HTTP: `POST /launch/{ch}?contentId={id}` |
+
+Nunca tienes que pensar en esto. El driver se encarga.
 
 ## Plataformas
 
@@ -149,7 +158,9 @@ Para Claude Desktop, Cursor u otros clientes MCP — esto es opcional, el CLI es
 }
 ```
 
-18 herramientas disponibles. La configuración se lee automáticamente de `~/.config/smartest-tv/config.toml`. Sin variables de entorno.
+18 herramientas disponibles: `tv_on`, `tv_off`, `tv_launch`, `tv_close`, `tv_volume`, `tv_set_volume`, `tv_mute`, `tv_play`, `tv_pause`, `tv_stop`, `tv_status`, `tv_info`, `tv_notify`, `tv_apps`, `tv_volume_up`, `tv_volume_down`, `tv_screen_on`, `tv_screen_off`.
+
+La configuración se lee automáticamente de `~/.config/smartest-tv/config.toml` — sin variables de entorno.
 
 ## Arquitectura
 

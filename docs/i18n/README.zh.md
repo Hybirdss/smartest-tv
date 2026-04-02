@@ -96,7 +96,16 @@ stv launch youtube dQw4w9WgXcQ                       # 同上
 stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f  # 同上
 ```
 
-各平台的深度链接格式不同，驱动层自动处理，用户无需关心。
+每个驱动将内容 ID 转换为平台原生的深度链接格式：
+
+| 电视 | 深度链接发送方式 |
+|------|---------------|
+| LG webOS | SSAP WebSocket: contentId (Netflix DIAL) / params.contentTarget (YouTube) |
+| Samsung | WebSocket: `run_app(id, "DEEP_LINK", meta_tag)` |
+| Android / Fire TV | ADB: `am start -d 'netflix://title/{id}'` |
+| Roku | HTTP: `POST /launch/{ch}?contentId={id}` |
+
+这些你完全不需要关心。驱动会自动处理。
 
 ## 平台支持
 
@@ -149,7 +158,9 @@ mac = "AA:BB:CC:DD:EE:FF"   # 可选，用于 Wake-on-LAN
 }
 ```
 
-共 18 个工具。配置自动从 `~/.config/smartest-tv/config.toml` 读取，无需环境变量。
+共 18 个工具：`tv_on`、`tv_off`、`tv_launch`、`tv_close`、`tv_volume`、`tv_set_volume`、`tv_mute`、`tv_play`、`tv_pause`、`tv_stop`、`tv_status`、`tv_info`、`tv_notify`、`tv_apps`、`tv_volume_up`、`tv_volume_down`、`tv_screen_on`、`tv_screen_off`。
+
+配置自动从 `~/.config/smartest-tv/config.toml` 读取——无需环境变量。
 
 ## 架构
 
