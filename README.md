@@ -10,7 +10,7 @@
 
 **Talk to your TV. It listens.**
 
-Other tools open Netflix. smartest-tv plays *Frieren season 2 episode 8*.
+Other tools open Netflix. smartest-tv plays *The Queen's Gambit episode 5*.
 
 <p align="center">
   <img src="docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
@@ -28,10 +28,11 @@ That's it. No developer mode. No API keys. No env vars. Say what you want to wat
 ## What can you do?
 
 ```
-You: Play Frieren season 2 episode 8 on Netflix
+You: Play Squid Game season 2 episode 3 on Netflix
 You: Put on Baby Shark for the kids
-You: Ye's new album on Spotify
-You: Screen off, play my jazz playlist
+You: Play the Wednesday soundtrack on Spotify
+You: Find Glass Onion on Netflix          (movies work too)
+You: Screen off, play lo-fi beats
 You: Good night
 ```
 
@@ -60,18 +61,18 @@ pip install "stv[all]"          # Everything
 
 ```bash
 # Play content by name — stv finds the ID automatically
-stv play netflix "Frieren" s2e8            # Resolve + deep link in one shot
+stv play netflix "Bridgerton" s3e4         # Resolve + deep link in one shot
 stv play youtube "baby shark"              # Search + play
 stv play spotify "Ye White Lines"          # Find on Spotify + play
 
 # Search without playing
-stv search netflix "Stranger Things"       # Shows all seasons + episode counts
+stv search netflix "Money Heist"           # Shows all seasons + episode counts
 stv search youtube "lofi hip hop"          # Top 3 results
-stv resolve netflix "Frieren" s2e8         # Just get the episode ID
+stv resolve netflix "The Witcher" s2e5     # Just get the episode ID
 
 # Continue watching
 stv next                                   # Play next episode from history
-stv next "Frieren"                         # Next episode of specific show
+stv next "Breaking Bad"                    # Next episode of specific show
 stv history                                # Recent plays with timestamps
 
 # TV control
@@ -92,7 +93,7 @@ Every command supports `--format json` — designed for scripts and AI agents.
 `stv play` and `stv resolve` find streaming IDs so you don't have to:
 
 ```bash
-stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve netflix "The Witcher" s2e5     # → 80189693
 stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (via yt-dlp)
 stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
@@ -108,8 +109,8 @@ Results are cached in three tiers:
 
 ```bash
 stv cache show                                # View all cached IDs
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
+stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
 stv cache contribute                          # Export for community cache PR
 ```
 
@@ -131,7 +132,7 @@ Any AI agent that can run shell commands:
 
 ## Real World
 
-**It's 2am.** You're in bed. You tell Claude: "Play where I left off on Frieren." The living room TV turns on, Netflix opens, the episode starts. You never touched the remote. You barely opened your eyes.
+**It's 2am.** You're in bed. You tell Claude: "Play where I left off on Stranger Things." The living room TV turns on, Netflix opens, the episode starts. You never touched the remote. You barely opened your eyes.
 
 **Saturday morning.** "Put on Cocomelon for the baby." YouTube finds it, TV plays it. You keep making breakfast.
 
