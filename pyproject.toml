@@ -27,7 +27,8 @@ dependencies = [
 lg = ["bscpylgtv>=0.5.0"]
 samsung = ["samsungtvws[encrypted]>=3.0.0"]
 android = ["adb-shell>=0.4.0"]
-all = ["smartest-tv[lg,samsung,android]"]
+roku = ["aiohttp>=3.9.0"]
+all = ["smartest-tv[lg,samsung,android,roku]"]
 
 [project.urls]
 Homepage = "https://github.com/Hybirdss/smartest-tv"

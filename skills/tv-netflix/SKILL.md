@@ -1,6 +1,6 @@
 ---
 name: tv-netflix
-description: "Play specific Netflix content on TV — finds episode IDs automatically via page scraping. Use when the user asks to play a Netflix show, specific episode, or movie on their TV. Triggers on: 'Netflix에서 틀어', 'play X on Netflix', 'Netflix episode', specific show name + episode number."
+description: "Play specific Netflix content on TV — finds episode IDs automatically via page scraping. Use when the user asks to play a Netflix show, specific episode, or movie on their TV. Triggers on: 'play X on Netflix', 'Netflix episode', show name + episode number, any language requesting Netflix playback on TV."
 ---
 
 # tv-netflix — Netflix Deep Link Resolver
@@ -31,9 +31,9 @@ For multi-season shows, select the season:
 
 ```
 mcp__playwright-plus__browser_select_option(
-  element="시즌 선택",
+  element="Season selector dropdown",
   ref="{combobox_ref}",
-  values=["시즌 2"]
+  values=["Season 2"]       # Or localized: "시즌 2", "シーズン 2", etc.
 )
 ```
 
@@ -72,10 +72,10 @@ tv launch netflix {episodeId}
 
 ## Example
 
-User: "프리렌 2기 8화 틀어줘"
+User: "Play Frieren season 2 episode 8"
 
 1. Search → `netflix.com/title/81726714`
-2. Playwright → select 시즌 2 → extract videoIds
+2. Playwright → select Season 2 → extract videoIds
 3. Sequential cluster: `82656790`–`82656799`
 4. S2E8 = `82656790 + 7` = `82656797`
 5. `tv close netflix && sleep 2 && tv launch netflix 82656797`

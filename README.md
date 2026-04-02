@@ -1,5 +1,7 @@
 # smartest-tv
 
+[English](README.md) | [한국어](docs/i18n/README.ko.md) | [中文](docs/i18n/README.zh.md) | [日本語](docs/i18n/README.ja.md) | [Español](docs/i18n/README.es.md) | [Deutsch](docs/i18n/README.de.md) | [Português](docs/i18n/README.pt-br.md) | [Français](docs/i18n/README.fr.md)
+
 Talk to your TV. It listens.
 
 A CLI and agent skills for controlling smart TVs with natural language. Deep links into Netflix, YouTube, Spotify — say what you want to watch and it plays.
