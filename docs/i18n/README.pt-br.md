@@ -1,113 +1,138 @@
 # smartest-tv
 
+[![PyPI](https://img.shields.io/pypi/v/stv)](https://pypi.org/project/stv/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+
 [English](../../README.md) | [한국어](README.ko.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Deutsch](README.de.md) | **Português** | [Français](README.fr.md)
 
-**Fale com a sua TV. Ela entende.**
+**Fala com a sua TV. Ela obedece.**
 
-CLI e skills para agentes de IA que controlam sua smart TV em linguagem natural. Deep links para Netflix, YouTube e Spotify — fala o que quer assistir e começa a tocar. Sem modo desenvolvedor. Sem API keys. Um `stv setup` e pronto.
+Outras ferramentas abrem a Netflix. O smartest-tv reproduz *Frieren temporada 2 episódio 8*.
 
-> "Coloca o episódio 8 da segunda temporada de Frieren"
->
-> *A Netflix abre e o episódio começa a reproduzir.*
+<!-- TODO: Add terminal demo GIF here -->
+<!-- ![demo](docs/assets/demo.gif) -->
 
-Compatível com **LG** (testado), **Samsung**, **Android TV / Fire TV** e **Roku** (testes da comunidade).
+## Início rápido
+
+```bash
+pip install stv
+stv setup          # descobre sua TV automaticamente, faz o pareamento, pronto
+```
+
+Só isso. Sem modo desenvolvedor. Sem API keys. Sem variáveis de ambiente. Fala o que quer assistir.
+
+## O que dá pra fazer?
+
+```
+Você: Play Frieren season 2 episode 8 on Netflix
+Você: Put on Baby Shark for the kids
+Você: Ye's new album on Spotify
+Você: Screen off, play my jazz playlist
+Você: Good night
+```
+
+A IA encontra o ID do conteúdo (episódio da Netflix, vídeo do YouTube, URI do Spotify), chama o `stv`, e sua TV começa a reproduzir.
 
 ## Instalação
 
 ```bash
-pip install stv
+pip install stv                 # LG (padrão, já vem tudo)
+pip install "stv[samsung]"      # Samsung Tizen
+pip install "stv[android]"      # Android TV / Fire TV
+pip install "stv[all]"          # Tudo junto
 ```
-
-Só isso. Pra LG não precisa de mais nada.
-
-```bash
-pip install "stv[samsung]"  # Samsung Tizen
-pip install "stv[android]"  # Android TV / Fire TV
-pip install "stv[all]"      # Tudo
-```
-
-## Configuração zero
-
-Roda isso uma vez e esquece:
-
-```bash
-stv setup
-```
-
-Descobre a TV na rede automaticamente, identifica a plataforma (LG? Samsung? Roku?), faz o pareamento sozinho — sem modo desenvolvedor, sem precisar caçar o IP da TV — e salva tudo em `~/.config/smartest-tv/config.toml`. Depois disso, todo comando `stv` funciona de primeira.
-
-Se der algum problema, `stv doctor` te fala exatamente o que tá errado.
 
 ## CLI
 
 ```bash
-stv status                          # O que tá tocando, volume, mudo
+stv status                          # O que tá tocando, volume, estado de mudo
 stv launch netflix 82656797         # Deep link pra conteúdo específico
-stv launch youtube dQw4w9WgXcQ     # Tocar um vídeo do YouTube
+stv launch youtube dQw4w9WgXcQ     # Reproduzir um vídeo do YouTube
 stv launch spotify spotify:album:x  # Tocar no Spotify
-stv volume 25                       # Definir volume
+stv volume 25                       # Ajustar volume
 stv mute                            # Alternar mudo
-stv apps --format json              # Listar apps instalados
-stv notify "Comida tá pronta!"      # Notificação na tela da TV
-stv off                             # Desligar a TV
+stv apps --format json              # Listar apps (saída estruturada)
+stv notify "Comida tá pronta!"      # Notificação toast na tela
+stv off                             # Boa noite
 ```
 
-Todos os comandos suportam `--format json` — saída estruturada para scripts e agentes de IA.
+Todo comando suporta `--format json` — feito para scripts e agentes de IA.
 
-## Skills para agentes de IA
+## Agent Skills
 
-O stv vem com cinco skills que ensinam assistentes de IA a controlar sua TV de forma inteligente. Instala tudo no Claude Code de uma vez:
+O smartest-tv vem com cinco skills que ensinam assistentes de IA a controlar sua TV. Instala tudo no Claude Code:
 
 ```bash
 cd smartest-tv && ./install-skills.sh
 ```
 
-Depois é só falar com o Claude normalmente:
-
-```
-Você: Coloca o episódio 8 da 2ª temporada de Frieren na Netflix
-Você: Bota Cocomelon pra criança
-Você: Coloca o novo álbum do Ye no Spotify
-Você: Desliga a tela e coloca jazz
-Você: Boa noite
-```
-
-Os skills cuidam da parte chata — buscar o ID do episódio na Netflix, pesquisar no YouTube com yt-dlp, resolver URIs do Spotify — e chamam o CLI `stv` pra controlar a TV.
-
-### Lista de skills
-
 | Skill | O que faz |
 |-------|-----------|
 | `tv-shared` | Referência do CLI, autenticação, configuração, padrões comuns |
-| `tv-netflix` | Busca de IDs de episódios com Playwright |
-| `tv-youtube` | Busca de vídeos com yt-dlp |
+| `tv-netflix` | Busca de IDs de episódios via Playwright |
+| `tv-youtube` | Busca de vídeos via yt-dlp, resolução de formato |
 | `tv-spotify` | Resolução de URIs de álbuns, músicas e playlists |
-| `tv-workflow` | Ações combinadas: modo cinema, modo criança, timer pra dormir |
+| `tv-workflow` | Ações compostas: noite de cinema, modo criança, timer pra dormir |
 
-## Por que os deep links mudam tudo
+Skills são arquivos Markdown simples. Dá pra portar pra qualquer agente em minutos.
 
-Outras ferramentas só *abrem* a Netflix. O stv *reproduz o episódio 36 de Frieren*. É essa a diferença.
+## Compatível com
+
+Qualquer agente de IA que consiga rodar comandos shell:
+
+**Claude Code** · **OpenCode** · **Cursor** · **Codex** · **OpenClaw** · **Goose** · **Gemini CLI** · ou simplesmente `bash`
+
+## Na prática
+
+**2 da manhã.** Deitado na cama, você fala pro Claude: "Continua de onde eu parei em Frieren." A TV da sala liga, a Netflix abre, o episódio começa. Você não tocou no controle. Mal abriu os olhos.
+
+**Sábado de manhã.** "Bota Cocomelon pro bebê." O YouTube acha, a TV toca. Você continua fazendo o café da manhã.
+
+**Galera chegou.** "Modo game, HDMI 2, baixa o volume." Uma frase, três mudanças, feito antes de alguém notar.
+
+**Cozinhando o jantar.** "Desliga a tela e coloca minha playlist de jazz." A tela apaga, a música começa a tocar pelos alto-falantes.
+
+**Caindo no sono.** "Timer de 45 minutos." A TV se desliga sozinha. Você não.
+
+## O que o smartest-tv é
+
+- **Resolvedor de deep links** — encontra o ID do episódio na Netflix, o vídeo no YouTube, a URI do Spotify
+- **Controle universal** — uma CLI pra 4 plataformas de TV
+- **AI-native** — projetado pra agentes chamarem, não só pra humanos
+
+## O que ele não é
+
+- Não é um app de controle remoto (sem navegar por canais, sem teclas de direção)
+- Não é um controlador HDMI-CEC
+- Não é uma ferramenta de espelhamento de tela
+
+<details>
+<summary><strong>Deep Linking</strong> — como funciona de verdade</summary>
 
 O mesmo ID de conteúdo funciona em todas as plataformas de TV:
 
 ```bash
-stv launch netflix 82656797                          # Funciona igual na LG, Samsung ou Roku
-stv launch youtube dQw4w9WgXcQ                       # Igual
-stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f  # Igual
+stv launch netflix 82656797                           # LG, Samsung, Roku, Android TV
+stv launch youtube dQw4w9WgXcQ                        # Igual
+stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f   # Igual
 ```
 
-Cada driver traduz o ID de conteúdo pro formato de deep link nativo da plataforma:
+Cada driver traduz o ID pro formato de deep link nativo da plataforma:
 
-| TV | Como o deep link é enviado |
-|----|---------------------------|
+| TV | Como envia o deep link |
+|----|------------------------|
 | LG webOS | SSAP WebSocket: contentId (Netflix DIAL) / params.contentTarget (YouTube) |
 | Samsung | WebSocket: `run_app(id, "DEEP_LINK", meta_tag)` |
 | Android / Fire TV | ADB: `am start -d 'netflix://title/{id}'` |
 | Roku | HTTP: `POST /launch/{ch}?contentId={id}` |
 
-Você nunca precisa pensar nisso. O driver cuida de tudo.
+Você não precisa pensar em nada disso. O driver cuida de tudo.
 
-## Plataformas
+</details>
+
+<details>
+<summary><strong>Plataformas</strong> — TVs e drivers suportados</summary>
 
 | Plataforma | Driver | Conexão | Status |
 |------------|--------|---------|--------|
@@ -116,36 +141,30 @@ Você nunca precisa pensar nisso. O driver cuida de tudo.
 | Android / Fire TV | [adb-shell](https://github.com/JeffLIrion/adb-shell) | ADB TCP :5555 | Testes da comunidade |
 | Roku | HTTP ECP | REST :8060 | Testes da comunidade |
 
-LG é a plataforma principal testada. Samsung, Android TV e Roku devem funcionar — nenhuma precisa de modo desenvolvedor — feedback da comunidade é bem-vindo.
+LG é a plataforma principal testada. Nenhuma delas precisa de modo desenvolvedor.
 
-## Configuração
+</details>
 
-A configuração fica em `~/.config/smartest-tv/config.toml`. Depois do `stv setup`, é assim:
+## Configuração zero
+
+```bash
+stv setup
+```
+
+Descobre sua TV na rede automaticamente, detecta a plataforma, faz o pareamento sozinho e salva tudo em `~/.config/smartest-tv/config.toml`. Se alguma coisa parecer estranha, `stv doctor` te fala exatamente o que tá acontecendo.
 
 ```toml
 [tv]
 platform = "lg"
 ip = "192.168.1.100"
-mac = "AA:BB:CC:DD:EE:FF"   # opcional, pra Wake-on-LAN
+mac = "AA:BB:CC:DD:EE:FF"   # opcional, para Wake-on-LAN
 ```
 
-Na primeira conexão a TV mostra um aviso de pareamento. Aceita uma vez, a chave fica salva e nunca mais pergunta.
-
-## Casos de uso reais
-
-**2 da manhã.** Deitado na cama, você fala pro Claude: "Continua o Frieren." A TV da sala liga, a Netflix abre e o episódio começa. Sem precisar procurar o controle. Com os olhos meio fechados.
-
-**Sábado de manhã.** "Bota Cocomelon pro bebê." Acha no YouTube e toca na TV. Você continua fazendo o café da manhã. O café ainda tá quente.
-
-**Quando os amigos chegam.** "Modo game, HDMI 2, baixa o volume." Três mudanças em uma frase, antes de alguém notar.
-
-**Cozinhando.** "Desliga a tela e coloca jazz." A tela apaga, a música começa. Sem navegar em menu nenhum.
-
-**Antes de dormir.** "Desliga em 45 minutos." A TV se desliga sozinha. Você não.
+Na primeira conexão, a TV mostra um aviso de pareamento. Aceita uma vez — a chave fica salva e nunca mais pergunta.
 
 ## Servidor MCP
 
-Para Claude Desktop, Cursor ou outros clientes MCP — isso é opcional, o CLI é a interface principal:
+Para Claude Desktop, Cursor ou outros clientes MCP — opcional, o CLI é a interface principal:
 
 ```json
 {
@@ -158,25 +177,26 @@ Para Claude Desktop, Cursor ou outros clientes MCP — isso é opcional, o CLI �
 }
 ```
 
-18 ferramentas disponíveis: `tv_on`, `tv_off`, `tv_launch`, `tv_close`, `tv_volume`, `tv_set_volume`, `tv_mute`, `tv_play`, `tv_pause`, `tv_stop`, `tv_status`, `tv_info`, `tv_notify`, `tv_apps`, `tv_volume_up`, `tv_volume_down`, `tv_screen_on`, `tv_screen_off`.
-
-A configuração é lida automaticamente de `~/.config/smartest-tv/config.toml` — sem variáveis de ambiente.
-
 ## Arquitetura
 
 ```
 Você (linguagem natural)
   → IA + Skills (encontra o ID do conteúdo via yt-dlp / Playwright / busca)
-    → stv CLI (formata e envia)
+    → stv CLI (formata e despacha)
       → Driver (WebSocket / ADB / HTTP)
         → TV
 ```
 
 ## Contribuindo
 
-**Drivers** para Samsung, Android TV e Roku são a contribuição de maior impacto. A [interface do driver](src/smartest_tv/drivers/base.py) já está definida — implementa `TVDriver` pra sua plataforma e abre um PR.
+| Status | Área | O que precisa |
+|--------|------|---------------|
+| **Pronto** | Driver LG webOS | Testado e funcionando |
+| **Precisa de testes** | Drivers Samsung, Android TV, Roku | Relatos com hardware real são bem-vindos |
+| **Procurado** | Skill Disney+ | Resolução de ID de deep link |
+| **Procurado** | Skills Hulu, Prime Video | Resolução de ID de deep link |
 
-**Skills** para novos serviços de streaming (Disney+, Hulu, Prime Video) também são bem-vindas.
+A [interface do driver](src/smartest_tv/drivers/base.py) já está definida — implementa `TVDriver` pra sua plataforma e abre um PR.
 
 ## Licença
 
