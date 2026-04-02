@@ -95,21 +95,13 @@ stv cache show                                # 캐시된 ID 전체 보기
 
 ## 에이전트 스킬
 
-smartest-tv는 AI 어시스턴트에게 TV 제어 방법을 가르쳐주는 스킬 5개를 포함합니다. Claude Code에 한 번에 설치하세요:
+smartest-tv는 AI 어시스턴트에게 TV 제어 방법을 모두 가르쳐주는 스킬 하나를 제공합니다. Claude Code에 설치하세요:
 
 ```bash
 cd smartest-tv && ./install-skills.sh
 ```
 
-| 스킬 | 역할 |
-|------|------|
-| `tv-shared` | CLI 레퍼런스, 인증, 설정, 공통 패턴 |
-| `tv-netflix` | HTTP 스크래핑으로 에피소드 ID 조회 |
-| `tv-youtube` | yt-dlp로 영상 검색 및 포맷 해석 |
-| `tv-spotify` | 앨범/트랙/플레이리스트 URI 해석 |
-| `tv-workflow` | 복합 액션: 영화 모드, 아이 모드, 수면 타이머 |
-
-스킬은 일반 마크다운 파일입니다. 어떤 에이전트에든 몇 분이면 이식할 수 있습니다.
+`tv` 스킬은 모든 플랫폼(Netflix, YouTube, Spotify), 모든 명령어(`play`, `search`, `resolve`, `cache`, `volume`, `off`), 복합 워크플로우(영화 모드, 아이 모드, 수면 타이머)를 다룹니다. 마크다운 파일 하나로 — 어떤 AI 에이전트에든 몇 분이면 이식할 수 있습니다.
 
 ## 호환 에이전트
 
@@ -265,6 +257,15 @@ MCP 클라이언트에서 연결:
 | **기여 환영** | Hulu, Prime Video 스킬 | 딥링크 ID 해석 구현 |
 
 [드라이버 인터페이스](src/smartest_tv/drivers/base.py)가 정의되어 있습니다 — 플랫폼에 맞게 `TVDriver`를 구현해서 PR을 열어주세요.
+
+### 테스트 실행
+
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+```
+
+콘텐츠 리졸버, 캐시, CLI 파서를 다루는 55개 유닛 테스트. TV나 네트워크 연결 없이도 실행 가능합니다 — 모든 외부 호출은 목(mock)으로 처리됩니다.
 
 ## 라이선스
 

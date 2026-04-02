@@ -95,21 +95,13 @@ stv cache show                                # 查看所有已缓存 ID
 
 ## AI 助手技能
 
-smartest-tv 内置五个技能，教 AI 助手如何控制你的电视。一键安装到 Claude Code：
+smartest-tv 内置一个技能，将电视控制的一切都教给 AI 助手。安装到 Claude Code：
 
 ```bash
 cd smartest-tv && ./install-skills.sh
 ```
 
-| 技能 | 功能 |
-|------|------|
-| `tv-shared` | CLI 参考、认证、配置、通用模式 |
-| `tv-netflix` | 通过 HTTP 抓取剧集 ID |
-| `tv-youtube` | 通过 yt-dlp 搜索视频并解析格式 |
-| `tv-spotify` | 解析专辑/曲目/播放列表 URI |
-| `tv-workflow` | 组合操作：观影模式、儿童模式、定时关机 |
-
-技能文件全部是普通的 Markdown。移植到其他 AI 助手，几分钟搞定。
+`tv` 技能涵盖所有平台（Netflix、YouTube、Spotify）、所有命令（`play`、`search`、`resolve`、`cache`、`volume`、`off`）以及组合工作流（观影模式、儿童模式、定时关机）。一个 Markdown 文件——几分钟即可移植到任何 AI 助手。
 
 ## 支持的助手
 
@@ -265,6 +257,15 @@ stv serve --transport streamable-http
 | **招募中** | Hulu、Prime Video 技能 | 深度链接 ID 解析 |
 
 [驱动接口](src/smartest_tv/drivers/base.py)已定义好——实现 `TVDriver`，提 PR 即可。
+
+### 运行测试
+
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+```
+
+55 个单元测试，覆盖内容解析器、缓存和 CLI 解析器。无需电视或网络连接——所有外部调用均已模拟。
 
 ## 许可证
 

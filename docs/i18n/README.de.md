@@ -95,21 +95,13 @@ stv cache show                                # Alle gecachten IDs anzeigen
 
 ## Agent Skills
 
-smartest-tv bringt fünf Skills mit, die KI-Assistenten beibringen, wie man einen Fernseher steuert. In Claude Code installieren:
+smartest-tv bringt einen Skill mit, der KI-Assistenten alles über die TV-Steuerung beibringt. In Claude Code installieren:
 
 ```bash
 cd smartest-tv && ./install-skills.sh
 ```
 
-| Skill | Funktion |
-|-------|----------|
-| `tv-shared` | CLI-Referenz, Authentifizierung, Konfiguration, häufige Muster |
-| `tv-netflix` | Episoden-ID-Abfrage per HTTP-Scraping |
-| `tv-youtube` | Videosuche per yt-dlp, Format-Auflösung |
-| `tv-spotify` | Auflösung von Album-/Track-/Playlist-URIs |
-| `tv-workflow` | Kombinierte Aktionen: Kinoabend, Kindermodus, Einschlaftimer |
-
-Skills sind einfache Markdown-Dateien. In wenigen Minuten auf jeden Agenten portierbar.
+Der `tv`-Skill deckt alle Plattformen (Netflix, YouTube, Spotify), alle Befehle (`play`, `search`, `resolve`, `cache`, `volume`, `off`) und kombinierte Workflows (Kinoabend, Kindermodus, Einschlaftimer) ab. Eine einzige Markdown-Datei — in wenigen Minuten auf jeden KI-Agenten portierbar.
 
 ## Works With
 
@@ -265,6 +257,15 @@ Du (natürliche Sprache)
 | **Gesucht** | Hulu, Prime Video Skills | Deep-Link-ID-Auflösung |
 
 Das [Treiber-Interface](src/smartest_tv/drivers/base.py) ist definiert — implementiere `TVDriver` für deine Plattform und öffne einen PR.
+
+### Tests ausführen
+
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+```
+
+55 Unit-Tests für den Content-Resolver, den Cache und den CLI-Parser. Kein Fernseher und keine Netzwerkverbindung erforderlich — alle externen Aufrufe sind gemockt.
 
 ## Lizenz
 
