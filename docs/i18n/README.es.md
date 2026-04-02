@@ -38,9 +38,12 @@ La IA encuentra el ID del contenido (episodio de Netflix, video de YouTube, URI 
 ### See it in action
 
 <p align="center">
-  <video src="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4" controls width="720">
-  </video>
+  <a href="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4">
+    <img src="../../docs/assets/demo.gif" alt="smartest-tv demo" width="720">
+  </a>
 </p>
+
+*Click for full video with sound*
 
 ## Instalación
 
