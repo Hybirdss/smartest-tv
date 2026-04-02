@@ -46,18 +46,41 @@ pip install "stv[all]"          # Tout
 ## CLI
 
 ```bash
+stv play netflix "Frieren" s2e8 --title-id 81726714   # Rechercher + lancer en une étape
+stv play youtube "baby shark"                          # Rechercher + lancer
+stv resolve netflix "Jujutsu Kaisen" s3e10 --title-id 81278456  # Juste récupérer l'ID
+stv launch netflix 82656797         # Deep link direct (si tu connais déjà l'ID)
 stv status                          # Ce qui tourne, volume, sourdine
-stv launch netflix 82656797         # Deep link vers un contenu précis
-stv launch youtube dQw4w9WgXcQ     # Lancer une vidéo YouTube
-stv launch spotify spotify:album:x  # Lancer sur Spotify
 stv volume 25                       # Régler le volume
 stv mute                            # Activer/désactiver la sourdine
 stv apps --format json              # Lister les apps (sortie structurée)
-stv notify "Dinner's ready"         # Notification toast à l'écran
+stv notify "Le dîner est prêt"      # Notification toast à l'écran
 stv off                             # Bonne nuit
 ```
 
 Chaque commande accepte `--format json` — conçu pour les scripts et les agents IA.
+
+### Résolution de contenu
+
+`stv resolve` trouve les IDs de streaming à ta place. `stv play` fait la même chose et lance directement sur la TV en une seule étape.
+
+```bash
+stv resolve netflix "Frieren" s2e8 --title-id 81726714    # → 82656797
+stv resolve youtube "lofi hip hop"                         # → dQw4w9WgXcQ (via yt-dlp)
+stv resolve spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS  # → transmis tel quel
+```
+
+La résolution Netflix fonctionne en extrayant les métadonnées de l'épisode depuis la page du titre avec une seule requête `curl` — sans Playwright, sans navigateur, sans connexion. Toutes les saisons sont résolues en une fois et mises en cache localement. La deuxième recherche est instantanée (~0,1 s).
+
+### Cache
+
+Une fois un ID trouvé, il est mis en cache définitivement dans `~/.config/smartest-tv/cache.json`. Tu peux aussi alimenter le cache manuellement :
+
+```bash
+stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
+stv cache get netflix "Frieren" -s 2 -e 8    # → 82656797
+stv cache show                                # Afficher tous les IDs en cache
+```
 
 ## Skills d'agent
 
@@ -70,7 +93,7 @@ cd smartest-tv && ./install-skills.sh
 | Skill | Ce qu'il fait |
 |-------|--------------|
 | `tv-shared` | Référence CLI, auth, config, patterns courants |
-| `tv-netflix` | Récupération d'ID d'épisodes via scraping Playwright |
+| `tv-netflix` | Récupération d'ID d'épisodes via scraping HTTP |
 | `tv-youtube` | Recherche de vidéos via yt-dlp, résolution de format |
 | `tv-spotify` | Résolution d'URI d'albums, pistes et playlists |
 | `tv-workflow` | Actions combinées : soirée ciné, mode enfants, minuteur sommeil |
@@ -181,8 +204,8 @@ Pour Claude Desktop, Cursor, ou d'autres clients MCP — optionnel, le CLI reste
 
 ```
 Toi (langage naturel)
-  → IA + Skills (trouve l'ID du contenu via yt-dlp / Playwright / recherche web)
-    → stv CLI (formate et envoie)
+  → IA + stv resolve (trouve l'ID du contenu via scraping HTTP / yt-dlp / cache)
+    → stv play (formate le deep link et envoie)
       → Driver (WebSocket / ADB / HTTP)
         → TV
 ```
