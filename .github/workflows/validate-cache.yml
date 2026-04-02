@@ -1,0 +1,25 @@
+name: Validate Community Cache
+
+on:
+  pull_request:
+    paths:
+      - 'community-cache.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate JSON structure
+        run: python .github/scripts/validate-cache.py
+
+      - name: Verify Netflix IDs against live data
+        run: python .github/scripts/verify-netflix.py
+
+      - name: Check for regressions (no existing entries removed)
+        run: python .github/scripts/check-regressions.py
