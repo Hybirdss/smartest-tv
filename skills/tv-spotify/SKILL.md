@@ -1,6 +1,6 @@
 ---
 name: tv-spotify
-description: "Play Spotify music on TV — finds album/track/playlist URIs via web search. Use when the user asks to play music, an album, artist, or playlist on their TV via Spotify. Triggers on: 'Spotify에서 틀어', 'play X on Spotify', artist/album name + 'TV에서 음악'."
+description: "Play Spotify music on TV — finds album/track/playlist URIs via web search. Use when the user asks to play music, an album, artist, or playlist on their TV via Spotify. Triggers on: 'play X on Spotify', artist/album name + music on TV, any language requesting Spotify playback."
 ---
 
 # tv-spotify — Spotify URI Resolver
@@ -38,7 +38,7 @@ tv launch spotify spotify:album:5poA9SAx0Xiz1cd17fWBLS
 
 ## Example
 
-User: "스포티파이에서 Ye의 BULLY 앨범 틀어줘"
+User: "Play Ye's BULLY album on Spotify"
 
 ```bash
 # Web search: "Ye BULLY album Spotify"

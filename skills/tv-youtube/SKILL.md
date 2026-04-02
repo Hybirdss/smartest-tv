@@ -1,6 +1,6 @@
 ---
 name: tv-youtube
-description: "Play YouTube videos on TV — finds video IDs via yt-dlp search. Use when the user asks to play a YouTube video, specific anime episode, music video, or any video content on their TV. Triggers on: 'YouTube에서 틀어', 'play X on YouTube', video name + 'TV에서'."
+description: "Play YouTube videos on TV — finds video IDs via yt-dlp search. Use when the user asks to play a YouTube video, specific anime episode, music video, or any video content on their TV. Triggers on: 'play X on YouTube', video name + TV, any language requesting YouTube playback."
 ---
 
 # tv-youtube — YouTube Video Resolver
@@ -39,13 +39,13 @@ Good search queries make or break the results:
 
 Add `official` to avoid fan re-uploads. Add the channel name if you know it.
 
-### For Korean content
+### Non-English content
 
-Try both Korean and English titles — English often gets better results for official uploads:
+Try both the original language and English titles — English often gets better results for official uploads:
 
 ```bash
-# Korean title
-yt-dlp "ytsearch5:수성의마녀 2화 공식" --get-id --get-title --no-download
+# Original language
+yt-dlp "ytsearch5:水星の魔女 2話 公式" --get-id --get-title --no-download
 
 # English title (often better for official channels)
 yt-dlp "ytsearch5:gundam witch from mercury episode 2 official" --get-id --get-title --no-download
@@ -53,7 +53,7 @@ yt-dlp "ytsearch5:gundam witch from mercury episode 2 official" --get-id --get-t
 
 ## Example
 
-User: "유튜브에서 수성의마녀 2화 틀어줘"
+User: "Play Gundam Witch from Mercury episode 2 on YouTube"
 
 ```bash
 yt-dlp "ytsearch5:gundam witch from mercury episode 2 official gundam.info" \

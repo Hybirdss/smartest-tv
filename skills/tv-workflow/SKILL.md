@@ -1,6 +1,6 @@
 ---
 name: tv-workflow
-description: "Composite TV workflows — movie night, kids mode, sleep timer, morning routine. Use when the user wants to do multiple TV actions at once, or asks for a 'mode' or 'routine'. Triggers on: 'movie night', 'kids mode', 'good night', '영화 모드', '아이 모드', 'morning TV', composite requests like 'game mode on HDMI 2 and lower volume'."
+description: "Composite TV workflows — movie night, kids mode, sleep timer, morning routine. Use when the user wants multiple TV actions at once, or asks for a 'mode' or 'routine'. Triggers on: 'movie night', 'kids mode', 'good night', 'morning TV', composite requests like 'game mode on HDMI 2 and lower volume'."
 ---
 
 # tv-workflow — Composite TV Actions
@@ -23,7 +23,7 @@ tv launch netflix {contentId}     # if they named a title
 
 ### Kids Mode
 
-User: "아이한테 유튜브 틀어줘" / "Put on something for the kids"
+User: "Put on something for the kids"
 
 1. Search for age-appropriate content via yt-dlp:
    ```bash
@@ -38,7 +38,7 @@ User: "아이한테 유튜브 틀어줘" / "Put on something for the kids"
 
 ### Music Mode
 
-User: "음악 모드" / "Screen off, play music"
+User: "Screen off, play music"
 
 ```bash
 tv launch spotify {uri}
@@ -47,7 +47,7 @@ tv screen-off                  # screen off, audio continues
 
 ### Sleep Timer
 
-User: "30분 뒤에 TV 꺼줘" / "Turn off TV in 30 minutes"
+User: "Turn off TV in 30 minutes"
 
 ```bash
 sleep 1800 && tv off
@@ -57,7 +57,7 @@ Run in background if needed: `(sleep 1800 && tv off) &`
 
 ### Game Mode
 
-User: "게임 모드" / "Switch to game mode on HDMI 2"
+User: "Switch to game mode on HDMI 2"
 
 ```bash
 tv launch hdmi2
@@ -66,7 +66,7 @@ tv launch hdmi2
 
 ### Good Night
 
-User: "잘자" / "Good night"
+User: "Good night"
 
 ```bash
 tv off
