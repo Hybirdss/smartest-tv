@@ -10,7 +10,7 @@
 
 **Habla con tu tele. Te escucha.**
 
-Otras herramientas abren Netflix. smartest-tv pone *la temporada 2 episodio 8 de Frieren*.
+Otras herramientas abren Netflix. smartest-tv pone *The Queen's Gambit episodio 5*.
 
 <p align="center">
   <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
@@ -28,10 +28,11 @@ Eso es todo. Sin modo desarrollador. Sin API keys. Sin variables de entorno. Di 
 ## ¿Qué puedes hacer?
 
 ```
-Tú: Pon la temporada 2 episodio 8 de Frieren en Netflix
+Tú: Pon Squid Game temporada 2 episodio 3 en Netflix
 Tú: Pon Baby Shark para los chicos
-Tú: El nuevo álbum de Ye en Spotify
-Tú: Apaga la pantalla y pon mi playlist de jazz
+Tú: La banda sonora de Wednesday en Spotify
+Tú: Busca Glass Onion en Netflix          (las películas también funcionan)
+Tú: Apaga la pantalla y pon lo-fi beats
 Tú: Buenas noches
 ```
 
@@ -60,18 +61,18 @@ pip install "stv[all]"          # Todo
 
 ```bash
 # Reproducir contenido por nombre — stv encuentra el ID automáticamente
-stv play netflix "Frieren" s2e8            # Resolver + deep link en un paso
+stv play netflix "Bridgerton" s3e4         # Resolver + deep link en un paso
 stv play youtube "baby shark"              # Buscar + reproducir
 stv play spotify "Ye White Lines"          # Buscar en Spotify + reproducir
 
 # Buscar sin reproducir
-stv search netflix "Stranger Things"       # Muestra todas las temporadas + episodios
+stv search netflix "Money Heist"           # Muestra todas las temporadas + episodios
 stv search youtube "lofi hip hop"          # Top 3 resultados
-stv resolve netflix "Frieren" s2e8         # Solo obtener el ID del episodio
+stv resolve netflix "The Witcher" s2e5     # Solo obtener el ID del episodio
 
 # Continuar viendo
 stv next                                   # Reproducir el siguiente episodio del historial
-stv next "Frieren"                         # Siguiente episodio de una serie específica
+stv next "Breaking Bad"                    # Siguiente episodio de una serie específica
 stv history                                # Reproducciones recientes con marca de tiempo
 
 # Control del TV
@@ -92,7 +93,7 @@ Todos los comandos admiten `--format json` — diseñado para scripts y agentes 
 `stv play` y `stv resolve` encuentran los IDs de streaming para que no tengas que hacerlo tú:
 
 ```bash
-stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve netflix "The Witcher" s2e5     # → 80189693
 stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (via yt-dlp)
 stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
@@ -108,8 +109,8 @@ Los resultados se cachean en tres niveles:
 
 ```bash
 stv cache show                                # Ver todos los IDs cacheados
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
+stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
 stv cache contribute                          # Exportar para PR del caché comunitario
 ```
 
@@ -131,7 +132,7 @@ Cualquier agente de IA que pueda ejecutar comandos de shell:
 
 ## En el mundo real
 
-**Son las 2 de la mañana.** Estás en la cama y le dices a Claude: "Sigue Frieren donde lo dejé." El televisor del salón se enciende, Netflix se abre, el episodio empieza. Nunca tocaste el control. Apenas abriste los ojos.
+**Son las 2 de la mañana.** Estás en la cama y le dices a Claude: "Sigue Stranger Things donde lo dejé." El televisor del salón se enciende, Netflix se abre, el episodio empieza. Nunca tocaste el control. Apenas abriste los ojos.
 
 **Sábado en la mañana.** "Pon Cocomelon para el bebé." YouTube lo encuentra, la tele lo pone. Tú sigues haciendo el desayuno.
 

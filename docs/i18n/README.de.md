@@ -10,7 +10,7 @@
 
 **Sprich mit deinem Fernseher. Er hört zu.**
 
-Andere Tools öffnen Netflix. smartest-tv spielt *Frieren Staffel 2, Folge 8*.
+Andere Tools öffnen Netflix. smartest-tv spielt *The Queen's Gambit Folge 5*.
 
 <p align="center">
   <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
@@ -28,10 +28,11 @@ Das war's. Kein Entwicklermodus. Keine API-Keys. Keine Umgebungsvariablen. Sag e
 ## Was kannst du damit machen?
 
 ```
-Du: Spiel Frieren Staffel 2, Folge 8 auf Netflix
+Du: Spiel Squid Game Staffel 2 Folge 3 auf Netflix
 Du: Mach Baby Shark für die Kinder an
-Du: Das neue Album von Ye auf Spotify
-Du: Bildschirm aus, Jazz an
+Du: Den Wednesday-Soundtrack auf Spotify
+Du: Finde Glass Onion auf Netflix          (Filme funktionieren auch)
+Du: Bildschirm aus, lo-fi Beats an
 Du: Gute Nacht
 ```
 
@@ -60,18 +61,18 @@ pip install "stv[all]"          # Alles
 
 ```bash
 # Inhalte nach Name abspielen — stv findet die ID automatisch
-stv play netflix "Frieren" s2e8            # Auflösen + Deep Link in einem Schritt
+stv play netflix "Bridgerton" s3e4         # Auflösen + Deep Link in einem Schritt
 stv play youtube "baby shark"              # Suchen + abspielen
 stv play spotify "Ye White Lines"          # Auf Spotify suchen + abspielen
 
 # Suchen ohne Abspielen
-stv search netflix "Stranger Things"       # Zeigt alle Staffeln + Episodenanzahl
+stv search netflix "Money Heist"           # Zeigt alle Staffeln + Episodenanzahl
 stv search youtube "lofi hip hop"          # Top 3 Ergebnisse
-stv resolve netflix "Frieren" s2e8         # Nur die Episoden-ID ermitteln
+stv resolve netflix "The Witcher" s2e5     # Nur die Episoden-ID ermitteln
 
 # Weiterschauen
 stv next                                   # Nächste Episode aus dem Verlauf abspielen
-stv next "Frieren"                         # Nächste Episode einer bestimmten Serie
+stv next "Breaking Bad"                    # Nächste Episode einer bestimmten Serie
 stv history                                # Zuletzt abgespielt mit Zeitstempel
 
 # TV-Steuerung
@@ -92,7 +93,7 @@ Alle Befehle unterstützen `--format json` — konzipiert für Skripte und KI-Ag
 `stv play` und `stv resolve` finden Streaming-IDs, damit du es nicht musst:
 
 ```bash
-stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve netflix "The Witcher" s2e5     # → 80189693
 stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (via yt-dlp)
 stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
@@ -108,8 +109,8 @@ Ergebnisse werden in drei Ebenen gecacht:
 
 ```bash
 stv cache show                                # Alle gecachten IDs anzeigen
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
+stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
 stv cache contribute                          # Für Community-Cache-PR exportieren
 ```
 
@@ -131,7 +132,7 @@ Jeder KI-Agent, der Shell-Befehle ausführen kann:
 
 ## Alltag
 
-**Nachts um 2 Uhr.** Du liegst im Bett. Du sagst Claude: „Weiter mit Frieren." Der Fernseher im Wohnzimmer geht an, Netflix öffnet sich, die Episode beginnt. Fernbedienung nicht angefasst, Augen kaum aufgemacht.
+**Nachts um 2 Uhr.** Du liegst im Bett. Du sagst Claude: „Weiter mit Stranger Things." Der Fernseher im Wohnzimmer geht an, Netflix öffnet sich, die Episode beginnt. Fernbedienung nicht angefasst, Augen kaum aufgemacht.
 
 **Samstagmorgen.** „Mach Cocomelon für die Kleinen an." YouTube findet es, der Fernseher spielt es ab. Du machst einfach weiter mit dem Frühstück.
 

@@ -10,7 +10,7 @@
 
 **TV에 말하세요. 알아듣습니다.**
 
-다른 도구들은 넷플릭스를 *열기만* 합니다. smartest-tv는 *프리렌 2기 8화를 재생*합니다.
+다른 도구들은 넷플릭스를 *열기만* 합니다. smartest-tv는 *The Queen's Gambit 5화를 재생*합니다.
 
 <p align="center">
   <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
@@ -28,10 +28,11 @@ stv setup          # TV 자동 탐색, 페어링, 완료
 ## 무엇을 할 수 있나요?
 
 ```
-나: 넷플릭스에서 프리렌 2기 8화 틀어줘
+나: 넷플릭스에서 Squid Game 시즌 2 에피소드 3 틀어줘
 나: 아기한테 상어 가족 틀어줘
-나: Ye 새 앨범 스포티파이로 틀어
-나: 화면 끄고 재즈 틀어
+나: Wednesday 사운드트랙 스포티파이로 틀어
+나: 넷플릭스에서 Glass Onion 찾아줘          (영화도 됩니다)
+나: 화면 끄고 lo-fi 비트 틀어
 나: 잘 자
 ```
 
@@ -60,18 +61,18 @@ pip install "stv[all]"          # 전부 다
 
 ```bash
 # 이름으로 콘텐츠 재생 — stv가 ID를 자동으로 찾아줍니다
-stv play netflix "Frieren" s2e8            # 해석 + 딥링크 한 번에
+stv play netflix "Bridgerton" s3e4         # 해석 + 딥링크 한 번에
 stv play youtube "baby shark"              # 검색 + 재생
 stv play spotify "Ye White Lines"          # Spotify에서 찾아서 재생
 
 # 재생 없이 검색
-stv search netflix "Stranger Things"       # 모든 시즌 + 에피소드 수 표시
+stv search netflix "Money Heist"           # 모든 시즌 + 에피소드 수 표시
 stv search youtube "lofi hip hop"          # 상위 3개 결과
-stv resolve netflix "Frieren" s2e8         # ID만 가져오기
+stv resolve netflix "The Witcher" s2e5     # ID만 가져오기
 
 # 이어 보기
 stv next                                   # 기록에서 다음 에피소드 재생
-stv next "Frieren"                         # 특정 작품의 다음 에피소드
+stv next "Breaking Bad"                    # 특정 작품의 다음 에피소드
 stv history                                # 최근 재생 기록 및 시간
 
 # TV 제어
@@ -92,7 +93,7 @@ stv launch netflix 82656797
 `stv play`와 `stv resolve`는 스트리밍 ID를 대신 찾아줍니다:
 
 ```bash
-stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve netflix "The Witcher" s2e5     # → 80189693
 stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (yt-dlp 이용)
 stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
@@ -108,8 +109,8 @@ stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 
 ```bash
 stv cache show                                # 캐시된 ID 전체 보기
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
+stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
 stv cache contribute                          # 커뮤니티 캐시 PR용 내보내기
 ```
 
@@ -131,7 +132,7 @@ cd smartest-tv && ./install-skills.sh
 
 ## 실제 사용 사례
 
-**새벽 2시.** 침대에서 Claude에게 말합니다: "프리렌 이어서 틀어줘." 거실 TV가 켜지고, 넷플릭스가 열리고, 에피소드가 시작됩니다. 리모컨을 건드리지도 않았고, 눈도 제대로 안 뜬 상태였습니다.
+**새벽 2시.** 침대에서 Claude에게 말합니다: "Stranger Things 이어서 틀어줘." 거실 TV가 켜지고, 넷플릭스가 열리고, 에피소드가 시작됩니다. 리모컨을 건드리지도 않았고, 눈도 제대로 안 뜬 상태였습니다.
 
 **토요일 아침.** "아기한테 코코멜론 틀어줘." 유튜브에서 찾아 TV에서 재생됩니다. 아침 준비를 계속하세요.
 

@@ -10,7 +10,7 @@
 
 **跟你的电视说话。它听得懂。**
 
-其他工具只能打开 Netflix。smartest-tv 能直接播放*《葬送的芙莉莲》第二季第八集*。
+其他工具只能打开 Netflix。smartest-tv 能直接播放*《后翼弃兵》第五集*。
 
 <p align="center">
   <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
@@ -28,10 +28,11 @@ stv setup          # 自动发现电视、完成配对，搞定
 ## 能做什么？
 
 ```
-你: 用 Netflix 播放《葬送的芙莉莲》第二季第八集
+你: 用 Netflix 播放《鱿鱼游戏》第二季第三集
 你: 给孩子放《小鲨鱼》
-你: 用 Spotify 放 Ye 的新专辑
-你: 关掉画面，放爵士乐
+你: 用 Spotify 播放 Wednesday 原声带
+你: 在 Netflix 上找 Glass Onion          (电影也支持)
+你: 关掉画面，放 lo-fi 音乐
 你: 晚安
 ```
 
@@ -60,18 +61,18 @@ pip install "stv[all]"          # 全部平台
 
 ```bash
 # 按名称播放内容 — stv 自动查找 ID
-stv play netflix "Frieren" s2e8            # 解析 + 深度链接一步完成
+stv play netflix "Bridgerton" s3e4         # 解析 + 深度链接一步完成
 stv play youtube "baby shark"              # 搜索 + 播放
 stv play spotify "Ye White Lines"          # 在 Spotify 查找 + 播放
 
 # 只搜索不播放
-stv search netflix "Stranger Things"       # 显示所有季 + 集数
+stv search netflix "Money Heist"           # 显示所有季 + 集数
 stv search youtube "lofi hip hop"          # 显示前 3 条结果
-stv resolve netflix "Frieren" s2e8         # 只获取剧集 ID
+stv resolve netflix "The Witcher" s2e5     # 只获取剧集 ID
 
 # 继续观看
 stv next                                   # 从历史记录中播放下一集
-stv next "Frieren"                         # 播放指定剧集的下一集
+stv next "Breaking Bad"                    # 播放指定剧集的下一集
 stv history                                # 最近播放记录及时间戳
 
 # 电视控制
@@ -92,7 +93,7 @@ stv launch netflix 82656797
 `stv play` 和 `stv resolve` 帮你自动查找流媒体 ID：
 
 ```bash
-stv resolve netflix "Frieren" s2e8         # → 82656797
+stv resolve netflix "The Witcher" s2e5     # → 80189693
 stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ（通过 yt-dlp）
 stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
 ```
@@ -108,8 +109,8 @@ Netflix 解析只需向剧集页面发送一次 `curl` 请求。Netflix 会在 `
 
 ```bash
 stv cache show                                # 查看所有已缓存 ID
-stv cache set netflix "Frieren" -s 2 --first-ep-id 82656790 --count 10
-stv cache get netflix "Frieren" -s 2 -e 8     # → 82656797
+stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
+stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
 stv cache contribute                          # 导出以提交社区缓存 PR
 ```
 
@@ -131,7 +132,7 @@ cd smartest-tv && ./install-skills.sh
 
 ## 真实使用场景
 
-**凌晨两点。** 你躺在床上，跟 Claude 说："继续放《芙莉莲》。" 客厅电视自动开机，Netflix 打开，剧集从上次的地方继续播放。遥控器碰都没碰，眼睛都没睁开。
+**凌晨两点。** 你躺在床上，跟 Claude 说："继续放《怪奇物语》。" 客厅电视自动开机，Netflix 打开，剧集从上次的地方继续播放。遥控器碰都没碰，眼睛都没睁开。
 
 **周六早上。** "给宝宝放《小鲨鱼》。" YouTube 自动找到，电视开始播放。你继续做早饭。
 
