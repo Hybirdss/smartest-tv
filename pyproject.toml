@@ -1,0 +1,45 @@
+[project]
+name = "smartest-tv"
+version = "0.1.0"
+description = "Control any smart TV with natural language. AI-first CLI + MCP server."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Yunsu Kim" }]
+keywords = [
+    "tv", "smart-tv", "mcp", "cli", "ai-agent",
+    "lg", "samsung", "roku", "android-tv", "fire-tv",
+    "deep-link", "netflix", "youtube", "spotify",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Home Automation",
+]
+dependencies = [
+    "fastmcp>=2.0.0",
+    "click>=8.0.0",
+]
+
+[project.optional-dependencies]
+lg = ["bscpylgtv>=0.5.0"]
+samsung = ["samsungtvws[encrypted]>=3.0.0"]
+android = ["adb-shell>=0.4.0"]
+all = ["smartest-tv[lg,samsung,android]"]
+
+[project.urls]
+Homepage = "https://github.com/Hybirdss/smartest-tv"
+Repository = "https://github.com/Hybirdss/smartest-tv"
+
+[project.scripts]
+tv = "smartest_tv.cli:main"
+smartest-tv = "smartest_tv:mcp_main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/smartest_tv"]
