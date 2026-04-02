@@ -16,8 +16,11 @@ CLI + MCP server for controlling smart TVs with natural language. Deep links int
 # Install (editable, LG driver)
 pip install -e ".[lg]"
 
+# First-time setup
+stv setup                                    # Auto-discover + pair TV
+stv setup --ip 192.168.1.100                 # Direct IP (skip discovery)
+
 # CLI
-stv setup                                    # First-time TV setup
 stv status                                   # TV state
 stv play netflix "Frieren" s2e8              # Find + play (auto title ID)
 stv play youtube "baby shark"                # Search + play
@@ -26,8 +29,13 @@ stv resolve netflix "Jujutsu Kaisen" s3e10   # Just get the content ID
 stv cache show                               # View cached IDs
 stv launch netflix 82656797                  # Direct deep link (known ID)
 
-# MCP server
-python -m smartest_tv.server
+# MCP server (stdio — default for Claude Code)
+python -m smartest_tv
+
+# MCP server (remote/HTTP — for web clients or Cursor)
+stv serve                                    # SSE on http://127.0.0.1:8910/sse
+stv serve --port 9000 --transport streamable-http
+STV_TRANSPORT=sse STV_PORT=8910 python -m smartest_tv   # env var mode
 
 # Build + publish
 uvx --from build pyproject-build
@@ -44,8 +52,8 @@ src/smartest_tv/
   cache.py        — Local JSON cache (~/.config/smartest-tv/cache.json)
   config.py       — TOML config (~/.config/smartest-tv/config.toml)
   apps.py         — App name → platform-specific ID mapping
-  discovery.py    — SSDP network discovery
-  setup.py        — Interactive setup wizard
+  discovery.py    — SSDP network discovery (LG/Samsung/Roku/Android)
+  setup.py        — Interactive setup wizard (auto-discover + pair)
   drivers/
     base.py       — TVDriver ABC (22 methods)
     lg.py         — LG webOS via bscpylgtv (WebSocket SSAP)
@@ -53,7 +61,13 @@ src/smartest_tv/
     android.py    — Android TV / Fire TV via ADB TCP
     roku.py       — Roku via HTTP ECP (:8060)
 skills/tv/        — Single unified AI agent skill (Markdown)
-docs/i18n/        — 7 language README translations
+tests/            — Unit tests (pytest, no TV required)
+docs/
+  setup-guide.md        — First-time setup walkthrough
+  mcp-integration.md    — MCP server config (Claude Code, Cursor, etc.)
+  api-reference.md      — All CLI commands + MCP tools
+  contributing-cache.md — How to contribute content IDs
+  i18n/               — 7 language README translations
 ```
 
 ## Key Architecture
@@ -108,7 +122,10 @@ Netflix requires close → relaunch for deep links. `stv play` handles this auto
 ## Testing
 
 ```bash
-# Resolve tests (no TV needed)
+# Unit tests (no TV, no network)
+python -m pytest tests/ -v
+
+# Resolve tests (no TV, uses real network)
 stv resolve netflix "Frieren" s2e8
 stv resolve youtube "baby shark"
 stv resolve spotify "Ye White Lines"
@@ -116,6 +133,11 @@ stv resolve spotify "Ye White Lines"
 # TV tests (requires LG TV on network)
 stv status
 stv play netflix "Frieren" s2e8
+
+# Remote MCP smoke test
+stv serve --port 8910 &
+curl http://127.0.0.1:8910/sse   # should return SSE stream
+kill %1
 ```
 
 ## PyPI

@@ -8,22 +8,25 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import subprocess
 import sys
-import time
 
 import click
 
 from smartest_tv.config import save as save_config
 
 
-def run_setup() -> None:
+def run_setup(ip: str | None = None) -> None:
     """Run the full interactive setup."""
     click.echo()
-    click.echo("🔍 Scanning your network for smart TVs...")
-    click.echo()
 
-    tvs = asyncio.run(_discover_all())
+    if ip:
+        click.echo(f"🔍 Connecting to {ip}...")
+        click.echo()
+        tvs = asyncio.run(_probe_ip(ip))
+    else:
+        click.echo("🔍 Scanning your network for smart TVs...")
+        click.echo()
+        tvs = asyncio.run(_discover_all())
 
     if not tvs:
         click.echo("❌ No TV found on your network.")
@@ -31,16 +34,19 @@ def run_setup() -> None:
         click.echo("   Checklist:")
         click.echo("   • Is the TV turned on?")
         click.echo("   • Are TV and computer on the same Wi-Fi?")
-        click.echo("   • Try: stv setup --ip 192.168.1.XXX")
+        if not ip:
+            click.echo("   • Try: stv setup --ip 192.168.1.XXX")
         click.echo()
         sys.exit(1)
 
     if len(tvs) == 1:
         tv = tvs[0]
+        click.echo(f"   Found: {tv['name']} [{tv['platform'].upper()}]")
+        click.echo()
     else:
         click.echo(f"Found {len(tvs)} TVs:")
         for i, t in enumerate(tvs, 1):
-            click.echo(f"  {i}. {t['name']} ({t['ip']}) [{t['platform']}]")
+            click.echo(f"  {i}. {t['name']} ({t['ip']}) [{t['platform'].upper()}]")
         click.echo()
         choice = click.prompt("Which one?", type=int, default=1)
         tv = tvs[choice - 1]
@@ -54,7 +60,7 @@ def run_setup() -> None:
 
     if platform == "roku":
         click.echo("   No pairing needed — Roku is open by default. ✨")
-    elif platform == "android":
+    elif platform in ("android", "firetv"):
         click.echo("   📋 Quick one-time setup on your TV:")
         click.echo("      Settings → About → tap 'Build number' 7 times")
         click.echo("      → Developer Options → enable 'ADB debugging'")
@@ -77,7 +83,7 @@ def run_setup() -> None:
         mac = asyncio.run(_pair_tv(tv))
         tv["mac"] = mac
     except Exception as e:
-        click.echo(f" ❌")
+        click.echo(" ❌")
         click.echo()
         click.echo(f"   Connection failed: {e}")
         click.echo("   Make sure you approved the popup on your TV.")
@@ -118,41 +124,55 @@ def run_setup() -> None:
     click.echo()
 
 
-async def _discover_all() -> list[dict]:
-    """Discover TVs on the network with platform auto-detection."""
-    found: list[dict] = []
+async def _probe_ip(ip: str) -> list[dict]:
+    """Probe a specific IP for TV services and detect platform."""
+    # Try each platform driver in order
+    for platform, port in [("lg", 3000), ("samsung", 8001), ("roku", 8060)]:
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(ip, port),
+                timeout=2.0,
+            )
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+            name = _make_name(platform, ip)
+            return [{"ip": ip, "name": name, "platform": platform, "raw": ""}]
+        except Exception:
+            pass
 
-    # SSDP discovery
+    # Try ADB
     try:
-        from smartest_tv.discovery import discover
-        ssdp_results = await discover(timeout=5.0)
-        for tv in ssdp_results:
-            platform = _detect_platform(tv)
-            found.append({
-                "ip": tv["ip"],
-                "name": tv.get("name", f"TV ({tv['ip']})"),
-                "platform": platform,
-            })
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, 5555),
+            timeout=2.0,
+        )
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return [{"ip": ip, "name": f"Android TV ({ip})", "platform": "android", "raw": ""}]
     except Exception:
         pass
 
-    return found
+    return []
 
 
-def _detect_platform(tv: dict) -> str:
-    """Detect TV platform from SSDP response."""
-    name = tv.get("name", "").lower()
-    raw = tv.get("raw", "").lower() if "raw" in tv else name
+async def _discover_all() -> list[dict]:
+    """Discover TVs on the network with platform auto-detection."""
+    try:
+        from smartest_tv.discovery import discover
+        return await discover(timeout=3.0)
+    except Exception:
+        return []
 
-    if "webos" in raw or "lg" in name:
-        return "lg"
-    if "samsung" in raw or "tizen" in name:
-        return "samsung"
-    if "roku" in raw:
-        return "roku"
-    if "android" in raw or "google" in name:
-        return "android"
-    return "lg"  # Default fallback
+
+def _make_name(platform: str, ip: str) -> str:
+    brand = {"lg": "LG", "samsung": "Samsung", "roku": "Roku"}.get(platform, "Smart")
+    return f"{brand} TV ({ip})"
 
 
 async def _pair_tv(tv: dict) -> str:
@@ -176,7 +196,7 @@ async def _pair_tv(tv: dict) -> str:
         await driver.disconnect()
         return info.mac or ""
 
-    elif platform == "android":
+    elif platform in ("android", "firetv"):
         from smartest_tv.drivers.android import AndroidDriver
         driver = AndroidDriver(ip=ip)
         await driver.connect()
@@ -209,12 +229,14 @@ async def _test_notify(tv: dict) -> None:
 
 def _detect_ai_clients() -> None:
     """Detect installed AI clients and offer to configure them."""
+    import pathlib
+
     claude_code = shutil.which("claude")
     cursor_config = any(
         p.exists()
         for p in [
-            __import__("pathlib").Path.home() / ".cursor" / "mcp.json",
-            __import__("pathlib").Path.home() / ".cursor" / "settings.json",
+            pathlib.Path.home() / ".cursor" / "mcp.json",
+            pathlib.Path.home() / ".cursor" / "settings.json",
         ]
     )
 

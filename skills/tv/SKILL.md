@@ -72,6 +72,28 @@ stv notify "msg" # Toast on screen
 
 **Good night**: `stv off`
 
+## Setup
+
+If `stv status` fails with "No TV configured":
+
+```bash
+stv setup              # Auto-discover TV on network + pair
+stv setup --ip X.X.X.X # Skip discovery, connect directly
+stv doctor             # Diagnose connection issues
+```
+
+## Remote MCP (HTTP mode)
+
+For web-based MCP clients (Cursor, VS Code, etc.) that need a URL instead of a command:
+
+```bash
+stv serve                                    # SSE on http://127.0.0.1:8910/sse
+stv serve --host 0.0.0.0 --port 9000         # Expose on all interfaces
+stv serve --transport streamable-http        # streamable-http on /mcp
+```
+
+Claude Code uses stdio mode automatically (`uvx stv`). Only use `stv serve` for HTTP clients.
+
 ## Notes
 
 - All commands support `--format json`

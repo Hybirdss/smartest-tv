@@ -1,6 +1,6 @@
 [project]
 name = "stv"
-version = "0.3.0"
+version = "0.4.0"
 description = "Talk to your TV. Control any smart TV with natural language."
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,7 @@ android = ["adb-shell>=0.4.0"]
 roku = ["aiohttp>=3.9.0"]
 mcp = ["fastmcp>=2.0.0"]
 all = ["stv[lg,samsung,android,roku,mcp]"]
+dev = ["pytest>=8.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/Hybirdss/smartest-tv"
@@ -37,6 +38,10 @@ Repository = "https://github.com/Hybirdss/smartest-tv"
 
 [project.scripts]
 stv = "smartest_tv.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
 [build-system]
 requires = ["hatchling"]

@@ -177,7 +177,13 @@ LG is the primary tested platform. No developer mode required on any of them.
 stv setup
 ```
 
-It auto-discovers your TV on the network, detects the platform, pairs automatically, and writes everything to `~/.config/smartest-tv/config.toml`. If something looks wrong, `stv doctor` will tell you exactly what's up.
+Scans your network for LG, Samsung, Roku, and Android/Fire TV simultaneously (SSDP + ADB). Auto-detects the platform, pairs, saves config, and sends a test notification — all in one command. If your TV isn't discovered, pass the IP directly:
+
+```bash
+stv setup --ip 192.168.1.100
+```
+
+Everything lands in `~/.config/smartest-tv/config.toml`. If something looks wrong, `stv doctor` tells you exactly what's up.
 
 ```toml
 [tv]
@@ -190,7 +196,9 @@ On first connection, the TV shows a pairing prompt. Accept once — the key is s
 
 ## MCP Server
 
-For Claude Desktop, Cursor, or other MCP clients — optional, the CLI is the primary interface:
+### Local (stdio)
+
+For Claude Desktop, Cursor, or other MCP clients — connect to stv as a local process:
 
 ```json
 {
@@ -198,6 +206,28 @@ For Claude Desktop, Cursor, or other MCP clients — optional, the CLI is the pr
     "tv": {
       "command": "uvx",
       "args": ["stv"]
+    }
+  }
+}
+```
+
+### Remote (HTTP)
+
+Run stv as a network-accessible MCP server. Useful for shared setups or AI agents running on a different machine:
+
+```bash
+stv serve                          # localhost:8910 (SSE)
+stv serve --host 0.0.0.0 --port 8910
+stv serve --transport streamable-http
+```
+
+Connect from any MCP client:
+
+```json
+{
+  "mcpServers": {
+    "tv": {
+      "url": "http://192.168.1.50:8910/sse"
     }
   }
 }
@@ -227,6 +257,15 @@ You (natural language)
 | **Wanted** | Hulu, Prime Video skills | Deep link ID resolution |
 
 The [driver interface](src/smartest_tv/drivers/base.py) is defined — implement `TVDriver` for your platform and open a PR.
+
+### Running tests
+
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+```
+
+55 unit tests covering the content resolver, cache, and CLI parser. No TV or network connection required — all external calls are mocked.
 
 ## License
 

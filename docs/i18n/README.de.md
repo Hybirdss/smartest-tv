@@ -185,7 +185,13 @@ LG ist die primär getestete Plattform. Auf keiner Plattform ist ein Entwicklerm
 stv setup
 ```
 
-Erkennt deinen Fernseher automatisch im Netzwerk, identifiziert die Plattform, koppelt sich selbstständig und schreibt alles in `~/.config/smartest-tv/config.toml`. Wenn etwas nicht stimmt, erklärt `stv doctor` genau, was los ist.
+Scannt gleichzeitig nach LG, Samsung, Roku und Android/Fire TV im Netzwerk (SSDP + ADB). Erkennt die Plattform, koppelt sich, speichert die Konfiguration und sendet eine Testbenachrichtigung — alles in einem Schritt. Falls der Fernseher nicht automatisch gefunden wird, IP direkt angeben:
+
+```bash
+stv setup --ip 192.168.1.100
+```
+
+Alles landet in `~/.config/smartest-tv/config.toml`. Wenn etwas nicht stimmt, erklärt `stv doctor` genau, was los ist.
 
 ```toml
 [tv]
@@ -198,7 +204,9 @@ Beim ersten Verbindungsaufbau erscheint eine Kopplungsaufforderung auf dem Ferns
 
 ## MCP-Server
 
-Für Claude Desktop, Cursor oder andere MCP-Clients — optional, der CLI ist die primäre Schnittstelle:
+### Lokal (stdio)
+
+Für Claude Desktop, Cursor oder andere MCP-Clients — als lokaler Prozess verbinden:
 
 ```json
 {
@@ -206,6 +214,28 @@ Für Claude Desktop, Cursor oder andere MCP-Clients — optional, der CLI ist di
     "tv": {
       "command": "uvx",
       "args": ["stv"]
+    }
+  }
+}
+```
+
+### Remote (HTTP)
+
+stv als netzwerkzugänglichen MCP-Server starten. Nützlich für KI-Agenten auf anderen Maschinen:
+
+```bash
+stv serve                          # localhost:8910 (SSE)
+stv serve --host 0.0.0.0 --port 8910
+stv serve --transport streamable-http
+```
+
+Von beliebigen MCP-Clients verbinden:
+
+```json
+{
+  "mcpServers": {
+    "tv": {
+      "url": "http://192.168.1.50:8910/sse"
     }
   }
 }

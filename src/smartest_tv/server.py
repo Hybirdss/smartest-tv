@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from typing import Any
 
 from fastmcp import FastMCP
 
@@ -314,7 +312,6 @@ async def tv_play_content(
         episode: Episode number (Netflix TV shows only).
         title_id: Netflix title ID if known (e.g. 81726714). Skips search.
     """
-    import asyncio
     from smartest_tv.resolve import resolve
 
     content_id = resolve(platform, query, season, episode, title_id)

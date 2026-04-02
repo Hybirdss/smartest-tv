@@ -80,14 +80,37 @@ def main(ctx, fmt):
     ctx.obj["fmt"] = fmt
 
 
+# -- Remote MCP Server -------------------------------------------------------
+
+
+@main.command()
+@click.option("--host", default="127.0.0.1", help="Bind address")
+@click.option("--port", default=8910, type=int, help="Port")
+@click.option(
+    "--transport",
+    default="sse",
+    type=click.Choice(["sse", "streamable-http"]),
+    help="Transport protocol",
+)
+def serve(host, port, transport):
+    """Start stv as a remote MCP server."""
+    from smartest_tv.server import mcp
+
+    path = "sse" if transport == "sse" else "mcp"
+    click.echo(f"MCP server running at http://{host}:{port}/{path}")
+    click.echo("Press Ctrl+C to stop.")
+    mcp.run(transport=transport, host=host, port=port)
+
+
 # -- Setup & Diagnostics ----------------------------------------------------
 
 
 @main.command()
-def setup():
+@click.option("--ip", default=None, help="TV IP address (skip auto-discovery)")
+def setup(ip):
     """Set up your TV. Discovers, pairs, and configures everything."""
     from smartest_tv.setup import run_setup
-    run_setup()
+    run_setup(ip=ip)
 
 
 @main.command()

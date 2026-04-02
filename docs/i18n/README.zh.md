@@ -185,20 +185,28 @@ LG 是主要测试平台。所有平台均无需开发者模式。
 stv setup
 ```
 
-自动扫描局域网发现电视，自动识别平台，自动完成配对，将所有配置写入 `~/.config/smartest-tv/config.toml`。有问题？`stv doctor` 会告诉你哪里不对。
+同时扫描局域网中的 LG、Samsung、Roku 和 Android/Fire TV（SSDP + ADB）。自动识别平台、完成配对、保存配置并发送测试通知——一步搞定。如果自动发现失败，直接指定 IP：
+
+```bash
+stv setup --ip 192.168.1.100
+```
+
+所有配置写入 `~/.config/smartest-tv/config.toml`。有问题？`stv doctor` 会告诉你哪里不对。
 
 ```toml
 [tv]
 platform = "lg"
 ip = "192.168.1.100"
-mac = "AA:BB:CC:DD:EE:FF"   # optional, for Wake-on-LAN
+mac = "AA:BB:CC:DD:EE:FF"   # 可选，用于 Wake-on-LAN
 ```
 
 首次连接时电视会弹出配对提示，确认一次，密钥自动保存，以后不再询问。
 
 ## MCP 服务器
 
-供 Claude Desktop、Cursor 等 MCP 客户端使用——这是可选项，CLI 才是主要入口：
+### 本地 (stdio)
+
+供 Claude Desktop、Cursor 等 MCP 客户端使用——作为本地进程连接：
 
 ```json
 {
@@ -206,6 +214,28 @@ mac = "AA:BB:CC:DD:EE:FF"   # optional, for Wake-on-LAN
     "tv": {
       "command": "uvx",
       "args": ["stv"]
+    }
+  }
+}
+```
+
+### 远程 (HTTP)
+
+作为可通过网络访问的 MCP 服务器运行。适用于在其他设备上运行的 AI 代理远程控制电视：
+
+```bash
+stv serve                          # localhost:8910 (SSE)
+stv serve --host 0.0.0.0 --port 8910
+stv serve --transport streamable-http
+```
+
+从任意 MCP 客户端连接：
+
+```json
+{
+  "mcpServers": {
+    "tv": {
+      "url": "http://192.168.1.50:8910/sse"
     }
   }
 }
