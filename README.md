@@ -89,21 +89,13 @@ stv cache show                                # Show all cached IDs
 
 ## Agent Skills
 
-smartest-tv ships five skills that teach AI assistants how to control your TV. Install them into Claude Code:
+smartest-tv ships one skill that teaches AI assistants everything about TV control. Install into Claude Code:
 
 ```bash
 cd smartest-tv && ./install-skills.sh
 ```
 
-| Skill | What it does |
-|-------|-------------|
-| `tv-shared` | CLI reference, auth, config, common patterns |
-| `tv-netflix` | Episode ID lookup via HTTP scraping |
-| `tv-youtube` | Video search via yt-dlp, format resolution |
-| `tv-spotify` | Album/track/playlist URI resolution |
-| `tv-workflow` | Composite actions: movie night, kids mode, sleep timer |
-
-Skills are plain Markdown files. Port them to any agent in minutes.
+The `tv` skill covers all platforms (Netflix, YouTube, Spotify), all commands (`play`, `search`, `resolve`, `cache`, `volume`, `off`), and composite workflows (movie night, kids mode, sleep timer). It's a single Markdown file — portable to any AI agent in minutes.
 
 ## Works With
 

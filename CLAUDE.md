@@ -52,7 +52,7 @@ src/smartest_tv/
     samsung.py    — Samsung Tizen via samsungtvws
     android.py    — Android TV / Fire TV via ADB TCP
     roku.py       — Roku via HTTP ECP (:8060)
-skills/           — AI agent skills (Markdown, 5 files)
+skills/tv/        — Single unified AI agent skill (Markdown)
 docs/i18n/        — 7 language README translations
 ```
 
