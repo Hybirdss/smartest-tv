@@ -37,7 +37,7 @@ The AI finds the content ID (Netflix episode, YouTube video, Spotify URI), calls
 
 ### See it in action
 
-https://github.com/user-attachments/assets/PLACEHOLDER_DEMO_VIDEO
+https://github.com/Hybirdss/smartest-tv/raw/main/docs/assets/demo.mp4
 
 ## Install
 

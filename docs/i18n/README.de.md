@@ -10,8 +10,9 @@
 
 Andere Tools öffnen Netflix. smartest-tv spielt *Frieren Staffel 2, Folge 8*.
 
-<!-- TODO: Add terminal demo GIF here -->
-<!-- ![demo](docs/assets/demo.gif) -->
+<p align="center">
+  <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
+</p>
 
 ## Schnellstart
 
@@ -33,6 +34,10 @@ Du: Gute Nacht
 ```
 
 Die KI findet die Inhalts-ID (Netflix-Episode, YouTube-Video, Spotify-URI), ruft `stv` auf, und dein Fernseher spielt es ab.
+
+### See it in action
+
+https://github.com/Hybirdss/smartest-tv/raw/main/docs/assets/demo.mp4
 
 ## Installation
 
@@ -209,6 +214,10 @@ Du (natürliche Sprache)
       → Treiber (WebSocket / ADB / HTTP)
         → Fernseher
 ```
+
+<p align="center">
+  <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
+</p>
 
 ## Mitmachen
 

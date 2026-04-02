@@ -10,8 +10,9 @@
 
 其他工具只能打开 Netflix。smartest-tv 能直接播放*《葬送的芙莉莲》第二季第八集*。
 
-<!-- TODO: Add terminal demo GIF here -->
-<!-- ![demo](docs/assets/demo.gif) -->
+<p align="center">
+  <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
+</p>
 
 ## 快速开始
 
@@ -33,6 +34,10 @@ stv setup          # 自动发现电视、完成配对，搞定
 ```
 
 AI 负责找到内容 ID（Netflix 剧集、YouTube 视频、Spotify URI），调用 `stv`，电视随即播放。
+
+### See it in action
+
+https://github.com/Hybirdss/smartest-tv/raw/main/docs/assets/demo.mp4
 
 ## 安装
 
@@ -209,6 +214,10 @@ mac = "AA:BB:CC:DD:EE:FF"   # optional, for Wake-on-LAN
       → 驱动（WebSocket / ADB / HTTP）
         → 电视
 ```
+
+<p align="center">
+  <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
+</p>
 
 ## 贡献
 
