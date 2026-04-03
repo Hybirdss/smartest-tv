@@ -4,7 +4,7 @@
 [![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-132%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen)](tests/)
 
 [English](README.md) | [한국어](docs/i18n/README.ko.md) | [中文](docs/i18n/README.zh.md) | [日本語](docs/i18n/README.ja.md) | [Español](docs/i18n/README.es.md) | [Deutsch](docs/i18n/README.de.md) | [Português](docs/i18n/README.pt-br.md) | [Français](docs/i18n/README.fr.md)
 
@@ -79,14 +79,16 @@ stv scene sleep                    # ambient sounds, auto-off
 stv scene create date-night        # make your own
 ```
 
-### "Play it on the bedroom TV"
+### "Play it everywhere"
 
-Control every TV in the house from one CLI.
+Control every TV in the house. Or all of them at once.
 
 ```bash
-stv multi list                     # living-room (LG), bedroom (Samsung)
+stv multi list                     # living-room (LG), bedroom (Samsung), friend (remote)
 stv play netflix "The Crown" --tv bedroom
-stv off --tv living-room
+stv --all play youtube "lo-fi beats"    # every TV in the house
+stv --group party play netflix "Wednesday" s1e1  # sync party mode
+stv --all off                      # good night, all TVs
 ```
 
 ### "Play where I left off"
@@ -109,7 +111,7 @@ stv history                        # see what you've been watching
 
 **7:00pm** -- "what should we watch?" `stv recommend --mood chill` -- suggests The Queen's Gambit.
 
-**9:00pm** -- friends come over. Everyone runs `stv queue add ...` -- TV plays them in order.
+**9:00pm** -- friends come over. `stv --group party play netflix "Wednesday" s1e1` -- syncs across living room and bedroom. Everyone runs `stv queue add ...` -- TV plays them in order.
 
 **11:30pm** -- "good night." `stv scene sleep` -- ambient sounds, TV turns off in 45 minutes.
 
@@ -171,7 +173,7 @@ pip install "stv[all]"          # Everything
 | **Home Assistant** | Door opens -- TV turns on -- trending shows appear |
 | **Cursor / Codex** | AI writes code, controls your TV on break |
 | **cron / scripts** | 7am: news on bedroom TV. 9pm: kids TV off |
-| **Any MCP client** | 32 tools over stdio or HTTP |
+| **Any MCP client** | 18 tools over stdio or HTTP |
 
 ### MCP Server
 
@@ -207,10 +209,11 @@ clawhub install smartest-tv
 | [Playing Content](docs/guides/playing-content.md) | play, cast, search, queue, resolve |
 | [Scenes](docs/guides/scenes.md) | Presets: movie-night, kids, sleep, custom |
 | [Multi-TV](docs/guides/multi-tv.md) | Control multiple TVs with `--tv` |
+| [Sync & Party](docs/guides/sync-party.md) | Play on all TVs at once, remote watch party |
 | [AI Agents](docs/guides/ai-agents.md) | MCP setup for Claude, Cursor, OpenClaw |
 | [Recommendations](docs/guides/recommendations.md) | AI-powered content suggestions |
 | [CLI Reference](docs/reference/cli.md) | Every command and option |
-| [MCP Tools](docs/reference/mcp-tools.md) | All 32 MCP tools with parameters |
+| [MCP Tools](docs/reference/mcp-tools.md) | All 18 MCP tools with parameters |
 | [OpenClaw](docs/integrations/openclaw.md) | ClawHub skill + Telegram scenarios |
 
 ## Contributing
@@ -219,7 +222,7 @@ Samsung, Roku, and Android TV drivers need real-world testing. If you have one o
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v         # 132 tests, no TV needed
+python -m pytest tests/ -v         # 169 tests, no TV needed
 ```
 
 Want to add your favorite shows to the community cache? See [Contributing Cache](docs/contributing/cache-contributions.md).

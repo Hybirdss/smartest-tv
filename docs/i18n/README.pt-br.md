@@ -4,7 +4,7 @@
 [![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-132%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | [한국어](README.ko.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Deutsch](README.de.md) | **Português** | [Français](README.fr.md)
 
@@ -79,14 +79,14 @@ stv scene sleep                    # sons ambiente, desligamento automático
 stv scene create date-night        # cria o seu
 ```
 
-### "Toca na TV do quarto"
+### "Reproduza em todo lugar"
 
-Controla cada TV da casa de uma CLI só.
+Sincroniza todas as TVs da casa ao mesmo tempo — festa no modo full house.
 
 ```bash
-stv multi list                     # sala (LG), quarto (Samsung)
-stv play netflix "The Crown" --tv bedroom
-stv off --tv living-room
+stv --all play youtube "lo-fi beats"
+stv --group party play netflix "Wednesday" s1e1
+stv --all off
 ```
 
 ### "Continua de onde eu parei"
@@ -109,7 +109,7 @@ stv history                        # veja o que você assistiu
 
 **19h00** -- "o que a gente assiste?" `stv recommend --mood chill` -- sugere The Queen's Gambit.
 
-**21h00** -- os amigos chegam. Todo mundo roda `stv queue add ...` -- a TV toca na ordem.
+**21h00** -- os amigos chegam. `stv --group party play netflix "Wednesday" s1e1` -- todas as TVs sincronizam na hora.
 
 **23h30** -- "boa noite." `stv scene sleep` -- sons ambiente, a TV desliga em 45 minutos.
 
@@ -171,7 +171,7 @@ pip install "stv[all]"          # Tudo
 | **Home Assistant** | Porta abre -- TV liga -- séries em alta aparecem |
 | **Cursor / Codex** | IA escreve código, controla sua TV no intervalo |
 | **cron / scripts** | 7h: notícias na TV do quarto. 21h: TV das crianças desliga |
-| **Qualquer cliente MCP** | 32 ferramentas via stdio ou HTTP |
+| **Qualquer cliente MCP** | 18 ferramentas via stdio ou HTTP |
 
 ### Servidor MCP
 
@@ -207,10 +207,11 @@ clawhub install smartest-tv
 | [Reproduzir conteúdo](docs/guides/playing-content.md) | play, cast, search, queue, resolve |
 | [Scenes](docs/guides/scenes.md) | Presets: movie-night, kids, sleep, custom |
 | [Multi-TV](docs/guides/multi-tv.md) | Controla várias TVs com `--tv` |
+| [Festa sincronizada](docs/guides/sync-party.md) | `--all` e `--group` para sincronizar todas as TVs |
 | [Agentes IA](docs/guides/ai-agents.md) | Configuração MCP para Claude, Cursor, OpenClaw |
 | [Recomendações](docs/guides/recommendations.md) | Sugestões de conteúdo por IA |
 | [Referência CLI](docs/reference/cli.md) | Todos os comandos e opções |
-| [Ferramentas MCP](docs/reference/mcp-tools.md) | As 32 ferramentas MCP com parâmetros |
+| [Ferramentas MCP](docs/reference/mcp-tools.md) | As 18 ferramentas MCP com parâmetros |
 | [OpenClaw](docs/integrations/openclaw.md) | ClawHub skill + cenários do Telegram |
 
 ## Contribuindo
@@ -219,7 +220,7 @@ Os drivers de Samsung, Roku e Android TV precisam de testes no mundo real. Se vo
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v         # 132 testes, sem necessidade de TV
+python -m pytest tests/ -v         # 169 testes, sem necessidade de TV
 ```
 
 Quer adicionar suas séries favoritas ao cache comunitário? Veja [Contribuindo com o cache](docs/contributing/cache-contributions.md).

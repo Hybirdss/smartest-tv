@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-03
+
+### Added
+- Sync & party mode: `--all` and `--group` flags for multi-TV simultaneous playback
+- Remote TV support: `stv serve` exposes REST API, `RemoteDriver` controls friend's TV over HTTP
+- TV groups: `stv group create party living-room bedroom friend`
+- `stv sync` MCP tool for AI agents to play on multiple TVs at once
+
+### Changed
+- MCP tools optimized: 34 → 18 tools (consolidated volume/power/screen/queue/scene into single tools)
+- `api.py` uses `drivers/factory.py` instead of inline driver creation
+- `cli.py` `_broadcast_action` uses `sync.py` helpers (broadcast/connect_all)
+- docs/reference/mcp-tools.md rewritten for 18-tool architecture
+- All i18n READMEs updated with sync party, 18 tools, 169 tests
+
+### Fixed
+- CLAUDE.md referenced 34 MCP tools instead of 18
+
 ## [0.6.0] - 2026-04-03
 
 ### Added

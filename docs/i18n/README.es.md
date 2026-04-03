@@ -4,7 +4,7 @@
 [![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-132%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | [한국어](README.ko.md) | [中文](README.zh.md) | [日本語](README.ja.md) | **Español** | [Deutsch](README.de.md) | [Português](README.pt-br.md) | [Français](README.fr.md)
 
@@ -79,14 +79,14 @@ stv scene sleep                    # sonidos ambientales, apagado automático
 stv scene create date-night        # crea el tuyo
 ```
 
-### "Ponlo en la tele del dormitorio"
+### Reproduce en todas partes
 
-Controla todas las teles de casa desde un CLI.
+Sincroniza todas las teles a la vez o crea grupos para fiestas.
 
 ```bash
-stv multi list                     # salón (LG), dormitorio (Samsung)
-stv play netflix "The Crown" --tv bedroom
-stv off --tv living-room
+stv --all play youtube "lo-fi beats"
+stv --group party play netflix "Wednesday" s1e1
+stv --all off
 ```
 
 ### "Pon donde lo dejé"
@@ -109,7 +109,7 @@ stv history                        # mira qué has estado viendo
 
 **7:00pm** -- "¿qué vemos?" `stv recommend --mood chill` -- sugiere The Queen's Gambit.
 
-**9:00pm** -- llegan los amigos. Todos ejecutan `stv queue add ...` -- la tele los pone en orden.
+**9:00pm** -- llegan los amigos. `stv --group party play netflix "Wednesday" s1e1` -- todas las teles sincronizan al instante.
 
 **11:30pm** -- "buenas noches." `stv scene sleep` -- sonidos ambientales, la tele se apaga en 45 minutos.
 
@@ -171,7 +171,7 @@ pip install "stv[all]"          # Todo
 | **Home Assistant** | Se abre la puerta -- se enciende la tele -- aparecen series en tendencia |
 | **Cursor / Codex** | La IA escribe código, controla tu tele en el descanso |
 | **cron / scripts** | 7am: noticias en la tele del dormitorio. 9pm: tele de los niños apagada |
-| **Cualquier cliente MCP** | 32 herramientas por stdio o HTTP |
+| **Cualquier cliente MCP** | 18 herramientas por stdio o HTTP |
 
 ### Servidor MCP
 
@@ -210,8 +210,9 @@ clawhub install smartest-tv
 | [Agentes IA](docs/guides/ai-agents.md) | Configuración MCP para Claude, Cursor, OpenClaw |
 | [Recomendaciones](docs/guides/recommendations.md) | Sugerencias de contenido con IA |
 | [Referencia CLI](docs/reference/cli.md) | Todos los comandos y opciones |
-| [Herramientas MCP](docs/reference/mcp-tools.md) | Las 32 herramientas MCP con parámetros |
+| [Herramientas MCP](docs/reference/mcp-tools.md) | Las 18 herramientas MCP con parámetros |
 | [OpenClaw](docs/integrations/openclaw.md) | ClawHub skill + escenarios de Telegram |
+| [Sync Party](docs/guides/sync-party.md) | Reproducción sincronizada en varias teles y grupos remotos |
 
 ## Contribuir
 
@@ -219,7 +220,7 @@ Los drivers de Samsung, Roku y Android TV necesitan pruebas reales. Si tienes un
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v         # 132 tests, no hace falta tele
+python -m pytest tests/ -v         # 169 tests, no hace falta tele
 ```
 
 ¿Quieres añadir tus series favoritas al caché comunitario? Mira [Contribuir al caché](docs/contributing/cache-contributions.md).
