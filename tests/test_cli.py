@@ -1,8 +1,11 @@
 """Unit tests for CLI helpers in smartest_tv.cli."""
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
+from smartest_tv import cli
 from smartest_tv.cli import _parse_season_episode
 
 
@@ -63,3 +66,63 @@ def test_s_prefix_with_x_separator():
 
 def test_season_1_episode_1():
     assert _parse_season_episode("s1e1") == (1, 1)
+
+
+def test_broadcast_action_uses_sync_helpers(monkeypatch):
+    fake_drivers = {"living-room": object()}
+    calls: list[tuple] = []
+
+    async def fake_connect_all(targets, create_driver):
+        calls.append(("connect_all", targets, create_driver))
+        return fake_drivers
+
+    async def fake_broadcast(drivers, action_fn):
+        calls.append(("broadcast", drivers, action_fn))
+        return [{"tv": "living-room", "status": "ok", "message": "done"}]
+
+    async def action_fn(_driver):
+        return "done"
+
+    monkeypatch.setattr(cli, "connect_all", fake_connect_all)
+    monkeypatch.setattr(cli, "broadcast", fake_broadcast)
+
+    results = asyncio.run(cli._broadcast_action(["living-room"], action_fn))
+
+    assert results == [{"tv": "living-room", "status": "ok", "message": "done"}]
+    assert calls == [
+        ("connect_all", ["living-room"], cli._get_driver),
+        ("broadcast", fake_drivers, action_fn),
+    ]
+
+
+def test_broadcast_action_reports_connection_failures(monkeypatch):
+    async def fake_connect_all(_targets, _create_driver):
+        return {"bedroom": object()}
+
+    async def fake_broadcast(_drivers, _action_fn):
+        return [{"tv": "bedroom", "status": "ok", "message": "done"}]
+
+    async def action_fn(_driver):
+        return "done"
+
+    monkeypatch.setattr(cli, "connect_all", fake_connect_all)
+    monkeypatch.setattr(cli, "broadcast", fake_broadcast)
+
+    results = asyncio.run(cli._broadcast_action(["living-room", "bedroom"], action_fn))
+
+    assert results == [
+        {"tv": "bedroom", "status": "ok", "message": "done"},
+        {"tv": "living-room", "status": "error", "message": "Failed to connect"},
+    ]
+
+
+def test_print_results_handles_sync_broadcast_format(capsys):
+    cli._print_results([
+        {"tv": "living-room", "status": "ok", "message": "done"},
+        {"tv": "bedroom", "status": "error", "message": "boom"},
+    ])
+
+    assert capsys.readouterr().out.splitlines() == [
+        "  [living-room] ✅ done",
+        "  [bedroom] ❌ boom",
+    ]

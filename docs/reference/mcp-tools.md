@@ -1,169 +1,198 @@
 # MCP Tools Reference
 
-All MCP tools exposed by the smartest-tv server. Start the server with:
+18 tools optimized for AI agents. Each tool does more so agents make fewer decisions.
+
+Start the server:
 
 ```bash
-python -m smartest_tv.server
+python -m smartest_tv          # stdio (Claude Code)
+stv serve --port 8910          # HTTP (remote agents)
 ```
 
-All tools accept an optional `tv_name` parameter to target a specific TV in multi-TV setups. See [Multi-TV Setup](../guides/multi-tv.md).
+All tools accept an optional `tv_name` parameter to target a specific TV. Omit it to use the default TV. See [Multi-TV Setup](../guides/multi-tv.md).
 
 ---
 
-## Power
+## Content Playback
 
-### `tv_on(tv_name?)`
-Turn on the TV (Wake-on-LAN or platform equivalent).
+### `tv_play(platform, query, season?, episode?, title_id?, tv_name?)`
 
-### `tv_off(tv_name?)`
-Turn off the TV (standby).
-
----
-
-## Volume
-
-### `tv_volume(tv_name?) → dict`
-Get current volume and mute state.
-
-```json
-{"volume": 25, "muted": false}
-```
-
-### `tv_set_volume(level: int, tv_name?) → str`
-Set volume 0–100.
-
-### `tv_volume_up(tv_name?) → str`
-Increase volume by one step.
-
-### `tv_volume_down(tv_name?) → str`
-Decrease volume by one step.
-
-### `tv_mute(mute: bool | None = None, tv_name?) → str`
-Mute, unmute, or toggle. Pass `true`/`false` to force a state, omit to toggle.
-
----
-
-## Apps
-
-### `tv_launch(app: str, content_id?: str, tv_name?) → str`
-Launch an app with optional deep link.
+**The primary tool.** Find content by name and play it on TV. Resolves the content ID automatically, deep-links into the app.
 
 | Parameter | Description |
 |-----------|-------------|
-| `app` | App name (`netflix`, `youtube`, `spotify`, etc.) or raw app ID |
-| `content_id` | Netflix episode ID, YouTube video ID, or Spotify URI |
+| `platform` | `"netflix"`, `"youtube"`, or `"spotify"` |
+| `query` | Content name (e.g. "Stranger Things", "baby shark") |
+| `season` | Season number (Netflix series only) |
+| `episode` | Episode number (Netflix series only) |
+| `title_id` | Netflix title ID if already known (skips search) |
 
-### `tv_close(app: str, tv_name?) → str`
-Close a running app.
-
-### `tv_apps(tv_name?) → list[dict]`
-List installed apps.
-
-```json
-[{"id": "netflix", "name": "Netflix"}, ...]
 ```
+tv_play("netflix", "Stranger Things", season=4, episode=7)
+tv_play("youtube", "baby shark")
+tv_play("spotify", "Ye White Lines")
+```
+
+### `tv_cast(url, tv_name?)`
+
+Cast a Netflix/YouTube/Spotify URL directly. No need to parse the platform or ID — stv handles it.
+
+```
+tv_cast("https://youtube.com/watch?v=dQw4w9WgXcQ")
+tv_cast("https://netflix.com/watch/82656797")
+tv_cast("https://open.spotify.com/track/3bbjDFVu...")
+```
+
+### `tv_next(query?, tv_name?)`
+
+Play the next episode. Continues from watch history.
+
+- Omit `query` to continue the most recent Netflix show.
+- Provide `query` to continue a specific show.
+
+### `tv_launch(app, content_id?, tv_name?)`
+
+Launch an app with optional deep link. Use `tv_play` instead if you have a content name (not an ID).
+
+| Parameter | Description |
+|-----------|-------------|
+| `app` | App name (`netflix`, `youtube`, `spotify`) or raw app ID |
+| `content_id` | Platform-specific content ID for deep linking |
+
+### `tv_resolve(platform, query, season?, episode?, title_id?) -> str`
+
+Resolve a content name to its platform ID **without playing**. Returns the content ID string.
 
 ---
 
-## Media Playback
+## Discovery
 
-### `tv_play(tv_name?) → str`
-Resume playback.
+### `tv_whats_on(platform?, limit?) -> str`
 
-### `tv_pause(tv_name?) → str`
-Pause playback.
+Show trending content on Netflix and/or YouTube.
 
-### `tv_stop(tv_name?) → str`
-Stop playback.
+| Parameter | Description |
+|-----------|-------------|
+| `platform` | `"netflix"`, `"youtube"`, or omit for both |
+| `limit` | Number of results per platform (default 10) |
+
+### `tv_recommend(mood?, limit?) -> str`
+
+Get personalized recommendations based on watch history + trending.
+
+| Parameter | Description |
+|-----------|-------------|
+| `mood` | `"chill"`, `"action"`, `"kids"`, `"random"`, or omit for auto |
+| `limit` | Number of recommendations (default 5) |
 
 ---
 
-## Status & Info
+## TV Control
 
-### `tv_status(tv_name?) → dict`
-Current TV state.
+### `tv_power(on, tv_name?)`
 
-```json
-{
-  "platform": "lg",
-  "current_app": "netflix",
-  "volume": 20,
-  "muted": false,
-  "sound_output": "tv_speaker"
-}
-```
+Turn TV on or off.
 
-### `tv_info(tv_name?) → dict`
-System info.
+- `on=True` — power on (Wake-on-LAN or platform equivalent)
+- `on=False` — power off (standby)
+
+### `tv_volume(level?, direction?, mute?, tv_name?)`
+
+All volume control in one tool:
+
+| Usage | What it does |
+|-------|-------------|
+| No args | Returns current volume + mute status |
+| `level=25` | Set volume to 25 |
+| `direction="up"` | Step volume up |
+| `direction="down"` | Step volume down |
+| `mute=True` | Mute |
+| `mute=False` | Unmute |
+
+### `tv_screen(on, tv_name?)`
+
+Turn screen on or off. Audio continues when screen is off.
+
+- `on=True` — screen on
+- `on=False` — screen off (audio continues)
+
+### `tv_notify(message, tv_name?)`
+
+Show a toast notification on the TV screen.
+
+### `tv_status(tv_name?) -> dict`
+
+Get current TV state: app, volume, mute, model.
 
 ```json
 {
   "platform": "lg",
   "model": "OLED55C3",
-  "firmware": "04.30.04",
-  "ip": "192.168.1.100",
-  "name": "Living Room TV"
+  "current_app": "netflix",
+  "volume": 20,
+  "muted": false
 }
 ```
 
 ---
 
-## Notifications
+## Queue
 
-### `tv_notify(message: str, tv_name?) → str`
-Show a toast notification on screen.
+### `tv_queue(action, platform?, query?, season?, episode?, tv_name?)`
+
+Manage the play queue — all operations in one tool.
+
+| Action | Required params | Description |
+|--------|----------------|-------------|
+| `"add"` | `platform`, `query` | Add content to queue |
+| `"show"` | — | Show current queue |
+| `"play"` | — | Pop first item, resolve, and play |
+| `"skip"` | — | Skip first item |
+| `"clear"` | — | Clear entire queue |
+
+```
+tv_queue("add", "youtube", "Gangnam Style")
+tv_queue("add", "netflix", "Dark", season=1, episode=1)
+tv_queue("show")
+tv_queue("play")
+tv_queue("clear")
+```
 
 ---
 
-## Screen
+## Scenes
 
-### `tv_screen_off(tv_name?) → str`
-Turn off the screen while keeping audio playing.
+### `tv_scene(action?, name?, tv_name?)`
 
-### `tv_screen_on(tv_name?) → str`
-Turn the screen back on.
+Run or list scene presets — all operations in one tool.
 
----
+| Action | Description |
+|--------|-------------|
+| `"list"` (default) | Show all available scenes |
+| `"run"` | Execute a scene (requires `name`) |
 
-## Content Resolution & Playback
+Built-in scenes: `movie-night`, `kids`, `sleep`, `music`.
 
-### `tv_cast(url: str, tv_name?) → str`
-Cast a streaming URL to the TV. Accepts Netflix, YouTube, and Spotify links.
+```
+tv_scene("list")
+tv_scene("run", "movie-night")
+tv_scene("run", "kids", tv_name="kids-room")
+```
 
-| Parameter | Description |
-|-----------|-------------|
-| `url` | `https://www.netflix.com/watch/ID`, `https://www.youtube.com/watch?v=ID`, `https://open.spotify.com/track/ID`, etc. |
-
-Netflix `/title/` URLs are resolved to an episode ID automatically.
-
-### `tv_resolve(platform, query, season?, episode?, title_id?) → str`
-Resolve content to a platform-specific ID without playing it.
-
-| Parameter | Description |
-|-----------|-------------|
-| `platform` | `netflix`, `youtube`, or `spotify` |
-| `query` | Content name |
-| `season` | Season number (Netflix TV shows) |
-| `episode` | Episode number (Netflix TV shows) |
-| `title_id` | Netflix title ID — skips web search |
-
-Returns the content ID string (e.g. `"82656797"` for Netflix, `"dQw4w9WgXcQ"` for YouTube).
-
-### `tv_play_content(platform, query, season?, episode?, title_id?, tv_name?) → str`
-Resolve and play in one step. For Netflix, closes the app first automatically.
-Records the play to history. Same parameters as `tv_resolve`.
+Custom scenes: `~/.config/smartest-tv/scenes.json`. See [Scenes Guide](../guides/scenes.md).
 
 ---
 
 ## History
 
-### `tv_history(limit: int = 10) → list[dict]`
+### `tv_history(limit?) -> list[dict]`
+
 Return recent play history.
 
 ```json
 [{
   "platform": "netflix",
-  "query": "Frieren",
+  "query": "Wednesday",
   "content_id": "82656797",
   "time": 1743700000,
   "season": 2,
@@ -171,72 +200,60 @@ Return recent play history.
 }]
 ```
 
-`season` and `episode` are only present for Netflix TV shows.
-
-### `tv_next(query?: str, tv_name?) → str`
-Play the next episode of a Netflix show from history. If `query` is omitted,
-continues the most recently watched Netflix show.
-
 ---
 
-## Queue
+## Multi-TV & Sync
 
-### `tv_queue_add(platform, query, season?, episode?) → str`
-Add content to the play queue.
+### `tv_list_tvs() -> list[dict]`
 
-### `tv_queue_show() → list[dict]`
-Show the current play queue.
-
-### `tv_queue_play(tv_name?) → str`
-Pop the first item from the queue, resolve it, and play it on TV.
-
-### `tv_queue_clear() → str`
-Clear the entire play queue.
-
----
-
-## Trending & Recommendations
-
-### `tv_whats_on(platform?: str, limit: int = 10) → str`
-Show trending content on Netflix or YouTube.
-
-| Parameter | Description |
-|-----------|-------------|
-| `platform` | `"netflix"`, `"youtube"`, or `None` for both |
-| `limit` | Number of results per platform |
-
-### `tv_recommend(mood?: str, limit: int = 5) → str`
-Get personalized content recommendations based on watch history.
-
-| Parameter | Description |
-|-----------|-------------|
-| `mood` | `"chill"`, `"action"`, `"kids"`, `"random"`, or omit |
-| `limit` | Number of recommendations |
-
----
-
-## Scenes
-
-### `tv_scene_list() → list[dict]`
-List all available scene presets (built-in and custom).
-
-Built-in scenes: `movie-night`, `kids`, `sleep`, `music`.
-
-### `tv_scene_run(name: str, tv_name?) → str`
-Run a scene preset — executes all steps in order.
-
-Custom scenes are defined in `~/.config/smartest-tv/scenes.json`.
-
----
-
-## Multi-TV
-
-### `tv_list_tvs() → list[dict]`
-List all configured TVs.
+List all configured TVs (local and remote).
 
 ```json
 [
   {"name": "living-room", "platform": "lg", "ip": "192.168.1.100", "default": true},
-  {"name": "bedroom", "platform": "samsung", "ip": "192.168.1.101", "default": false}
+  {"name": "bedroom", "platform": "samsung", "ip": "192.168.1.101", "default": false},
+  {"name": "friend", "platform": "remote", "ip": "", "default": false}
 ]
 ```
+
+### `tv_groups() -> list[dict]`
+
+List all TV groups and their members.
+
+```json
+[{"name": "home", "members": ["living-room", "bedroom"]}]
+```
+
+### `tv_sync(platform, query, tv_names?, group?, season?, episode?, title_id?)`
+
+Play content on multiple TVs simultaneously. Resolves the content ID once, then launches on all targets via asyncio.gather.
+
+| Parameter | Description |
+|-----------|-------------|
+| `platform` | `netflix`, `youtube`, or `spotify` |
+| `query` | Content name |
+| `tv_names` | List of TV names. Or use `group`. |
+| `group` | TV group name (e.g. `"party"`) |
+| `season` | Netflix season number |
+| `episode` | Netflix episode number |
+| `title_id` | Netflix title ID if known |
+
+```
+tv_sync("netflix", "Wednesday", season=1, episode=1, group="party")
+tv_sync("youtube", "lo-fi beats", tv_names=["living-room", "bedroom"])
+```
+
+---
+
+## Tool Count Summary
+
+| Category | Tools | Names |
+|----------|-------|-------|
+| Content | 5 | tv_play, tv_cast, tv_next, tv_launch, tv_resolve |
+| Discovery | 2 | tv_whats_on, tv_recommend |
+| Control | 5 | tv_power, tv_volume, tv_screen, tv_notify, tv_status |
+| Queue | 1 | tv_queue (5 actions) |
+| Scenes | 1 | tv_scene (2 actions) |
+| History | 1 | tv_history |
+| Multi-TV | 3 | tv_list_tvs, tv_groups, tv_sync |
+| **Total** | **18** | |

@@ -22,6 +22,7 @@ from smartest_tv.config import (
     get_all_tv_names, get_group_members, get_groups, save_group, delete_group,
 )
 from smartest_tv.drivers.base import TVDriver
+from smartest_tv.sync import broadcast, connect_all
 
 
 def _get_driver(tv_name: str | None = None) -> TVDriver:
@@ -96,26 +97,28 @@ def _is_multi(ctx) -> bool:
 
 
 async def _broadcast_action(targets: list[str], action_fn):
-    """Run an async action on multiple TVs concurrently.
+    """Run an async action on multiple TVs concurrently."""
+    drivers = await connect_all(targets, _get_driver)
+    results = await broadcast(drivers, action_fn)
 
-    action_fn(driver) -> str | None
-    Returns list of (tv_name, success: bool, message: str)
-    """
-    async def _one(tv_name):
-        try:
-            d = _get_driver(tv_name)
-            await d.connect()
-            result = await action_fn(d)
-            return (tv_name or "default", True, str(result or "done"))
-        except Exception as e:
-            return (tv_name or "default", False, str(e))
+    connected_names = set(drivers)
+    for tv_name in targets:
+        if tv_name not in connected_names:
+            results.append({
+                "tv": tv_name or "default",
+                "status": "error",
+                "message": "Failed to connect",
+            })
 
-    return list(await asyncio.gather(*[_one(n) for n in targets]))
+    return results
 
 
 def _print_results(results):
     """Print multi-TV broadcast results."""
-    for name, success, msg in results:
+    for result in results:
+        name = result["tv"]
+        success = result["status"] == "ok"
+        msg = result["message"]
         icon = "✅" if success else "❌"
         click.echo(f"  [{name}] {icon} {msg}")
 

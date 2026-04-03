@@ -18,6 +18,7 @@ from typing import Any
 from smartest_tv.apps import resolve_app
 from smartest_tv.config import get_tv_config
 from smartest_tv.drivers.base import TVDriver
+from smartest_tv.drivers.factory import create_driver
 
 
 # Module-level driver cache (shared with the API handler)
@@ -32,24 +33,7 @@ def _get_driver() -> TVDriver:
         if _driver is not None:
             return _driver
 
-        tv = get_tv_config()
-        platform = tv.get("platform", "")
-
-        if platform == "lg":
-            from smartest_tv.drivers.lg import LGDriver
-            _driver = LGDriver(ip=tv["ip"], mac=tv.get("mac", ""))
-        elif platform == "samsung":
-            from smartest_tv.drivers.samsung import SamsungDriver
-            _driver = SamsungDriver(ip=tv["ip"], mac=tv.get("mac", ""))
-        elif platform in ("android", "firetv"):
-            from smartest_tv.drivers.android import AndroidDriver
-            _driver = AndroidDriver(ip=tv["ip"])
-        elif platform == "roku":
-            from smartest_tv.drivers.roku import RokuDriver
-            _driver = RokuDriver(ip=tv["ip"])
-        else:
-            raise ValueError("No TV configured. Run: stv setup")
-
+        _driver = create_driver()
         return _driver
 
 
