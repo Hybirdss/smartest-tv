@@ -1721,15 +1721,13 @@ def audio_volume_cmd(room, level):
 
 @main.group("license")
 def license_group():
-    """Manage your stv Pro license key."""
+    """Manage license key."""
 
 
 @license_group.command("set")
 @click.argument("key")
 def license_set(key):
-    """Save your Polar license key for unlimited API resolves.
-
-    Get a key at https://polar.sh/Hybirdss/smartest-tv
+    """Save a license key for unlimited API resolves.
 
     Example:
         stv license set XXXX-XXXX-XXXX-XXXX
@@ -1765,8 +1763,7 @@ def license_status():
 
     if not key:
         click.echo("No license key found.")
-        click.echo("  Free tier: 100 API resolves/day")
-        click.echo("  Get Pro: https://polar.sh/Hybirdss/smartest-tv")
+        click.echo("  Using free tier (100 API resolves/day)")
         return
 
     click.echo(f"License key: {key[:8]}...{key[-4:]}")

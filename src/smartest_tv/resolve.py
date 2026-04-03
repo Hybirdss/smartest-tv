@@ -163,11 +163,7 @@ def resolve(
 
 def _api_resolve(platform: str, query: str, season: int | None = None,
                  episode: int | None = None, title_id: int | None = None) -> str:
-    """Resolve via the hosted API.
-
-    Sends the Polar license key (STV_LICENSE_KEY) if available.
-    Free tier: 100 resolves/day. Pro: unlimited.
-    """
+    """Resolve via the hosted API fallback."""
     import os
     from smartest_tv.cache import CACHE_API_URL
     from smartest_tv.http import curl
@@ -208,8 +204,8 @@ def _api_resolve(platform: str, query: str, season: int | None = None,
 
         if data.get("error") == "rate_limited":
             raise ValueError(
-                f"Rate limit reached (100/day). "
-                f"Get unlimited: https://polar.sh/Hybirdss/smartest-tv"
+                f"Daily resolve limit reached. "
+                f"Install from PyPI for unlimited local resolution: pip install stv"
             )
 
     raise ValueError(
