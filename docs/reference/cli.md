@@ -10,6 +10,10 @@ Run `stv --help` or `stv <command> --help` for inline help.
 |--------|---------|-------------|
 | `--format [text\|json]` | `text` | Output format for commands that return data |
 | `--tv NAME` | primary | Target TV name (for multi-TV setups) |
+| `--all` | | Target all configured TVs (sync mode) |
+| `--group NAME` / `-g NAME` | | Target a TV group (sync mode) |
+
+`--all` and `--group` work with: `play`, `off`, `on`, `volume`, `mute`, `notify`.
 
 ---
 
@@ -32,13 +36,15 @@ apps are installed.
 
 ### `stv serve`
 
-Start stv as a remote MCP server (HTTP transport).
+Start stv as a remote MCP server + REST API for party mode.
 
 ```bash
-stv serve                               # localhost:8910 (SSE)
-stv serve --host 0.0.0.0 --port 8910
+stv serve                               # MCP :8910, API :8911
+stv serve --host 0.0.0.0 --port 8910    # expose to network
 stv serve --transport streamable-http
 ```
+
+The REST API (port+1) enables remote TV control from friends. See [Sync & Party Mode](../guides/sync-party.md).
 
 ---
 
@@ -292,3 +298,68 @@ Print the full contents of the local cache JSON.
 
 Print local cache in `community-cache.json` format (history stripped).
 Pipe to a file to submit a PR.
+
+---
+
+## Groups
+
+### `stv group create NAME MEMBER [MEMBER ...]`
+
+Create a TV group for sync playback.
+
+```bash
+stv group create party living-room bedroom
+stv group create watch-party living-room friend-jake
+```
+
+### `stv group list`
+
+List all configured groups and their members.
+
+### `stv group delete NAME`
+
+Delete a TV group.
+
+---
+
+## Multi-TV Management
+
+### `stv multi list`
+
+Show all configured TVs with platform, IP, and default status.
+
+### `stv multi add NAME --platform PLATFORM --ip IP [--mac MAC] [--default]`
+
+Add a local TV. Platform: `lg`, `samsung`, `android`, `firetv`, `roku`.
+
+### `stv multi add NAME --platform remote --url URL`
+
+Add a friend's TV via their stv REST API.
+
+```bash
+stv multi add friend --platform remote --url http://203.0.113.50:8911
+```
+
+### `stv multi remove NAME`
+
+Remove a TV from the config.
+
+### `stv multi default NAME`
+
+Change the default TV.
+
+---
+
+## Sync Play
+
+Use `--all` or `--group` with supported commands to target multiple TVs at once.
+
+```bash
+stv --all play netflix "Squid Game" s2e3         # every TV
+stv --group party play youtube "lo-fi beats"     # group of TVs
+stv --all volume 20                               # set volume everywhere
+stv --all off                                     # turn off everything
+stv --group home notify "Dinner's ready!"        # toast on group
+```
+
+Content is resolved once, then launched on all targets concurrently. One TV failing does not stop the others. See [Sync & Party Mode](../guides/sync-party.md) for the full guide.

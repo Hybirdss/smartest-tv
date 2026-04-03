@@ -36,7 +36,17 @@ def create_driver(tv_name: str | None = None) -> TVDriver:
     ip = tv.get("ip", "")
     mac = tv.get("mac", "")
 
-    if platform == "lg":
+    if platform == "remote":
+        from smartest_tv.drivers.remote import RemoteDriver
+        url = tv.get("url", "")
+        if not url:
+            raise ValueError(
+                f"Remote TV '{tv_name or 'default'}' has no url. "
+                f"Set url in config, e.g.: stv multi add friend --platform remote --url http://ip:8911"
+            )
+        return RemoteDriver(url=url)
+
+    elif platform == "lg":
         try:
             from smartest_tv.drivers.lg import LGDriver
         except ImportError as e:

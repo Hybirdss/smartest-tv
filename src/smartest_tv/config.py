@@ -109,6 +109,7 @@ def get_tv_config(tv_name: str | None = None) -> dict[str, str]:
         return {
             "platform": tv.get("platform", ""),
             "ip": tv.get("ip", ""),
+            "url": tv.get("url", ""),
             "mac": tv.get("mac", ""),
             "name": tv.get("name", tv_name),
         }
@@ -225,7 +226,11 @@ def add_tv(name: str, platform: str, ip: str, mac: str = "", default: bool = Fal
             for tv in tvs.values():
                 tv.pop("default", None)
 
-    new_tv: dict[str, Any] = {"platform": platform, "ip": ip}
+    new_tv: dict[str, Any] = {"platform": platform}
+    if platform == "remote":
+        new_tv["url"] = ip  # ip param holds the URL for remote TVs
+    else:
+        new_tv["ip"] = ip
     if mac:
         new_tv["mac"] = mac
     if default:
@@ -273,8 +278,11 @@ def set_default_tv(name: str) -> None:
     _write_multi_tv_config(tvs)
 
 
-def _write_multi_tv_config(tvs: dict[str, Any]) -> None:
-    """Write multi-TV config to file."""
+def _write_multi_tv_config(tvs: dict[str, Any], groups: dict[str, list[str]] | None = None) -> None:
+    """Write multi-TV config to file, preserving groups."""
+    if groups is None:
+        groups = load().get("groups", {})
+
     lines = [
         "# smartest-tv config",
         "# https://github.com/Hybirdss/smartest-tv",
@@ -283,7 +291,10 @@ def _write_multi_tv_config(tvs: dict[str, Any]) -> None:
     for name, tv in tvs.items():
         lines.append(f"[tv.{name}]")
         lines.append(f'platform = "{tv.get("platform", "")}"')
-        lines.append(f'ip = "{tv.get("ip", "")}"')
+        if tv.get("ip"):
+            lines.append(f'ip = "{tv["ip"]}"')
+        if tv.get("url"):
+            lines.append(f'url = "{tv["url"]}"')
         if tv.get("mac"):
             lines.append(f'mac = "{tv["mac"]}"')
         if tv.get("name"):
@@ -292,5 +303,80 @@ def _write_multi_tv_config(tvs: dict[str, Any]) -> None:
             lines.append("default = true")
         lines.append("")
 
+    if groups:
+        lines.append("[groups]")
+        for gname, members in groups.items():
+            members_str = ", ".join(f'"{m}"' for m in members)
+            lines.append(f"{gname} = [{members_str}]")
+        lines.append("")
+
+    _write_config_lines(lines)
+
+
+# ---------------------------------------------------------------------------
+# Groups
+# ---------------------------------------------------------------------------
+
+
+def get_groups() -> dict[str, list[str]]:
+    """Get all TV groups."""
+    config = load()
+    return {k: v for k, v in config.get("groups", {}).items() if isinstance(v, list)}
+
+
+def get_group_members(name: str) -> list[str]:
+    """Get TV names in a group. Validates all members exist."""
+    groups = get_groups()
+    if name not in groups:
+        available = ", ".join(groups) if groups else "none"
+        raise KeyError(f"Group '{name}' not found. Available: {available}")
+    members = groups[name]
+    known = {tv["name"] for tv in list_tvs()}
+    unknown = [m for m in members if m not in known]
+    if unknown:
+        raise KeyError(f"Unknown TV(s) in group '{name}': {', '.join(unknown)}")
+    return members
+
+
+def get_all_tv_names() -> list[str]:
+    """Get names of all configured TVs."""
+    return [tv["name"] for tv in list_tvs()]
+
+
+def save_group(name: str, members: list[str]) -> None:
+    """Save a TV group. Validates member names."""
+    name = _sanitize_tv_name(name)
+    known = {tv["name"] for tv in list_tvs()}
+    unknown = [m for m in members if m not in known]
+    if unknown:
+        raise ValueError(f"Unknown TV(s): {', '.join(unknown)}. Run: stv multi list")
+
+    config = load()
+    groups = {k: v for k, v in config.get("groups", {}).items() if isinstance(v, list)}
+    groups[name] = members
+
+    tv_section = config.get("tv", {})
+    if _is_legacy(tv_section):
+        # Can't use groups in legacy mode
+        raise ValueError("Groups require multi-TV config. Run: stv multi add <name> first.")
+
+    tvs = {k: v for k, v in tv_section.items() if isinstance(v, dict)}
+    _write_multi_tv_config(tvs, groups)
+
+
+def delete_group(name: str) -> None:
+    """Delete a TV group."""
+    config = load()
+    groups = {k: v for k, v in config.get("groups", {}).items() if isinstance(v, list)}
+    if name not in groups:
+        raise KeyError(f"Group '{name}' not found.")
+    del groups[name]
+
+    tv_section = config.get("tv", {})
+    tvs = {k: v for k, v in tv_section.items() if isinstance(v, dict)}
+    _write_multi_tv_config(tvs, groups)
+
+
+def _write_config_lines(lines: list[str]) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text("\n".join(lines))

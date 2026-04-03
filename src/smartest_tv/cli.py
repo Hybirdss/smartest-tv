@@ -17,7 +17,10 @@ import sys
 import click
 
 from smartest_tv.apps import resolve_app
-from smartest_tv.config import get_tv_config, list_tvs, add_tv, remove_tv, set_default_tv
+from smartest_tv.config import (
+    get_tv_config, list_tvs, add_tv, remove_tv, set_default_tv,
+    get_all_tv_names, get_group_members, get_groups, save_group, delete_group,
+)
 from smartest_tv.drivers.base import TVDriver
 
 
@@ -57,12 +60,64 @@ def _output(data, fmt: str):
 @click.option("--format", "fmt", default="text", type=click.Choice(["text", "json"]),
               help="Output format")
 @click.option("--tv", "tv_name", default=None, help="Target TV name (default: primary TV)")
+@click.option("--all", "all_tvs", is_flag=True, help="Target all configured TVs")
+@click.option("--group", "-g", "group_name", default=None, help="Target a TV group")
 @click.pass_context
-def main(ctx, fmt, tv_name):
+def main(ctx, fmt, tv_name, all_tvs, group_name):
     """stv — Talk to your TV. It listens."""
     ctx.ensure_object(dict)
     ctx.obj["fmt"] = fmt
     ctx.obj["tv_name"] = tv_name
+    ctx.obj["all_tvs"] = all_tvs
+    ctx.obj["group_name"] = group_name
+
+
+def _get_targets(ctx) -> list[str]:
+    """Resolve --all / --group / --tv into a list of TV names.
+
+    Returns [None] for single default TV, otherwise named TV list.
+    """
+    if ctx.obj.get("all_tvs"):
+        names = get_all_tv_names()
+        if not names:
+            raise click.ClickException("No TVs configured. Run: stv setup")
+        return names
+    if ctx.obj.get("group_name"):
+        try:
+            return get_group_members(ctx.obj["group_name"])
+        except KeyError as e:
+            raise click.ClickException(str(e))
+    return [ctx.obj.get("tv_name")]
+
+
+def _is_multi(ctx) -> bool:
+    """True if targeting multiple TVs."""
+    return bool(ctx.obj.get("all_tvs") or ctx.obj.get("group_name"))
+
+
+async def _broadcast_action(targets: list[str], action_fn):
+    """Run an async action on multiple TVs concurrently.
+
+    action_fn(driver) -> str | None
+    Returns list of (tv_name, success: bool, message: str)
+    """
+    async def _one(tv_name):
+        try:
+            d = _get_driver(tv_name)
+            await d.connect()
+            result = await action_fn(d)
+            return (tv_name or "default", True, str(result or "done"))
+        except Exception as e:
+            return (tv_name or "default", False, str(e))
+
+    return list(await asyncio.gather(*[_one(n) for n in targets]))
+
+
+def _print_results(results):
+    """Print multi-TV broadcast results."""
+    for name, success, msg in results:
+        icon = "✅" if success else "❌"
+        click.echo(f"  [{name}] {icon} {msg}")
 
 
 # -- Remote MCP Server -------------------------------------------------------
@@ -78,11 +133,18 @@ def main(ctx, fmt, tv_name):
     help="Transport protocol",
 )
 def serve(host, port, transport):
-    """Start stv as a remote MCP server."""
+    """Start stv as a remote MCP server (+ REST API for party mode)."""
     from smartest_tv.server import mcp
+    from smartest_tv.api import start_api_server
+
+    api_port = port + 1
+    start_api_server(host, api_port)
 
     path = "sse" if transport == "sse" else "mcp"
-    click.echo(f"MCP server running at http://{host}:{port}/{path}")
+    click.echo(f"MCP server:  http://{host}:{port}/{path}")
+    click.echo(f"REST API:    http://{host}:{api_port}/api/ping")
+    click.echo()
+    click.echo("Friends can add your TV:  stv multi add friend --platform remote --url http://YOUR_IP:" + str(api_port))
     click.echo("Press Ctrl+C to stop.")
     mcp.run(transport=transport, host=host, port=port)
 
@@ -148,25 +210,35 @@ def doctor(ctx):
 @main.command()
 @click.pass_context
 def on(ctx):
-    """Turn on the TV."""
-    d = _get_driver(ctx.obj["tv_name"])
-    _run(d.connect())
-    _run(d.power_on())
-    click.echo("TV turning on.")
+    """Turn on the TV (or all TVs with --all / --group)."""
+    if _is_multi(ctx):
+        targets = _get_targets(ctx)
+        results = _run(_broadcast_action(targets, lambda d: d.power_on() or "turning on"))
+        _print_results(results)
+    else:
+        d = _get_driver(ctx.obj["tv_name"])
+        _run(d.connect())
+        _run(d.power_on())
+        click.echo("TV turning on.")
 
 
 @main.command()
 @click.pass_context
 def off(ctx):
-    """Turn off the TV."""
-    d = _get_driver(ctx.obj["tv_name"])
+    """Turn off the TV (or all TVs with --all / --group)."""
+    if _is_multi(ctx):
+        targets = _get_targets(ctx)
+        results = _run(_broadcast_action(targets, lambda d: d.power_off() or "turned off"))
+        _print_results(results)
+    else:
+        d = _get_driver(ctx.obj["tv_name"])
 
-    async def _do():
-        await d.connect()
-        await d.power_off()
+        async def _do():
+            await d.connect()
+            await d.power_off()
 
-    _run(_do())
-    click.echo("TV turned off.")
+        _run(_do())
+        click.echo("TV turned off.")
 
 
 # -- Volume ------------------------------------------------------------------
@@ -176,38 +248,59 @@ def off(ctx):
 @click.argument("level", required=False, type=int)
 @click.pass_context
 def volume(ctx, level):
-    """Get or set volume. No argument = show current."""
-    d = _get_driver(ctx.obj["tv_name"])
+    """Get or set volume. No argument = show current. Supports --all / --group."""
+    if _is_multi(ctx) and level is not None:
+        targets = _get_targets(ctx)
 
-    async def _do():
-        await d.connect()
-        if level is not None:
+        async def _set_vol(d):
             await d.set_volume(level)
-            return {"volume": level, "action": "set"}
-        else:
-            return {"volume": await d.get_volume(), "muted": await d.get_muted()}
+            return f"volume → {level}"
 
-    result = _run(_do())
-    if level is not None:
-        click.echo(f"Volume set to {level}.")
+        results = _run(_broadcast_action(targets, _set_vol))
+        _print_results(results)
     else:
-        _output(result, ctx.obj["fmt"])
+        d = _get_driver(ctx.obj["tv_name"])
+
+        async def _do():
+            await d.connect()
+            if level is not None:
+                await d.set_volume(level)
+                return {"volume": level, "action": "set"}
+            else:
+                return {"volume": await d.get_volume(), "muted": await d.get_muted()}
+
+        result = _run(_do())
+        if level is not None:
+            click.echo(f"Volume set to {level}.")
+        else:
+            _output(result, ctx.obj["fmt"])
 
 
 @main.command()
 @click.pass_context
 def mute(ctx):
-    """Toggle mute."""
-    d = _get_driver(ctx.obj["tv_name"])
+    """Toggle mute. Supports --all / --group."""
+    if _is_multi(ctx):
+        targets = _get_targets(ctx)
 
-    async def _do():
-        await d.connect()
-        current = await d.get_muted()
-        await d.set_mute(not current)
-        return not current
+        async def _toggle_mute(d):
+            current = await d.get_muted()
+            await d.set_mute(not current)
+            return "muted" if not current else "unmuted"
 
-    muted = _run(_do())
-    click.echo(f"TV {'muted' if muted else 'unmuted'}.")
+        results = _run(_broadcast_action(targets, _toggle_mute))
+        _print_results(results)
+    else:
+        d = _get_driver(ctx.obj["tv_name"])
+
+        async def _do():
+            await d.connect()
+            current = await d.get_muted()
+            await d.set_mute(not current)
+            return not current
+
+        muted = _run(_do())
+        click.echo(f"TV {'muted' if muted else 'unmuted'}.")
 
 
 # -- Apps & Deep Linking -----------------------------------------------------
@@ -337,15 +430,25 @@ def info(ctx):
 @click.argument("message")
 @click.pass_context
 def notify(ctx, message):
-    """Show a notification on the TV."""
-    d = _get_driver(ctx.obj["tv_name"])
+    """Show a notification on the TV. Supports --all / --group."""
+    if _is_multi(ctx):
+        targets = _get_targets(ctx)
 
-    async def _do():
-        await d.connect()
-        await d.notify(message)
+        async def _send(d):
+            await d.notify(message)
+            return f"sent: {message}"
 
-    _run(_do())
-    click.echo(f"Sent: {message}")
+        results = _run(_broadcast_action(targets, _send))
+        _print_results(results)
+    else:
+        d = _get_driver(ctx.obj["tv_name"])
+
+        async def _do():
+            await d.connect()
+            await d.notify(message)
+
+        _run(_do())
+        click.echo(f"Sent: {message}")
 
 
 # -- What's On ---------------------------------------------------------------
@@ -714,39 +817,54 @@ def play(ctx, platform, query, season, episode, title_id):
         click.echo("❌ No query provided.", err=True)
         sys.exit(1)
 
-    # Step 1: Resolve content ID
+    # Step 1: Resolve content ID (once — works for all TVs)
     try:
         content_id = do_resolve(platform, query_str, season, episode, title_id)
     except ValueError as exc:
         click.echo(f"❌ {exc}", err=True)
         sys.exit(1)
 
-    # Step 2: Launch on TV
-    d = _get_driver(ctx.obj["tv_name"])
-    app_id, name = resolve_app(platform, d.platform)
+    desc = f"{query_str}"
+    if season and episode:
+        desc += f" S{season}E{episode}"
 
-    async def _do():
-        await d.connect()
-        # Netflix requires close-then-relaunch for deep links
-        if platform.lower() == "netflix":
-            try:
-                await d.close_app(app_id)
-                import asyncio
-                await asyncio.sleep(2)
-            except Exception:
-                pass
-        await d.launch_app_deep(app_id, content_id)
+    # Step 2: Launch on TV(s)
+    if _is_multi(ctx):
+        targets = _get_targets(ctx)
 
-    _run(_do())
+        async def _play_on(d):
+            app_id, name = resolve_app(platform, d.platform)
+            if platform.lower() == "netflix":
+                try:
+                    await d.close_app(app_id)
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
+            await d.launch_app_deep(app_id, content_id)
+            return f"▶ {desc} on {name} ({content_id})"
+
+        results = _run(_broadcast_action(targets, _play_on))
+        _print_results(results)
+    else:
+        d = _get_driver(ctx.obj["tv_name"])
+        app_id, name = resolve_app(platform, d.platform)
+
+        async def _do():
+            await d.connect()
+            if platform.lower() == "netflix":
+                try:
+                    await d.close_app(app_id)
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
+            await d.launch_app_deep(app_id, content_id)
+
+        _run(_do())
+        click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
 
     # Record to history
     from smartest_tv import cache as _cache
     _cache.record_play(platform, query_str, content_id, season, episode)
-
-    desc = f"{query_str}"
-    if season and episode:
-        desc += f" S{season}E{episode}"
-    click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
 
 
 # -- History -----------------------------------------------------------------
@@ -1301,22 +1419,35 @@ def multi_list(ctx):
 
 @multi_group.command("add")
 @click.argument("name")
-@click.option("--platform", required=True, type=click.Choice(["lg", "samsung", "android", "firetv", "roku"]),
-              help="TV platform")
-@click.option("--ip", required=True, help="TV IP address")
+@click.option("--platform", required=True,
+              type=click.Choice(["lg", "samsung", "android", "firetv", "roku", "remote"]),
+              help="TV platform (use 'remote' for a friend's stv)")
+@click.option("--ip", default="", help="TV IP address (local TVs)")
+@click.option("--url", default="", help="Remote stv API URL (e.g. http://friend:8911)")
 @click.option("--mac", default="", help="MAC address for Wake-on-LAN")
 @click.option("--default", "is_default", is_flag=True, help="Set as default TV")
-def multi_add(name, platform, ip, mac, is_default):
+def multi_add(name, platform, ip, url, mac, is_default):
     """Add a TV to the config.
 
     Examples:
         stv multi add bedroom --platform samsung --ip 192.168.1.101
-        stv multi add living-room --platform lg --ip 192.168.1.100 --mac AA:BB:CC:DD:EE:FF --default
+        stv multi add living-room --platform lg --ip 192.168.1.100 --default
+        stv multi add friend --platform remote --url http://203.0.113.50:8911
     """
+    if platform == "remote" and not url:
+        click.echo("❌ Remote TVs require --url. Example: --url http://friend-ip:8911", err=True)
+        sys.exit(1)
+    if platform != "remote" and not ip:
+        click.echo("❌ Local TVs require --ip.", err=True)
+        sys.exit(1)
+
     try:
-        add_tv(name, platform, ip, mac=mac, default=is_default)
-        default_str = " (set as default)" if is_default else ""
-        click.echo(f"Added TV '{name}': {platform.upper()} @ {ip}{default_str}")
+        add_tv(name, platform, ip or url, mac=mac, default=is_default)
+        if platform == "remote":
+            click.echo(f"Added remote TV '{name}': {url}")
+        else:
+            default_str = " (set as default)" if is_default else ""
+            click.echo(f"Added TV '{name}': {platform.upper()} @ {ip}{default_str}")
     except Exception as e:
         click.echo(f"❌ {e}", err=True)
         sys.exit(1)
@@ -1349,6 +1480,69 @@ def multi_default(name):
     try:
         set_default_tv(name)
         click.echo(f"Default TV set to '{name}'.")
+    except KeyError as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
+
+
+# -- Group Management --------------------------------------------------------
+
+
+@main.group("group")
+def group_group():
+    """Manage TV groups for sync playback and party mode."""
+
+
+@group_group.command("list")
+@click.pass_context
+def group_list_cmd(ctx):
+    """List all TV groups.
+
+    Example:
+        stv group list
+    """
+    groups = get_groups()
+    if not groups:
+        click.echo("No groups configured.")
+        click.echo("Create one: stv group create party living-room bedroom")
+        return
+
+    if ctx.obj["fmt"] == "json":
+        _output(groups, "json")
+    else:
+        for name, members in groups.items():
+            click.echo(f"  {name}: {', '.join(members)}")
+
+
+@group_group.command("create")
+@click.argument("name")
+@click.argument("members", nargs=-1, required=True)
+def group_create_cmd(name, members):
+    """Create a TV group.
+
+    Examples:
+        stv group create party living-room bedroom
+        stv group create everywhere living-room bedroom friend-tv
+    """
+    try:
+        save_group(name, list(members))
+        click.echo(f"Group '{name}' created: {', '.join(members)}")
+    except (ValueError, KeyError) as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
+
+
+@group_group.command("delete")
+@click.argument("name")
+def group_delete_cmd(name):
+    """Delete a TV group.
+
+    Example:
+        stv group delete party
+    """
+    try:
+        delete_group(name)
+        click.echo(f"Group '{name}' deleted.")
     except KeyError as e:
         click.echo(f"❌ {e}", err=True)
         sys.exit(1)

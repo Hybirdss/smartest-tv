@@ -1,41 +1,105 @@
 # Multi-TV Setup
 
-stv supports multiple TVs in one config. Each TV gets a name; commands target the primary TV by default.
+stv supports multiple TVs in one config — local TVs on your network and remote TVs at a friend's house.
+
+## Adding TVs
+
+```bash
+stv multi add living-room --platform lg --ip 192.168.1.100 --default
+stv multi add bedroom --platform samsung --ip 192.168.1.101
+stv multi add kids-room --platform roku --ip 192.168.1.102
+stv multi add friend --platform remote --url http://203.0.113.50:8911
+```
+
+Supported platforms: `lg`, `samsung`, `android`, `firetv`, `roku`, `remote`.
 
 ## Configuration
 
 ```toml
 # ~/.config/smartest-tv/config.toml
 
-[tvs.living-room]
+[tv.living-room]
 platform = "lg"
 ip = "192.168.1.100"
-mac = "AA:BB:CC:DD:EE:FF"
 default = true
 
-[tvs.bedroom]
+[tv.bedroom]
 platform = "samsung"
 ip = "192.168.1.101"
-mac = "11:22:33:44:55:66"
+
+[tv.friend]
+platform = "remote"
+url = "http://203.0.113.50:8911"
+
+[groups]
+home = ["living-room", "bedroom"]
+party = ["living-room", "bedroom", "friend"]
 ```
 
 The TV with `default = true` is used when no `--tv` flag is passed.
 
-## CLI
+## Targeting a single TV
 
-Use `--tv NAME` to target a specific TV:
+Use `--tv NAME` before the subcommand:
 
 ```bash
-stv --tv bedroom status
-stv --tv bedroom play netflix "Frieren" s2e8
-stv --tv living-room volume 20
+stv --tv bedroom play netflix "Dark" s1e1
+stv --tv bedroom volume 20
+stv --tv kids-room off
 ```
 
-The `--tv` flag applies globally and must come before the subcommand:
+## Targeting multiple TVs
+
+### --all: every configured TV
 
 ```bash
-stv --tv bedroom off
-stv --tv living-room notify "Dinner's ready"
+stv --all off                    # good night
+stv --all volume 15              # quiet everywhere
+stv --all notify "Dinner!"      # toast on every screen
+```
+
+### --group: a named set of TVs
+
+```bash
+stv --group home play youtube "lo-fi beats"
+stv --group party play netflix "Wednesday" s1e1
+stv --group home mute
+```
+
+## Managing groups
+
+```bash
+stv group create party living-room bedroom friend
+stv group list
+stv group delete party
+```
+
+Groups are stored in the `[groups]` section of `config.toml`.
+
+## Managing TVs
+
+```bash
+stv multi list                   # show all TVs + default status
+stv multi add NAME --platform PLATFORM --ip IP [--mac MAC] [--default]
+stv multi add NAME --platform remote --url URL
+stv multi remove NAME
+stv multi default NAME           # change default TV
+```
+
+## Remote TVs
+
+A remote TV is a friend's TV controlled through their `stv serve` instance. See [Sync & Party Mode](sync-party.md) for the full setup guide.
+
+```bash
+# Friend runs:
+stv serve --host 0.0.0.0        # exposes MCP + REST API
+
+# You add:
+stv multi add friend --platform remote --url http://friend-ip:8911
+
+# Now friend's TV works like any other:
+stv --tv friend play spotify "chill vibes"
+stv --group party play netflix "Squid Game" s2e3
 ```
 
 ## MCP tools
@@ -44,19 +108,11 @@ All tools accept an optional `tv_name` parameter:
 
 ```
 tv_status(tv_name="bedroom")
-tv_play_content(platform="netflix", query="Frieren", season=2, episode=8, tv_name="bedroom")
+tv_play_content(platform="netflix", query="Dark", season=1, episode=1, tv_name="bedroom")
 tv_set_volume(level=20, tv_name="living-room")
-
-tv_list_tvs()    → list all configured TVs
-```
-
-`tv_list_tvs()` returns:
-
-```json
-[
-  {"name": "living-room", "platform": "lg", "ip": "192.168.1.100", "default": true},
-  {"name": "bedroom", "platform": "samsung", "ip": "192.168.1.101", "default": false}
-]
+tv_list_tvs()       → list all configured TVs
+tv_group_list()     → list all groups
+tv_sync_play(platform="netflix", query="Wednesday", season=1, episode=1, group="party")
 ```
 
 ## Environment variable override
@@ -67,4 +123,4 @@ For single-shot commands without a config file:
 TV_PLATFORM=lg TV_IP=192.168.1.100 stv status
 ```
 
-Environment variables always take precedence over `config.toml`.
+Environment variables only apply in legacy single-TV mode.

@@ -725,3 +725,106 @@ async def tv_scene_run(name: str, tv_name: str | None = None) -> str:
     except KeyError as exc:
         return f"Error: {exc}"
     return "\n".join(results) + f"\nScene '{name}' done."
+
+
+# -- Sync / Party Mode -------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_sync_play(
+    platform: str,
+    query: str,
+    tv_names: list[str] | None = None,
+    group: str | None = None,
+    season: int | None = None,
+    episode: int | None = None,
+    title_id: int | None = None,
+) -> str:
+    """Play content on multiple TVs simultaneously (party mode).
+
+    Resolves the content ID once, then launches on all target TVs at the same time.
+    Works with both local TVs and remote friends' TVs.
+
+    Args:
+        platform: netflix, youtube, or spotify.
+        query: Content name (e.g. "Squid Game", "lo-fi beats").
+        tv_names: List of TV names to play on. If omitted, uses group.
+        group: TV group name (e.g. "party", "home"). If omitted, uses tv_names.
+        season: Season number (Netflix TV shows only).
+        episode: Episode number (Netflix TV shows only).
+        title_id: Netflix title ID if known.
+    """
+    from smartest_tv.config import get_all_tv_names, get_group_members
+    from smartest_tv.resolve import resolve
+    from smartest_tv.sync import broadcast
+
+    # Determine targets
+    if tv_names:
+        targets = tv_names
+    elif group:
+        try:
+            targets = get_group_members(group)
+        except KeyError as e:
+            return f"Error: {e}"
+    else:
+        targets = get_all_tv_names()
+
+    if not targets:
+        return "No TVs to play on."
+
+    # Resolve content once
+    try:
+        content_id = resolve(platform, query, season, episode, title_id)
+    except ValueError as e:
+        return f"Error resolving content: {e}"
+
+    # Connect all drivers
+    drivers: dict[str, TVDriver] = {}
+    for name in targets:
+        try:
+            d = await _get_driver(name)
+            drivers[name] = d
+        except Exception as e:
+            pass  # Skip unreachable TVs
+
+    if not drivers:
+        return "Could not connect to any target TVs."
+
+    # Play on all simultaneously
+    async def _play(d: TVDriver) -> str:
+        app_id, app_name = resolve_app(platform, d.platform)
+        if platform.lower() == "netflix":
+            try:
+                await d.close_app(app_id)
+                await asyncio.sleep(2)
+            except Exception:
+                pass
+        await d.launch_app_deep(app_id, content_id)
+        return f"Playing on {app_name}"
+
+    results = await broadcast(drivers, _play)
+
+    # Record to history
+    from smartest_tv import cache as _cache
+    _cache.record_play(platform, query, content_id, season, episode)
+
+    desc = query
+    if season and episode:
+        desc += f" S{season}E{episode}"
+
+    lines = [f"Sync play: {desc} ({content_id})"]
+    for r in results:
+        icon = "✓" if r["status"] == "ok" else "✗"
+        lines.append(f"  {icon} [{r['tv']}] {r['message']}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def tv_group_list() -> list[dict]:
+    """List all configured TV groups.
+
+    Returns groups with their member TV names.
+    """
+    from smartest_tv.config import get_groups
+    groups = get_groups()
+    return [{"name": name, "members": members} for name, members in groups.items()]
