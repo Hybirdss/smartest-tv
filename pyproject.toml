@@ -3,7 +3,7 @@ name = "stv"
 version = "0.8.0"
 description = "Talk to your TV. Control any smart TV with natural language."
 readme = "README.md"
-license = {text = "FSL-1.1-Apache-2.0"}
+license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "Yunsu Kim" }]
 keywords = [
@@ -14,7 +14,7 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: End Users/Desktop",
-    "License :: Other/Proprietary License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Home Automation",
 ]
@@ -47,6 +47,10 @@ pythonpath = ["src"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+# Include _engine in wheel even though it's gitignored
+# (GitHub: hidden source, PyPI: full functionality)
+ignore-vcs = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/smartest_tv"]
-exclude = ["src/smartest_tv/_engine", "src/smartest_tv/_engine/**"]
