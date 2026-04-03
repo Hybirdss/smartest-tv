@@ -1,77 +1,96 @@
 # smartest-tv
 
-CLI + MCP server for controlling smart TVs with natural language. Deep links into Netflix, YouTube, Spotify.
+CLI + MCP server for controlling smart TVs with natural language. Play, cast, queue, recommend, scene presets, multi-TV. Deep links into Netflix, YouTube, Spotify.
 
 ## Tech Stack
 
 - **Language**: Python 3.11+
 - **CLI**: Click
-- **MCP**: FastMCP
+- **MCP**: FastMCP (32 tools)
 - **Build**: Hatchling
+- **Tests**: pytest (132 tests, no TV required)
 - **TV drivers**: bscpylgtv (LG), samsungtvws (Samsung), adb-shell (Android), aiohttp (Roku)
 
 ## Commands
 
 ```bash
-# Install (editable, LG driver)
+# Install
 pip install -e ".[lg]"
 
-# First-time setup
-stv setup                                    # Auto-discover + pair TV
-stv setup --ip 192.168.1.100                 # Direct IP (skip discovery)
+# Setup
+stv setup                                    # Auto-discover + pair
+stv setup --ip 192.168.1.100                 # Direct IP
 
-# CLI
-stv status                                   # TV state
-stv play netflix "Frieren" s2e8              # Find + play (auto title ID)
-stv play youtube "baby shark"                # Search + play
-stv play spotify "Ye White Lines"            # Search + play
-stv resolve netflix "Jujutsu Kaisen" s3e10   # Just get the content ID
-stv cache show                               # View cached IDs
-stv launch netflix 82656797                  # Direct deep link (known ID)
+# Play content
+stv play netflix "Stranger Things" s4e7      # Series episode
+stv play netflix "Glass Onion"               # Movie
+stv play youtube "baby shark"                # YouTube
+stv play spotify "Ye White Lines"            # Spotify
 
-# MCP server (stdio — default for Claude Code)
-python -m smartest_tv
+# Cast URLs
+stv cast https://youtube.com/watch?v=...     # Any Netflix/YouTube/Spotify URL
 
-# MCP server (remote/HTTP — for web clients or Cursor)
-stv serve                                    # SSE on http://127.0.0.1:8910/sse
-stv serve --port 9000 --transport streamable-http
-STV_TRANSPORT=sse STV_PORT=8910 python -m smartest_tv   # env var mode
+# Queue
+stv queue add youtube "Gangnam Style"
+stv queue play                               # Play in order
+
+# Trending + Recommend
+stv whats-on netflix                         # What's popular
+stv recommend --mood chill                   # Based on history
+
+# Scenes
+stv scene movie-night                        # Preset: volume + mode
+stv scene list                               # All scenes
+
+# Continue watching
+stv next                                     # Next episode
+stv history                                  # Recent plays
+
+# Multi-TV
+stv play netflix "Dark" --tv bedroom         # Target specific TV
+stv multi list                               # All TVs
+
+# TV control
+stv status / stv volume 25 / stv mute / stv off
+stv notify "Dinner's ready"
+
+# MCP server
+python -m smartest_tv                        # stdio (Claude Code)
+stv serve --port 8910                        # HTTP (Cursor, remote)
 
 # Build + publish
-uvx --from build pyproject-build
-uvx twine upload dist/*
+python -m build && twine upload dist/*
 ```
 
 ## Project Structure
 
 ```
 src/smartest_tv/
-  cli.py          — Click CLI (stv command)
-  server.py       — FastMCP server (20 MCP tools)
-  resolve.py      — Content ID resolver (Netflix/YouTube/Spotify)
-  cache.py        — Local JSON cache (~/.config/smartest-tv/cache.json)
-  config.py       — TOML config (~/.config/smartest-tv/config.toml)
+  cli.py          — Click CLI (30+ commands)
+  server.py       — FastMCP server (32 MCP tools)
+  resolve.py      — Content resolver + trending + recommendations
+  cache.py        — Local cache + play history + queue
+  scenes.py       — Scene preset system (built-in + custom)
+  config.py       — TOML config (single + multi-TV)
   apps.py         — App name → platform-specific ID mapping
   discovery.py    — SSDP network discovery (LG/Samsung/Roku/Android)
-  setup.py        — Interactive setup wizard (auto-discover + pair)
+  setup.py        — Interactive setup wizard
   drivers/
     base.py       — TVDriver ABC (22 methods)
-    factory.py    — Driver factory (create_driver() used by CLI + scenes)
+    factory.py    — Driver factory (create_driver(), used by CLI + MCP + scenes)
     lg.py         — LG webOS via bscpylgtv (WebSocket SSAP)
     samsung.py    — Samsung Tizen via samsungtvws
     android.py    — Android TV / Fire TV via ADB TCP
     roku.py       — Roku via HTTP ECP (:8060)
-skills/tv/        — Single unified AI agent skill (Markdown)
-tests/            — Unit tests (pytest, no TV required)
+skills/tv/        — AI agent skill (Markdown, ClawHub-compatible)
+tests/            — 132 unit tests (pytest, no TV required)
 docs/
-  getting-started/      — First-time setup and quickstart
-  guides/               — How-to guides (cast, queue, scenes, multi-TV, etc.)
-  reference/            — API reference (all CLI commands + MCP tools)
-  integrations/         — MCP integration guides (Claude Code, Cursor, etc.)
-  contributing/         — Contributing cache, drivers, and skill guides
-  i18n/                 — 7 language README translations
-  setup-guide.md        — First-time setup walkthrough (legacy, kept for links)
-  mcp-integration.md    — MCP server config (legacy, kept for links)
+  getting-started/  — Installation, first TV setup
+  guides/           — Playing, scenes, multi-TV, AI agents, recommendations
+  reference/        — CLI reference, MCP tools, config format, cache format
+  integrations/     — OpenClaw, Home Assistant
+  contributing/     — Cache contributions, driver development
+  i18n/             — 7 language README translations
 ```
 
 ## Key Architecture
@@ -80,11 +99,34 @@ docs/
 
 Three-tier: cache → HTTP scrape → web search fallback.
 
-- **Netflix**: curl the title page → parse `__typename:"Episode"` from `<script>` tags → group sequential IDs into seasons. Brave Search fallback for title ID discovery. All seasons resolved in one HTTP request.
+- **Netflix**: curl the title page → parse `__typename:"Episode"` from `<script>` tags → group sequential IDs into seasons. One HTTP request resolves all seasons.
 - **YouTube**: yt-dlp `ytsearch1:{query}` → video ID.
 - **Spotify**: Brave Search `site:open.spotify.com` → URI.
+- **Trending**: Netflix top10 page + YouTube trending via yt-dlp. 24h/1h cache.
+- **Recommend**: History analysis + trending interleave + optional LLM (STV_LLM_URL).
 
-All results cached in `~/.config/smartest-tv/cache.json`. Repeat plays are instant (0.1s).
+### Scenes (scenes.py)
+
+Built-in presets: movie-night, kids, sleep, music. Each scene is a sequence of steps (volume, notify, play, screen_off, webhook). Custom scenes stored in `~/.config/smartest-tv/scenes.json`.
+
+### Queue (cache.py)
+
+Play queue stored in `~/.config/smartest-tv/queue.json`. FIFO: add → show → play (pop + resolve + launch) → skip → clear.
+
+### Multi-TV (config.py)
+
+```toml
+[tv.living-room]
+platform = "lg"
+ip = "192.168.1.100"
+default = true
+
+[tv.bedroom]
+platform = "samsung"
+ip = "192.168.1.101"
+```
+
+Legacy single-TV config (`[tv]` with `platform` key directly) auto-detected and supported.
 
 ### Deep Linking
 
@@ -96,54 +138,41 @@ Each driver translates a content ID into the platform's native format:
 
 Netflix requires close → relaunch for deep links. `stv play` handles this automatically.
 
-### Cache Format
+### Driver Factory (drivers/factory.py)
 
-```json
-{
-  "netflix": {
-    "frieren": {
-      "title_id": 81726714,
-      "seasons": {
-        "1": {"first_episode_id": 81726716, "episode_count": 10},
-        "2": {"first_episode_id": 82656790, "episode_count": 10}
-      }
-    }
-  },
-  "youtube": {"baby-shark": "XqZsoesa55w"},
-  "spotify": {"ye-white-lines": "spotify:track:3bbjDFVu9BtFtGD2fZpVfz"}
-}
-```
+`create_driver(tv_name=None)` creates the right driver from config. Used by cli.py (wraps with ClickException), server.py (wraps with MCP error), and scenes.py (direct). Never calls sys.exit().
 
 ## Key Decisions
 
-- No Playwright dependency — Netflix scraping works via curl + `__typename` parsing
-- DuckDuckGo was unreliable (rate limits) — switched to Brave Search with DDG fallback
-- Netflix episode IDs are sequential — find first ID, calculate the rest
-- `close_app` returns 403 on some webOS firmware → fallback to home screen launch
-- Config uses TOML (stdlib in 3.11+), cache uses JSON
-- Skills are plain Markdown — portable to any AI agent
+- No Playwright — Netflix scraping via curl + `__typename` parsing
+- Brave Search primary (DuckDuckGo rate-limits)
+- Netflix episode IDs are sequential — find first, calculate rest
+- `close_app` 403 on some webOS → fallback to home screen launch
+- Config: TOML (stdlib 3.11+). Cache/queue/scenes: JSON
+- Skills: single Markdown file, ClawHub-compatible frontmatter
+- Driver factory pattern to avoid cli.py dependency in scenes/server
 
 ## Testing
 
 ```bash
 # Unit tests (no TV, no network)
-python -m pytest tests/ -v
+python -m pytest tests/ -v                   # 132 tests
 
-# Resolve tests (no TV, uses real network)
-stv resolve netflix "Frieren" s2e8
-stv resolve youtube "baby shark"
-stv resolve spotify "Ye White Lines"
-
-# TV tests (requires LG TV on network)
-stv status
-stv play netflix "Frieren" s2e8
+# Manual smoke tests
+stv cast https://youtube.com/watch?v=dQw4w9WgXcQ
+stv whats-on netflix
+stv recommend --mood chill
+stv scene list
+stv queue add youtube "test" && stv queue show && stv queue clear
 
 # Remote MCP smoke test
 stv serve --port 8910 &
-curl http://127.0.0.1:8910/sse   # should return SSE stream
+curl http://127.0.0.1:8910/sse
 kill %1
 ```
 
-## PyPI
+## PyPI + Registry
 
-Package name: `stv`. Published at https://pypi.org/project/stv/
+- PyPI: `stv` at https://pypi.org/project/stv/
+- MCP Registry: `io.github.Hybirdss/smartest-tv`
+- ClawHub: `clawhub install smartest-tv`
