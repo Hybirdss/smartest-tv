@@ -1,21 +1,116 @@
-MIT License
+Functional Source License, Version 1.1, Apache 2.0 Future License
 
-Copyright (c) 2026 Yunsu Kim
+Abbreviation
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+    FSL-1.1-Apache-2.0
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Notice
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+    Copyright 2026 Yunsu Kim
+
+Terms and Conditions
+
+Licensor:             Yunsu Kim
+Licensed Work:        smartest-tv v0.8.0
+                      The Licensed Work is (c) 2026 Yunsu Kim.
+Additional Use Grant: You may make use of the Licensed Work, provided that
+                      you do not use the Licensed Work for a Competing Use.
+                      A Competing Use means making the Licensed Work available
+                      to third parties as a commercial smart TV control
+                      service or product that competes with the Licensor's
+                      products.
+Change Date:          2028-04-03 (two years from release)
+Change License:       Apache License, Version 2.0
+
+For information about alternative licensing arrangements, contact
+yunsu@narukys.com.
+
+License text below.
+
+-----------------------------------------------------------------------------
+
+Functional Source License, Version 1.1, Apache 2.0 Future License
+
+1. Purpose
+
+This license allows you to use, modify, and redistribute this software
+freely, with one condition: you may not use it to create a competing
+commercial product or service.
+
+2. Acceptance
+
+In order to get any license under these terms, you must agree to them as
+both strict obligations and conditions to all your licenses.
+
+3. Grant of Rights
+
+The licensor grants you a non-exclusive, royalty-free, worldwide,
+non-sublicensable, non-transferable license to use, copy, distribute,
+make available, and prepare derivative works of the Licensed Work, in
+each case subject to the limitations below.
+
+4. Limitations
+
+You may not make the Licensed Work available to third parties as a
+commercial smart TV control service, or include it in a commercial
+product or service that competes with the Licensed Work or any other
+product or service provided by the Licensor.
+
+5. Patents
+
+The Licensor grants you a license, under any patent claims the Licensor
+can license or becomes able to license, to make, have made, use, sell,
+offer for sale, import, and have imported the Licensed Work, in each
+case subject to the limitations and conditions in this license.
+
+6. Fair Use
+
+This license does not limit any rights you have under applicable fair
+use, fair dealing, or other laws.
+
+7. No Other Rights
+
+This license does not grant you any right in any trademark or logo of
+the Licensor or its affiliates.
+
+8. Disclaimer
+
+THE LICENSED WORK IS PROVIDED "AS IS". THE LICENSOR HEREBY DISCLAIMS ALL
+WARRANTIES, EXPRESS OR IMPLIED, INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NON-INFRINGEMENT.
+
+9. Limitation of Liability
+
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY DAMAGES ARISING FROM OR
+RELATED TO THIS LICENSE OR USE OF THE LICENSED WORK, INCLUDING WITHOUT
+LIMITATION, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
+DAMAGES, EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+10. Change License
+
+On the Change Date, or the fourth anniversary of the first publicly
+available distribution of a specific version of the Licensed Work under
+this License, whichever comes first, the Licensor hereby grants you
+rights under the terms of the Change License, and the rights granted
+under this License terminate.
+
+11. Termination
+
+If you use the Licensed Work in violation of this License, such use is
+not licensed, and your licenses will automatically terminate. If the
+Licensor provides you with a notice of your violation, and you cease all
+violation of this license no later than 30 days after you receive that
+notice, your licenses will be reinstated retroactively.
+
+12. Severability
+
+If any provision of this License is unenforceable, such provision shall
+be modified to reflect the parties' intention, and the remaining
+provisions shall not be affected.
+
+13. Versioning
+
+The Licensor may publish revised versions of this license. Each revision
+is distinguished by a version number.
