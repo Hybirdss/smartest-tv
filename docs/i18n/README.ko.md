@@ -16,7 +16,7 @@
   <a href="https://pypi.org/project/stv/"><img src="https://img.shields.io/pypi/v/stv?style=flat-square&color=blue" alt="PyPI"></a>
   <a href="https://pypi.org/project/stv/"><img src="https://img.shields.io/pypi/dm/stv?style=flat-square&color=green" alt="Downloads"></a>
   <a href="../../tests/"><img src="https://img.shields.io/badge/tests-211%20passed-brightgreen?style=flat-square" alt="Tests"></a>
-  <a href="../../LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1-blue?style=flat-square" alt="FSL-1.1"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.11+-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-21%20tools-8A2BE2?style=flat-square" alt="MCP Tools"></a>
 </p>
@@ -407,7 +407,7 @@ Samsung, Roku, Android TV 드라이버는 실제 기기 테스트가 필요합�
 ---
 
 <p align="center">
-  <sub><a href="../../LICENSE">FSL-1.1-Apache-2.0</a> · 자유롭게 사용 가능 · 2028년에 Apache 2.0으로 전환 · 클라우드 불필요</sub>
+  <sub>MIT License · Python으로 제작 · 클라우드 불필요</sub>
 </p>
 
 <!-- mcp-name: io.github.Hybirdss/smartest-tv -->
