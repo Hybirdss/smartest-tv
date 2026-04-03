@@ -4,17 +4,28 @@
 [![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-55%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-132%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | [한국어](README.ko.md) | **中文** | [日本語](README.ja.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt-br.md) | [Français](README.fr.md)
 
 **跟你的电视说话。它听得懂。**
 
-其他工具只能打开 Netflix。smartest-tv 能直接播放*《后翼弃兵》第五集*。
+| 没有 stv | 有了 stv |
+|:-------:|:-------:|
+| 手机上打开 Netflix | `stv play netflix "Dark" s1e1` |
+| 搜索剧集 | (自动完成) |
+| 选择季数 | (自动计算) |
+| 选择集数 | (深度链接直达) |
+| 点击播放 | |
+| **约30秒** | **约3秒** |
 
 <p align="center">
-  <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
+  <a href="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4">
+    <img src="../../docs/assets/demo.gif" alt="smartest-tv demo" width="720">
+  </a>
 </p>
+
+*点击观看完整视频（含声音）*
 
 ## 快速开始
 
@@ -23,203 +34,146 @@ pip install stv
 stv setup          # 自动发现电视、完成配对，搞定
 ```
 
-就这些。不需要开发者模式，不需要 API Key，不需要配环境变量。说你想看什么就行。
+## 大家用 stv 做什么
 
-## 能做什么？
+### "把这个链接投到电视上"
 
-```
-你: 用 Netflix 播放《鱿鱼游戏》第二季第三集
-你: 给孩子放《小鲨鱼》
-你: 用 Spotify 播放 Wednesday 原声带
-你: 在 Netflix 上找 Glass Onion          (电影也支持)
-你: 关掉画面，放 lo-fi 音乐
-你: 晚安
-```
-
-AI 负责找到内容 ID（Netflix 剧集、YouTube 视频、Spotify URI），调用 `stv`，电视随即播放。
-
-### See it in action
-
-<p align="center">
-  <a href="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4">
-    <img src="../../docs/assets/demo.gif" alt="smartest-tv demo" width="720">
-  </a>
-</p>
-
-*Click for full video with sound*
-
-## 安装
+朋友发来一个 YouTube 链接。粘贴。电视开始播放。
 
 ```bash
-pip install stv                 # LG（默认，开箱即用）
-pip install "stv[samsung]"      # Samsung Tizen
-pip install "stv[android]"      # Android TV / Fire TV
-pip install "stv[all]"          # 全部平台
+stv cast https://youtube.com/watch?v=dQw4w9WgXcQ
+stv cast https://netflix.com/watch/81726716
+stv cast https://open.spotify.com/track/3bbjDFVu9BtFtGD2fZpVfz
 ```
 
-## CLI
+### "派对歌单排队"
+
+每个人加入自己喜欢的歌。电视按顺序播放。
 
 ```bash
-# 按名称播放内容 — stv 自动查找 ID
-stv play netflix "Bridgerton" s3e4         # 解析 + 深度链接一步完成
-stv play youtube "baby shark"              # 搜索 + 播放
-stv play spotify "Ye White Lines"          # 在 Spotify 查找 + 播放
-
-# 只搜索不播放
-stv search netflix "Money Heist"           # 显示所有季 + 集数
-stv search youtube "lofi hip hop"          # 显示前 3 条结果
-stv resolve netflix "The Witcher" s2e5     # 只获取剧集 ID
-
-# 继续观看
-stv next                                   # 从历史记录中播放下一集
-stv next "Breaking Bad"                    # 播放指定剧集的下一集
-stv history                                # 最近播放记录及时间戳
-
-# 电视控制
-stv status                                 # 当前状态、音量、静音
-stv volume 25                              # 设置音量
-stv mute                                   # 切换静音
-stv notify "开饭了"                        # 在电视屏幕上弹出通知
-stv off                                    # 晚安
-
-# 直接深度链接（已知 ID 时）
-stv launch netflix 82656797
+stv queue add youtube "Gangnam Style"
+stv queue add youtube "Despacito"
+stv queue add spotify "playlist:Friday Night Vibes"
+stv queue play                     # 按顺序开始播放
+stv queue skip                     # 下一首
 ```
 
-所有命令均支持 `--format json`——专为脚本和 AI 助手调用设计。
+### "不知道看什么"
 
-### 内容解析原理
-
-`stv play` 和 `stv resolve` 帮你自动查找流媒体 ID：
+别再刷 30 分钟 Netflix 了。问问什么在热播。获取一个推荐。
 
 ```bash
-stv resolve netflix "The Witcher" s2e5     # → 80189693
-stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ（通过 yt-dlp）
-stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
+stv whats-on netflix               # 当前热门前 10 名
+stv recommend --mood chill         # 基于你的观看记录
+stv recommend --mood action        # 换个心情，换批推荐
 ```
 
-Netflix 解析只需向剧集页面发送一次 `curl` 请求。Netflix 会在 `<script>` 标签中服务端渲染 `__typename:"Episode"` 元数据。由于同一季内的剧集 ID 是连续整数，一次 HTTP 请求即可解析一部剧的所有季集。无需 Playwright、无需无头浏览器、无需登录。
+### "电影之夜"
 
-结果以三层缓存存储：
-1. **本地缓存** — `~/.config/smartest-tv/cache.json`，即时返回（约 0.1 秒）
-2. **社区缓存** — 通过 GitHub raw CDN 众包 ID（预置 29 部 Netflix 剧集、11 个 YouTube 视频），零服务器成本
-3. **网络搜索兜底** — 通过 Brave Search 自动发现未知标题 ID
-
-### 缓存
+一条命令搞定氛围：音量、通知、内容。
 
 ```bash
-stv cache show                                # 查看所有已缓存 ID
-stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
-stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
-stv cache contribute                          # 导出以提交社区缓存 PR
+stv scene movie-night              # 音量20，影院模式
+stv scene kids                     # 音量15，播放 Cocomelon
+stv scene sleep                    # 环境音效，自动关机
+stv scene create date-night        # 创建你自己的场景
 ```
 
-## AI 助手技能
+### "在卧室电视上播"
 
-smartest-tv 内置一个技能，将电视控制的一切都教给 AI 助手。安装到 Claude Code：
+用一个 CLI 控制家里所有电视。
 
 ```bash
-cd smartest-tv && ./install-skills.sh
+stv multi list                     # living-room (LG), bedroom (Samsung)
+stv play netflix "The Crown" --tv bedroom
+stv off --tv living-room
 ```
 
-`tv` 技能涵盖所有平台（Netflix、YouTube、Spotify）、所有命令（`play`、`search`、`resolve`、`cache`、`volume`、`off`）以及组合工作流（观影模式、儿童模式、定时关机）。一个 Markdown 文件——几分钟即可移植到任何 AI 助手。
+### "从上次看到的地方继续"
 
-## 支持的助手
+```bash
+stv next                           # 从上次的剧集继续
+stv next "Breaking Bad"            # 指定剧集继续看
+stv history                        # 查看观看记录
+```
 
-任何能执行 shell 命令的 AI 助手均可使用：
+## 与 stv 共度的一天
 
-**Claude Code** · **OpenCode** · **Cursor** · **Codex** · **OpenClaw** · **Goose** · **Gemini CLI** · 或者直接用 `bash`
+**早上 7 点** -- 闹钟响了。"有什么热播？" `stv whats-on youtube` 显示晨间新闻。电视开始播放。
 
-## 真实使用场景
+**早上 8 点** -- 孩子醒了。`stv scene kids` -- 音量 15，Cocomelon 启动。
 
-**凌晨两点。** 你躺在床上，跟 Claude 说："继续放《怪奇物语》。" 客厅电视自动开机，Netflix 打开，剧集从上次的地方继续播放。遥控器碰都没碰，眼睛都没睁开。
+**中午 12 点** -- 朋友发来一个 Netflix 链接。`stv cast https://netflix.com/watch/...` -- 电视直接播放。
 
-**周六早上。** "给宝宝放《小鲨鱼》。" YouTube 自动找到，电视开始播放。你继续做早饭。
+**下午 6 点 30 分** -- 下班回家。`stv scene movie-night` -- 音量降低，影院模式。
 
-**朋友来了。** "游戏模式，HDMI 2，调低音量。" 一句话，三个操作，没人注意到你动过什么。
+**晚上 7 点** -- "看什么好？" `stv recommend --mood chill` -- 推荐《女王的棋局》。
 
-**做晚饭。** "关掉画面，放爵士乐。" 屏幕熄灭，音乐响起。
+**晚上 9 点** -- 朋友来了。大家各自运行 `stv queue add ...` -- 电视按顺序播放。
 
-**快睡着了。** "45 分钟后关机。" 电视自动关掉，你不用管了。
-
-## smartest-tv 是什么
-
-- **深度链接解析器** — 找到 Netflix 剧集 ID、YouTube 视频、Spotify URI
-- **通用遥控器** — 一套 CLI 覆盖 4 个电视平台
-- **AI 原生** — 为 AI 助手调用而设计，而不只是人工操作
-
-## 不是什么
-
-- 不是遥控器 App（不能换台、不能按方向键）
-- 不是 HDMI-CEC 控制器
-- 不是投屏工具
+**晚上 11 点 30 分** -- "晚安。" `stv scene sleep` -- 环境音效，45 分钟后电视自动关机。
 
 <details>
-<summary><strong>深度链接</strong> — 实际工作原理</summary>
+<summary><b>stv 是怎么只用一次 HTTP 请求就找到 Netflix 剧集的？</b></summary>
 
-同一个内容 ID，在所有电视平台上都通用：
+Netflix 会在 `<script>` 标签中服务端渲染 `__typename:"Episode"` 元数据。同一季内的剧集 ID 是连续整数。向剧集页面发送一次 `curl` 请求，即可提取所有季的所有剧集 ID。无需 Playwright，无需无头浏览器，无需 API Key，无需登录。
 
-```bash
-stv launch netflix 82656797                           # LG、Samsung、Roku、Android TV
-stv launch youtube dQw4w9WgXcQ                        # 同上
-stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f   # 同上
-```
+结果以三层缓存存储：
+1. **本地缓存** -- `~/.config/smartest-tv/cache.json`，即时返回 (~0.1 秒)
+2. **社区缓存** -- 通过 GitHub raw CDN 众包 ID（预置 40 余条），零服务器成本
+3. **网络搜索兜底** -- 通过 Brave Search 自动发现未知标题 ID
+
+</details>
+
+<details>
+<summary><b>深度链接 -- stv 与电视通信的方式</b></summary>
 
 每个驱动将内容 ID 转换为平台原生的深度链接格式：
 
-| 电视 | 深度链接发送方式 |
-|----|---------------------------|
-| LG webOS | SSAP WebSocket: contentId (Netflix DIAL) / params.contentTarget (YouTube) |
-| Samsung | WebSocket: `run_app(id, "DEEP_LINK", meta_tag)` |
-| Android / Fire TV | ADB: `am start -d 'netflix://title/{id}'` |
-| Roku | HTTP: `POST /launch/{ch}?contentId={id}` |
+| 电视 | 协议 | 深度链接格式 |
+|------|------|------------|
+| LG webOS | SSAP WebSocket (:3001) | `contentId` via DIAL / `params.contentTarget` |
+| Samsung Tizen | WebSocket (:8001) | `run_app(id, "DEEP_LINK", meta_tag)` |
+| Android / Fire TV | ADB TCP (:5555) | `am start -d 'netflix://title/{id}'` |
+| Roku | HTTP ECP (:8060) | `POST /launch/{ch}?contentId={id}` |
 
 这些细节你完全不需要关心。驱动会自动处理。
 
 </details>
 
 <details>
-<summary><strong>平台支持</strong> — 已支持的电视和驱动</summary>
+<summary><b>支持平台</b></summary>
 
-| 平台 | 驱动 | 连接方式 | 状态 |
-|----------|--------|-----------|--------|
-| LG webOS | [bscpylgtv](https://github.com/chros73/bscpylgtv) | WebSocket :3001 | **已验证** |
-| Samsung Tizen | [samsungtvws](https://github.com/xchwarze/samsung-tv-ws-api) | WebSocket :8002 | 社区测试中 |
-| Android / Fire TV | [adb-shell](https://github.com/JeffLIrion/adb-shell) | ADB TCP :5555 | 社区测试中 |
-| Roku | HTTP ECP | REST :8060 | 社区测试中 |
-
-LG 是主要测试平台。所有平台均无需开发者模式。
+| 平台 | 驱动 | 状态 |
+|------|------|------|
+| LG webOS | [bscpylgtv](https://github.com/chros73/bscpylgtv) | **已验证** |
+| Samsung Tizen | [samsungtvws](https://github.com/xchwarze/samsung-tv-ws-api) | 社区测试中 |
+| Android / Fire TV | [adb-shell](https://github.com/JeffLIrion/adb-shell) | 社区测试中 |
+| Roku | HTTP ECP | 社区测试中 |
 
 </details>
 
-## 零配置启动
+## 安装
 
 ```bash
-stv setup
+pip install stv                 # LG（默认）
+pip install "stv[samsung]"      # Samsung Tizen
+pip install "stv[android]"      # Android TV / Fire TV
+pip install "stv[all]"          # 全部平台
 ```
 
-同时扫描局域网中的 LG、Samsung、Roku 和 Android/Fire TV（SSDP + ADB）。自动识别平台、完成配对、保存配置并发送测试通知——一步搞定。如果自动发现失败，直接指定 IP：
+## 与一切集成
 
-```bash
-stv setup --ip 192.168.1.100
-```
+| 集成 | 效果 |
+|------|------|
+| **Claude Code** | "播放 Breaking Bad s1e1" -- 电视开始播放 |
+| **OpenClaw** | Telegram: "到家了" -- 场景 + 推荐 + 播放 |
+| **Home Assistant** | 门打开 -- 电视开机 -- 热播节目列表出现 |
+| **Cursor / Codex** | AI 写代码休息时，顺便控制电视 |
+| **cron / 脚本** | 早 7 点：卧室电视播新闻。晚 9 点：儿童电视关机 |
+| **任意 MCP 客户端** | stdio 或 HTTP，32 个工具随时可用 |
 
-所有配置写入 `~/.config/smartest-tv/config.toml`。有问题？`stv doctor` 会告诉你哪里不对。
-
-```toml
-[tv]
-platform = "lg"
-ip = "192.168.1.100"
-mac = "AA:BB:CC:DD:EE:FF"   # 可选，用于 Wake-on-LAN
-```
-
-首次连接时电视会弹出配对提示，确认一次，密钥自动保存，以后不再询问。
-
-## MCP 服务器
-
-### 本地 (stdio)
-
-供 Claude Desktop、Cursor 等 MCP 客户端使用——作为本地进程连接：
+### MCP 服务器
 
 ```json
 {
@@ -232,71 +186,48 @@ mac = "AA:BB:CC:DD:EE:FF"   # 可选，用于 Wake-on-LAN
 }
 ```
 
-### 远程 (HTTP)
-
-作为可通过网络访问的 MCP 服务器运行。适用于在其他设备上运行的 AI 代理远程控制电视：
+作为 HTTP 服务器运行以支持远程访问：
 
 ```bash
-stv serve                          # localhost:8910 (SSE)
-stv serve --host 0.0.0.0 --port 8910
+stv serve --port 8910              # SSE 在 http://localhost:8910/sse
 stv serve --transport streamable-http
 ```
 
-从任意 MCP 客户端连接：
+### OpenClaw
 
-```json
-{
-  "mcpServers": {
-    "tv": {
-      "url": "http://192.168.1.50:8910/sse"
-    }
-  }
-}
+```bash
+clawhub install smartest-tv
 ```
-
-## 架构
-
-```
-用户（自然语言）
-  → AI + stv resolve（通过 HTTP 抓取 / yt-dlp / 缓存查找内容 ID）
-    → stv play（格式化并分发）
-      → 驱动（WebSocket / ADB / HTTP）
-        → 电视
-```
-
-<p align="center">
-  <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
-</p>
 
 ## 文档
 
-| 指南 | 内容 |
-|------|------|
-| [设置指南](docs/setup-guide.md) | 各品牌电视设置（LG 配对、Samsung 远程访问、ADB、Roku ECP） |
-| [MCP 集成](docs/mcp-integration.md) | Claude Code、Cursor 等 MCP 客户端配置 |
-| [API 参考](docs/api-reference.md) | 所有 CLI 命令 + 20 个 MCP 工具及参数 |
-| [贡献缓存](docs/contributing-cache.md) | 如何查找 Netflix ID 并提交社区缓存 PR |
+| | |
+|---|---|
+| [快速上手](../../docs/getting-started/installation.md) | 各品牌电视的首次配置 |
+| [播放内容](../../docs/guides/playing-content.md) | play, cast, search, queue, resolve |
+| [场景](../../docs/guides/scenes.md) | 预设：movie-night, kids, sleep, 自定义 |
+| [多电视](../../docs/guides/multi-tv.md) | 用 `--tv` 控制多台电视 |
+| [AI 助手](../../docs/guides/ai-agents.md) | Claude, Cursor, OpenClaw 的 MCP 配置 |
+| [推荐功能](../../docs/guides/recommendations.md) | AI 驱动的内容推荐 |
+| [CLI 参考](../../docs/reference/cli.md) | 所有命令和选项 |
+| [MCP 工具](../../docs/reference/mcp-tools.md) | 含参数的全部 32 个 MCP 工具 |
+| [OpenClaw](../../docs/integrations/openclaw.md) | ClawHub 技能 + Telegram 场景 |
 
 ## 贡献
 
-| 状态 | 方向 | 需要什么 |
-|--------|------|---------------|
-| **就绪** | LG webOS 驱动 | 已测试，可用 |
-| **需要测试** | Samsung、Android TV、Roku 驱动 | 欢迎提交实机测试报告 |
-| **招募中** | Disney+、Hulu、Prime Video | 深度链接 ID 解析 |
-| **招募中** | 社区缓存条目 | [添加你喜欢的剧集](docs/contributing-cache.md) |
-
-[驱动接口](src/smartest_tv/drivers/base.py)已定义好——实现 `TVDriver`，提 PR 即可。
-
-### 运行测试
+Samsung、Roku 和 Android TV 驱动需要真实设备测试。如果你有这些电视，你的反馈非常宝贵。
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v
+python -m pytest tests/ -v         # 132 个测试，无需电视
 ```
 
-55 个单元测试，覆盖内容解析器、缓存和 CLI 解析器。无需电视或网络连接——所有外部调用均已模拟。
+想把你喜欢的剧集加入社区缓存？请参阅[贡献缓存](../../docs/contributing/cache-contributions.md)。
+
+想为新电视编写驱动？请参阅[驱动开发](../../docs/contributing/driver-development.md)。
 
 ## 许可证
 
 MIT
+
+<!-- mcp-name: io.github.Hybirdss/smartest-tv -->

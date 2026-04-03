@@ -4,41 +4,20 @@
 [![Downloads](https://img.shields.io/pypi/dm/stv)](https://pypi.org/project/stv/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-55%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-132%20passed-brightgreen)](tests/)
 
 [English](../../README.md) | [한국어](README.ko.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | **Deutsch** | [Português](README.pt-br.md) | [Français](README.fr.md)
 
 **Sprich mit deinem Fernseher. Er hört zu.**
 
-Andere Tools öffnen Netflix. smartest-tv spielt *The Queen's Gambit Folge 5*.
-
-<p align="center">
-  <img src="../../docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
-</p>
-
-## Schnellstart
-
-```bash
-pip install stv
-stv setup          # erkennt deinen Fernseher automatisch, koppelt, fertig
-```
-
-Das war's. Kein Entwicklermodus. Keine API-Keys. Keine Umgebungsvariablen. Sag einfach, was du sehen willst.
-
-## Was kannst du damit machen?
-
-```
-Du: Spiel Squid Game Staffel 2 Folge 3 auf Netflix
-Du: Mach Baby Shark für die Kinder an
-Du: Den Wednesday-Soundtrack auf Spotify
-Du: Finde Glass Onion auf Netflix          (Filme funktionieren auch)
-Du: Bildschirm aus, lo-fi Beats an
-Du: Gute Nacht
-```
-
-Die KI findet die Inhalts-ID (Netflix-Episode, YouTube-Video, Spotify-URI), ruft `stv` auf, und dein Fernseher spielt es ab.
-
-### See it in action
+| Ohne stv | Mit stv |
+|:--------:|:-------:|
+| Netflix-App auf dem Handy öffnen | `stv play netflix "Dark" s1e1` |
+| Nach der Serie suchen | (automatisch aufgelöst) |
+| Staffel auswählen | (berechnet) |
+| Folge auswählen | (deep-linked) |
+| Play drücken | |
+| **~30 Sekunden** | **~3 Sekunden** |
 
 <p align="center">
   <a href="https://github.com/Hybirdss/smartest-tv/releases/download/v0.3.0/KakaoTalk_20260403_051617935.mp4">
@@ -46,180 +25,155 @@ Die KI findet die Inhalts-ID (Netflix-Episode, YouTube-Video, Spotify-URI), ruft
   </a>
 </p>
 
-*Click for full video with sound*
+*Klicken für das vollständige Video mit Ton*
 
-## Installation
-
-```bash
-pip install stv                 # LG (Standard, direkt einsatzbereit)
-pip install "stv[samsung]"      # Samsung Tizen
-pip install "stv[android]"      # Android TV / Fire TV
-pip install "stv[all]"          # Alles
-```
-
-## CLI
+## Schnellstart
 
 ```bash
-# Inhalte nach Name abspielen — stv findet die ID automatisch
-stv play netflix "Bridgerton" s3e4         # Auflösen + Deep Link in einem Schritt
-stv play youtube "baby shark"              # Suchen + abspielen
-stv play spotify "Ye White Lines"          # Auf Spotify suchen + abspielen
-
-# Suchen ohne Abspielen
-stv search netflix "Money Heist"           # Zeigt alle Staffeln + Episodenanzahl
-stv search youtube "lofi hip hop"          # Top 3 Ergebnisse
-stv resolve netflix "The Witcher" s2e5     # Nur die Episoden-ID ermitteln
-
-# Weiterschauen
-stv next                                   # Nächste Episode aus dem Verlauf abspielen
-stv next "Breaking Bad"                    # Nächste Episode einer bestimmten Serie
-stv history                                # Zuletzt abgespielt mit Zeitstempel
-
-# TV-Steuerung
-stv status                                 # Was läuft, Lautstärke, Stummschaltung
-stv volume 25                              # Lautstärke einstellen
-stv mute                                   # Stummschaltung umschalten
-stv notify "Essen ist fertig!"            # Benachrichtigung auf dem Bildschirm
-stv off                                    # Gute Nacht
-
-# Direkter Deep Link (wenn du die ID kennst)
-stv launch netflix 82656797
+pip install stv
+stv setup          # findet deinen Fernseher, koppelt, fertig
 ```
 
-Alle Befehle unterstützen `--format json` — konzipiert für Skripte und KI-Agenten.
+## Was Leute mit stv machen
 
-### Wie die Inhaltsauflösung funktioniert
+### "Diesen Link auf meinen Fernseher casten"
 
-`stv play` und `stv resolve` finden Streaming-IDs, damit du es nicht musst:
+Ein Freund schickt dir einen YouTube-Link. Du fügst ihn ein. Der Fernseher spielt ihn ab.
 
 ```bash
-stv resolve netflix "The Witcher" s2e5     # → 80189693
-stv resolve youtube "lofi hip hop"         # → dQw4w9WgXcQ (via yt-dlp)
-stv resolve spotify "Ye White Lines"       # → spotify:track:3bbjDFVu...
+stv cast https://youtube.com/watch?v=dQw4w9WgXcQ
+stv cast https://netflix.com/watch/81726716
+stv cast https://open.spotify.com/track/3bbjDFVu9BtFtGD2fZpVfz
 ```
 
-Die Netflix-Auflösung ist eine einzige `curl`-Anfrage an die Titelseite. Netflix rendert `__typename:"Episode"`-Metadaten serverseitig in `<script>`-Tags. Episoden-IDs innerhalb einer Staffel sind aufeinanderfolgende Ganzzahlen, sodass eine HTTP-Anfrage jede Staffel einer Serie auflöst. Kein Playwright, kein Browser, kein Login.
+### "Songs für die Party in die Warteschlange"
 
-Ergebnisse werden in drei Ebenen gecacht:
-1. **Lokaler Cache** — `~/.config/smartest-tv/cache.json`, sofort (~0,1 s)
-2. **Community-Cache** — Crowdsourced IDs via GitHub raw CDN (29 Netflix-Serien, 11 YouTube-Videos vorgeladen), keine Serverkosten
-3. **Websuch-Fallback** — Brave Search findet automatisch unbekannte Titel-IDs
-
-### Cache
+Jeder fügt seinen Song hinzu. Der Fernseher spielt sie der Reihe nach ab.
 
 ```bash
-stv cache show                                # Alle gecachten IDs anzeigen
-stv cache set netflix "Narcos" -s 1 --first-ep-id 80025173 --count 10
-stv cache get netflix "Narcos" -s 1 -e 5      # → 80025177
-stv cache contribute                          # Für Community-Cache-PR exportieren
+stv queue add youtube "Gangnam Style"
+stv queue add youtube "Despacito"
+stv queue add spotify "playlist:Friday Night Vibes"
+stv queue play                     # startet die Wiedergabe in der Reihenfolge
+stv queue skip                     # nächster Song
 ```
 
-## Agent Skills
+### "Was sollen wir schauen?"
 
-smartest-tv bringt einen Skill mit, der KI-Assistenten alles über die TV-Steuerung beibringt. In Claude Code installieren:
+Hör auf, 30 Minuten auf Netflix zu suchen. Frag, was gerade angesagt ist. Lass dir etwas empfehlen.
 
 ```bash
-cd smartest-tv && ./install-skills.sh
+stv whats-on netflix               # Top 10 Trends gerade jetzt
+stv recommend --mood chill         # basierend auf deinem Verlauf
+stv recommend --mood action        # andere Stimmung, andere Vorschläge
 ```
 
-Der `tv`-Skill deckt alle Plattformen (Netflix, YouTube, Spotify), alle Befehle (`play`, `search`, `resolve`, `cache`, `volume`, `off`) und kombinierte Workflows (Kinoabend, Kindermodus, Einschlaftimer) ab. Eine einzige Markdown-Datei — in wenigen Minuten auf jeden KI-Agenten portierbar.
+### "Filmabend"
 
-## Works With
+Ein Befehl setzt die Stimmung: Lautstärke, Benachrichtigungen, Inhalt.
 
-Jeder KI-Agent, der Shell-Befehle ausführen kann:
+```bash
+stv scene movie-night              # Lautstärke 20, Kinomodus
+stv scene kids                     # Lautstärke 15, spielt Cocomelon
+stv scene sleep                    # Ambient-Sounds, automatisches Ausschalten
+stv scene create date-night        # eigene Scene erstellen
+```
 
-**Claude Code** · **OpenCode** · **Cursor** · **Codex** · **OpenClaw** · **Goose** · **Gemini CLI** · oder einfach `bash`
+### "Spiel es auf dem Schlafzimmer-Fernseher ab"
 
-## Alltag
+Steuere jeden Fernseher im Haus über eine CLI.
 
-**Nachts um 2 Uhr.** Du liegst im Bett. Du sagst Claude: „Weiter mit Stranger Things." Der Fernseher im Wohnzimmer geht an, Netflix öffnet sich, die Episode beginnt. Fernbedienung nicht angefasst, Augen kaum aufgemacht.
+```bash
+stv multi list                     # Wohnzimmer (LG), Schlafzimmer (Samsung)
+stv play netflix "The Crown" --tv bedroom
+stv off --tv living-room
+```
 
-**Samstagmorgen.** „Mach Cocomelon für die Kleinen an." YouTube findet es, der Fernseher spielt es ab. Du machst einfach weiter mit dem Frühstück.
+### "Weiter wo ich aufgehört habe"
 
-**Wenn Freunde kommen.** „Gaming-Modus, HDMI 2, Lautstärke runter." Ein Satz, drei Änderungen, bevor es jemand bemerkt.
+```bash
+stv next                           # setzt bei der letzten Folge fort
+stv next "Breaking Bad"            # bestimmte Serie
+stv history                        # anzeigen, was du zuletzt geschaut hast
+```
 
-**Beim Kochen.** „Bildschirm aus, Jazz an." Der Bildschirm geht aus, Musik läuft durch die Lautsprecher.
+## Ein Tag mit stv
 
-**Vor dem Einschlafen.** „Schlaftimer 45 Minuten." Der Fernseher schaltet sich selbst ab. Du nicht.
+**7:00 Uhr** -- Wecker klingelt. "Was ist im Trend?" `stv whats-on youtube` zeigt die Morgennachrichten. Fernseher spielt sie ab.
 
-## Was smartest-tv ist
+**8:00 Uhr** -- Kinder wachen auf. `stv scene kids` -- Lautstärke 15, Cocomelon startet.
 
-- **Deep-Link-Resolver** — findet die Netflix-Episoden-ID, das YouTube-Video, die Spotify-URI
-- **Universal-Fernbedienung** — eine CLI für 4 TV-Plattformen
-- **KI-nativ** — entwickelt, damit Agenten es aufrufen, nicht nur Menschen
+**12:00 Uhr** -- Ein Freund schickt einen Netflix-Link. `stv cast https://netflix.com/watch/...` -- Fernseher spielt ihn ab.
 
-## Was es nicht ist
+**18:30 Uhr** -- Heimkommen von der Arbeit. `stv scene movie-night` -- Lautstärke runter, Kinomodus.
 
-- Keine Fernbedienungs-App (kein Zappen, keine Pfeiltasten)
-- Kein HDMI-CEC-Controller
-- Kein Screen-Mirroring-Tool
+**19:00 Uhr** -- "Was schauen wir?" `stv recommend --mood chill` -- empfiehlt The Queen's Gambit.
+
+**21:00 Uhr** -- Freunde kommen vorbei. Alle führen `stv queue add ...` aus -- Fernseher spielt sie der Reihe nach ab.
+
+**23:30 Uhr** -- "Gute Nacht." `stv scene sleep` -- Ambient-Sounds, Fernseher schaltet sich in 45 Minuten aus.
 
 <details>
-<summary><strong>Deep Linking</strong> — wie es wirklich funktioniert</summary>
+<summary><b>Wie findet stv eine Netflix-Folge mit einer einzigen HTTP-Anfrage?</b></summary>
 
-Die gleiche Inhalts-ID funktioniert auf allen TV-Plattformen:
+Netflix rendert `__typename:"Episode"`-Metadaten serverseitig in `<script>`-Tags. Folgen-IDs innerhalb einer Staffel sind aufeinanderfolgende Ganzzahlen. Eine einzige `curl`-Anfrage an eine Titelseite extrahiert jede Folgen-ID jeder Staffel. Kein Playwright, kein Headless-Browser, kein API-Key, kein Login.
 
-```bash
-stv launch netflix 82656797                           # LG, Samsung, Roku, Android TV
-stv launch youtube dQw4w9WgXcQ                        # Genauso
-stv launch spotify spotify:album:5poA9SAx0Xiz1cd17f   # Genauso
-```
+Ergebnisse werden in drei Ebenen gecacht:
+1. **Lokaler Cache** -- `~/.config/smartest-tv/cache.json`, sofort (~0,1 s)
+2. **Community-Cache** -- Crowdsourced IDs via GitHub raw CDN (über 40 vorgeladene Einträge), keine Serverkosten
+3. **Websuch-Fallback** -- Brave Search findet automatisch unbekannte Titel-IDs
 
-Jeder Treiber übersetzt die ID in das plattformspezifische Deep-Link-Format:
+</details>
 
-| Fernseher | Wie der Deep Link gesendet wird |
-|-----------|--------------------------------|
-| LG webOS | SSAP WebSocket: contentId (Netflix DIAL) / params.contentTarget (YouTube) |
-| Samsung | WebSocket: `run_app(id, "DEEP_LINK", meta_tag)` |
-| Android / Fire TV | ADB: `am start -d 'netflix://title/{id}'` |
-| Roku | HTTP: `POST /launch/{ch}?contentId={id}` |
+<details>
+<summary><b>Deep Linking -- wie stv mit deinem Fernseher kommuniziert</b></summary>
+
+Jeder Treiber übersetzt eine Inhalts-ID in das plattformspezifische Format:
+
+| Fernseher | Protokoll | Deep-Link-Format |
+|-----------|----------|-----------------|
+| LG webOS | SSAP WebSocket (:3001) | `contentId` via DIAL / `params.contentTarget` |
+| Samsung Tizen | WebSocket (:8001) | `run_app(id, "DEEP_LINK", meta_tag)` |
+| Android / Fire TV | ADB TCP (:5555) | `am start -d 'netflix://title/{id}'` |
+| Roku | HTTP ECP (:8060) | `POST /launch/{ch}?contentId={id}` |
 
 Darum musst du dich nie kümmern. Der Treiber erledigt das.
 
 </details>
 
 <details>
-<summary><strong>Plattformen</strong> — unterstützte Fernseher und Treiber</summary>
+<summary><b>Unterstützte Plattformen</b></summary>
 
-| Plattform | Treiber | Verbindung | Status |
-|-----------|---------|-----------|--------|
-| LG webOS | [bscpylgtv](https://github.com/chros73/bscpylgtv) | WebSocket :3001 | **Getestet** |
-| Samsung Tizen | [samsungtvws](https://github.com/xchwarze/samsung-tv-ws-api) | WebSocket :8002 | Community-Tests |
-| Android / Fire TV | [adb-shell](https://github.com/JeffLIrion/adb-shell) | ADB TCP :5555 | Community-Tests |
-| Roku | HTTP ECP | REST :8060 | Community-Tests |
-
-LG ist die primär getestete Plattform. Auf keiner Plattform ist ein Entwicklermodus erforderlich.
+| Plattform | Treiber | Status |
+|-----------|---------|--------|
+| LG webOS | [bscpylgtv](https://github.com/chros73/bscpylgtv) | **Getestet** |
+| Samsung Tizen | [samsungtvws](https://github.com/xchwarze/samsung-tv-ws-api) | Community-Tests |
+| Android / Fire TV | [adb-shell](https://github.com/JeffLIrion/adb-shell) | Community-Tests |
+| Roku | HTTP ECP | Community-Tests |
 
 </details>
 
-## Zero-config-Einrichtung
+## Installation
 
 ```bash
-stv setup
+pip install stv                 # LG (Standard)
+pip install "stv[samsung]"      # Samsung Tizen
+pip install "stv[android]"      # Android TV / Fire TV
+pip install "stv[all]"          # Alles
 ```
 
-Scannt gleichzeitig nach LG, Samsung, Roku und Android/Fire TV im Netzwerk (SSDP + ADB). Erkennt die Plattform, koppelt sich, speichert die Konfiguration und sendet eine Testbenachrichtigung — alles in einem Schritt. Falls der Fernseher nicht automatisch gefunden wird, IP direkt angeben:
+## Funktioniert mit allem
 
-```bash
-stv setup --ip 192.168.1.100
-```
+| Integration | Was passiert |
+|------------|-------------|
+| **Claude Code** | "Spiel Breaking Bad s1e1" -- Fernseher spielt es ab |
+| **OpenClaw** | Telegram: "Ich bin zu Hause" -- scene + recommend + play |
+| **Home Assistant** | Tür geht auf -- Fernseher geht an -- Trends erscheinen |
+| **Cursor / Codex** | KI schreibt Code, steuert deinen Fernseher in der Pause |
+| **cron / Skripte** | 7 Uhr: Nachrichten auf dem Schlafzimmer-TV. 21 Uhr: Kinder-TV aus |
+| **Jeder MCP-Client** | 32 Tools über stdio oder HTTP |
 
-Alles landet in `~/.config/smartest-tv/config.toml`. Wenn etwas nicht stimmt, erklärt `stv doctor` genau, was los ist.
-
-```toml
-[tv]
-platform = "lg"
-ip = "192.168.1.100"
-mac = "AA:BB:CC:DD:EE:FF"   # optional, für Wake-on-LAN
-```
-
-Beim ersten Verbindungsaufbau erscheint eine Kopplungsaufforderung auf dem Fernseher. Einmal bestätigen — der Schlüssel wird gespeichert und nie wieder abgefragt.
-
-## MCP-Server
-
-### Lokal (stdio)
-
-Für Claude Desktop, Cursor oder andere MCP-Clients — als lokaler Prozess verbinden:
+### MCP-Server
 
 ```json
 {
@@ -232,71 +186,48 @@ Für Claude Desktop, Cursor oder andere MCP-Clients — als lokaler Prozess verb
 }
 ```
 
-### Remote (HTTP)
-
-stv als netzwerkzugänglichen MCP-Server starten. Nützlich für KI-Agenten auf anderen Maschinen:
+Oder als HTTP-Server für Remote-Zugriff starten:
 
 ```bash
-stv serve                          # localhost:8910 (SSE)
-stv serve --host 0.0.0.0 --port 8910
+stv serve --port 8910              # SSE auf http://localhost:8910/sse
 stv serve --transport streamable-http
 ```
 
-Von beliebigen MCP-Clients verbinden:
+### OpenClaw
 
-```json
-{
-  "mcpServers": {
-    "tv": {
-      "url": "http://192.168.1.50:8910/sse"
-    }
-  }
-}
+```bash
+clawhub install smartest-tv
 ```
-
-## Architektur
-
-```
-Du (natürliche Sprache)
-  → KI + stv resolve (findet Inhalts-ID via HTTP-Scraping / yt-dlp / Cache)
-    → stv play (formatiert Deep Link und sendet)
-      → Treiber (WebSocket / ADB / HTTP)
-        → Fernseher
-```
-
-<p align="center">
-  <img src="../../docs/assets/mascot.png" alt="smartest-tv mascot" width="256">
-</p>
 
 ## Dokumentation
 
-| Anleitung | Inhalt |
-|-----------|--------|
-| [Einrichtungsanleitung](docs/setup-guide.md) | Markenspezifische TV-Einrichtung (LG-Kopplung, Samsung-Fernzugriff, ADB, Roku ECP) |
-| [MCP-Integration](docs/mcp-integration.md) | Konfiguration für Claude Code, Cursor und andere MCP-Clients |
-| [API-Referenz](docs/api-reference.md) | Alle CLI-Befehle + alle 20 MCP-Tools mit Parametern |
-| [Cache beitragen](docs/contributing-cache.md) | Wie man Netflix-IDs findet und einen PR zum Community-Cache einreicht |
+| | |
+|---|---|
+| [Erste Schritte](docs/getting-started/installation.md) | Ersteinrichtung für jede TV-Marke |
+| [Inhalte abspielen](docs/guides/playing-content.md) | play, cast, search, queue, resolve |
+| [Scenes](docs/guides/scenes.md) | Presets: movie-night, kids, sleep, custom |
+| [Multi-TV](docs/guides/multi-tv.md) | Mehrere Fernseher mit `--tv` steuern |
+| [KI-Agenten](docs/guides/ai-agents.md) | MCP-Einrichtung für Claude, Cursor, OpenClaw |
+| [Empfehlungen](docs/guides/recommendations.md) | KI-gestützte Inhaltsvorschläge |
+| [CLI-Referenz](docs/reference/cli.md) | Alle Befehle und Optionen |
+| [MCP-Tools](docs/reference/mcp-tools.md) | Alle 32 MCP-Tools mit Parametern |
+| [OpenClaw](docs/integrations/openclaw.md) | ClawHub-Skill + Telegram-Szenarien |
 
 ## Mitmachen
 
-| Status | Bereich | Was gebraucht wird |
-|--------|---------|-------------------|
-| **Bereit** | LG webOS-Treiber | Getestet und funktionsfähig |
-| **Braucht Tests** | Samsung, Android TV, Roku-Treiber | Erfahrungsberichte mit echter Hardware willkommen |
-| **Gesucht** | Disney+, Hulu, Prime Video | Deep-Link-ID-Auflösung |
-| **Gesucht** | Community-Cache-Einträge | [Füge deine Lieblingsserien hinzu](docs/contributing-cache.md) |
-
-Das [Treiber-Interface](src/smartest_tv/drivers/base.py) ist definiert — implementiere `TVDriver` für deine Plattform und öffne einen PR.
-
-### Tests ausführen
+Samsung-, Roku- und Android-TV-Treiber brauchen Tests in der Praxis. Wenn du einen dieser Fernseher hast, ist dein Feedback sehr wertvoll.
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v
+python -m pytest tests/ -v         # 132 Tests, kein Fernseher erforderlich
 ```
 
-55 Unit-Tests für den Content-Resolver, den Cache und den CLI-Parser. Kein Fernseher und keine Netzwerkverbindung erforderlich — alle externen Aufrufe sind gemockt.
+Möchtest du deine Lieblingsserien zum Community-Cache hinzufügen? Siehe [Cache beitragen](docs/contributing/cache-contributions.md).
+
+Möchtest du einen Treiber für einen neuen Fernseher schreiben? Siehe [Treiberentwicklung](docs/contributing/driver-development.md).
 
 ## Lizenz
 
 MIT
+
+<!-- mcp-name: io.github.Hybirdss/smartest-tv -->
