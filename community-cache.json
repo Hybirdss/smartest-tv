@@ -1,0 +1,261 @@
+{
+  "netflix": {
+    "frieren": {
+      "title_id": 81726714,
+      "seasons": {
+        "1": {"first_episode_id": 81726716, "episode_count": 10},
+        "2": {"first_episode_id": 82656790, "episode_count": 10}
+      }
+    },
+    "jujutsu-kaisen": {
+      "title_id": 81278456,
+      "seasons": {
+        "1": {"first_episode_id": 81342624, "episode_count": 10},
+        "2": {"first_episode_id": 81705281, "episode_count": 10},
+        "3": {"first_episode_id": 82656758, "episode_count": 10}
+      }
+    },
+    "one-piece": {
+      "title_id": 80217863,
+      "seasons": {
+        "1": {"first_episode_id": 81037630, "episode_count": 7},
+        "2": {"first_episode_id": 81677444, "episode_count": 7}
+      }
+    },
+    "squid-game": {
+      "title_id": 81040344,
+      "seasons": {
+        "1": {"first_episode_id": 81616248, "episode_count": 7},
+        "2": {"first_episode_id": 81721226, "episode_count": 6}
+      }
+    },
+    "stranger-things": {
+      "title_id": 80057281,
+      "seasons": {
+        "1": {"first_episode_id": 80077368, "episode_count": 8},
+        "2": {"first_episode_id": 80144891, "episode_count": 8},
+        "3": {"first_episode_id": 80222773, "episode_count": 7},
+        "4": {"first_episode_id": 80229866, "episode_count": 8},
+        "5": {"first_episode_id": 81599029, "episode_count": 8}
+      }
+    },
+    "wednesday": {
+      "title_id": 81231974,
+      "seasons": {
+        "1": {"first_episode_id": 81257204, "episode_count": 8},
+        "2": {"first_episode_id": 81662171, "episode_count": 8}
+      }
+    },
+    "the-witcher": {
+      "title_id": 80189685,
+      "seasons": {
+        "1": {"first_episode_id": 80244464, "episode_count": 3},
+        "2": {"first_episode_id": 81000145, "episode_count": 4},
+        "3": {"first_episode_id": 81246470, "episode_count": 8},
+        "4": {"first_episode_id": 81581069, "episode_count": 8},
+        "5": {"first_episode_id": 81705721, "episode_count": 8}
+      }
+    },
+    "alice-in-borderland": {
+      "title_id": 80200575,
+      "seasons": {
+        "1": {"first_episode_id": 81035908, "episode_count": 3},
+        "2": {"first_episode_id": 81036304, "episode_count": 5},
+        "3": {"first_episode_id": 81441349, "episode_count": 8},
+        "4": {"first_episode_id": 81711835, "episode_count": 6}
+      }
+    },
+    "money-heist": {
+      "title_id": 80192098,
+      "seasons": {
+        "1": {"first_episode_id": 80205257, "episode_count": 5},
+        "2": {"first_episode_id": 80205342, "episode_count": 10},
+        "3": {"first_episode_id": 80205392, "episode_count": 4},
+        "4": {"first_episode_id": 81012312, "episode_count": 7},
+        "5": {"first_episode_id": 81035321, "episode_count": 5},
+        "6": {"first_episode_id": 81246011, "episode_count": 10}
+      }
+    },
+    "dark": {
+      "title_id": 80100172,
+      "seasons": {
+        "1": {"first_episode_id": 80114790, "episode_count": 10},
+        "2": {"first_episode_id": 80236908, "episode_count": 7},
+        "3": {"first_episode_id": 81183523, "episode_count": 8}
+      }
+    },
+    "bridgerton": {
+      "title_id": 80232398,
+      "seasons": {
+        "1": {"first_episode_id": 81044684, "episode_count": 3},
+        "2": {"first_episode_id": 81306372, "episode_count": 7},
+        "3": {"first_episode_id": 81508516, "episode_count": 8},
+        "4": {"first_episode_id": 81677376, "episode_count": 8}
+      }
+    },
+    "the-crown": {
+      "title_id": 80025678,
+      "seasons": {
+        "1": {"first_episode_id": 80025757, "episode_count": 10},
+        "2": {"first_episode_id": 80149005, "episode_count": 10},
+        "3": {"first_episode_id": 80215488, "episode_count": 10},
+        "4": {"first_episode_id": 80215731, "episode_count": 10},
+        "5": {"first_episode_id": 81478005, "episode_count": 9}
+      }
+    },
+    "narcos": {
+      "title_id": 80025172,
+      "seasons": {
+        "1": {"first_episode_id": 80025313, "episode_count": 10},
+        "2": {"first_episode_id": 80101273, "episode_count": 10},
+        "3": {"first_episode_id": 80126672, "episode_count": 10}
+      }
+    },
+    "black-mirror": {
+      "title_id": 70264888,
+      "seasons": {
+        "1": {"first_episode_id": 70264856, "episode_count": 3},
+        "2": {"first_episode_id": 70279173, "episode_count": 3},
+        "3": {"first_episode_id": 80104625, "episode_count": 6},
+        "4": {"first_episode_id": 80131566, "episode_count": 6},
+        "5": {"first_episode_id": 80195729, "episode_count": 5},
+        "6": {"first_episode_id": 81716297, "episode_count": 5}
+      }
+    },
+    "ozark": {
+      "title_id": 80117552,
+      "seasons": {
+        "1": {"first_episode_id": 80120599, "episode_count": 9},
+        "2": {"first_episode_id": 80209525, "episode_count": 10},
+        "3": {"first_episode_id": 81037132, "episode_count": 10},
+        "4": {"first_episode_id": 81254456, "episode_count": 10}
+      }
+    },
+    "the-queens-gambit": {
+      "title_id": 80234304,
+      "seasons": {
+        "1": {"first_episode_id": 80243261, "episode_count": 7}
+      }
+    },
+    "lupin": {
+      "title_id": 80994082,
+      "seasons": {
+        "1": {"first_episode_id": 81021127, "episode_count": 3},
+        "2": {"first_episode_id": 81031849, "episode_count": 5},
+        "3": {"first_episode_id": 81424850, "episode_count": 7}
+      }
+    },
+    "all-of-us-are-dead": {
+      "title_id": 81237994,
+      "seasons": {
+        "1": {"first_episode_id": 81237996, "episode_count": 10}
+      }
+    },
+    "cobra-kai": {
+      "title_id": 81002370,
+      "seasons": {
+        "1": {"first_episode_id": 81307578, "episode_count": 10},
+        "2": {"first_episode_id": 81307588, "episode_count": 10},
+        "3": {"first_episode_id": 81307598, "episode_count": 10},
+        "4": {"first_episode_id": 81321987, "episode_count": 10},
+        "5": {"first_episode_id": 81488453, "episode_count": 10}
+      }
+    },
+    "emily-in-paris": {
+      "title_id": 81037371,
+      "seasons": {
+        "1": {"first_episode_id": 81289281, "episode_count": 10},
+        "2": {"first_episode_id": 81382334, "episode_count": 10},
+        "3": {"first_episode_id": 81578551, "episode_count": 10},
+        "4": {"first_episode_id": 81718485, "episode_count": 10},
+        "5": {"first_episode_id": 81948683, "episode_count": 10}
+      }
+    },
+    "vincenzo": {
+      "title_id": 81188784,
+      "seasons": {
+        "1": {"first_episode_id": 81013540, "episode_count": 6},
+        "2": {"first_episode_id": 81351053, "episode_count": 7},
+        "3": {"first_episode_id": 81509646, "episode_count": 10}
+      }
+    },
+    "kingdom": {
+      "title_id": 80180171,
+      "seasons": {
+        "1": {"first_episode_id": 80180256, "episode_count": 6},
+        "2": {"first_episode_id": 81016141, "episode_count": 6}
+      }
+    },
+    "castlevania": {
+      "title_id": 80095241,
+      "seasons": {
+        "1": {"first_episode_id": 80095340, "episode_count": 4},
+        "2": {"first_episode_id": 80241609, "episode_count": 4},
+        "3": {"first_episode_id": 81006547, "episode_count": 4},
+        "4": {"first_episode_id": 81012702, "episode_count": 16}
+      }
+    },
+    "cyberpunk-edgerunners": {
+      "title_id": 81054853,
+      "seasons": {
+        "1": {"first_episode_id": 81056738, "episode_count": 5},
+        "2": {"first_episode_id": 81496133, "episode_count": 5}
+      }
+    },
+    "you": {
+      "title_id": 80211991,
+      "seasons": {
+        "1": {"first_episode_id": 80212201, "episode_count": 10},
+        "2": {"first_episode_id": 81047302, "episode_count": 10},
+        "3": {"first_episode_id": 81206808, "episode_count": 10},
+        "4": {"first_episode_id": 81478061, "episode_count": 10},
+        "5": {"first_episode_id": 81771650, "episode_count": 10}
+      }
+    },
+    "elite": {
+      "title_id": 80200942,
+      "seasons": {
+        "1": {"first_episode_id": 80201009, "episode_count": 8},
+        "2": {"first_episode_id": 81011691, "episode_count": 7},
+        "3": {"first_episode_id": 81011699, "episode_count": 7},
+        "4": {"first_episode_id": 81093771, "episode_count": 8},
+        "5": {"first_episode_id": 81250672, "episode_count": 8},
+        "6": {"first_episode_id": 81572773, "episode_count": 8},
+        "7": {"first_episode_id": 81588714, "episode_count": 8},
+        "8": {"first_episode_id": 81692309, "episode_count": 4}
+      }
+    },
+    "3-body-problem": {
+      "title_id": 81024821,
+      "seasons": {
+        "1": {"first_episode_id": 81340183, "episode_count": 8}
+      }
+    },
+    "beef": {
+      "title_id": 81447461,
+      "seasons": {
+        "1": {"first_episode_id": 81497204, "episode_count": 10}
+      }
+    },
+    "outer-banks": {
+      "title_id": 80095172,
+      "seasons": {
+        "1": {"first_episode_id": 80095173, "episode_count": 10},
+        "2": {"first_episode_id": 80191251, "episode_count": 9}
+      }
+    }
+  },
+  "youtube": {
+    "baby-shark": "XqZsoesa55w",
+    "despacito": "ktvTqknDobU",
+    "gangnam-style": "9bZkp7q19f0",
+    "shape-of-you": "JGwWNGJdvx8",
+    "see-you-again": "RgKAFK5djSk",
+    "uptown-funk": "OPf0YbXqDm0",
+    "roar": "CevxZvSJLk8",
+    "sorry": "fRh_vgS2dFE",
+    "thinking-out-loud": "lp-EO5I60KA",
+    "chandelier": "2vjPBrBU-TM",
+    "let-her-go": "RBumgq5yVrA"
+  }
+}

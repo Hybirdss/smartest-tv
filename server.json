@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Hybirdss/smartest-tv",
+  "title": "smartest-tv",
+  "description": "Control any smart TV with natural language. Resolve Netflix/YouTube/Spotify and deep-link.",
+  "repository": {
+    "url": "https://github.com/Hybirdss/smartest-tv",
+    "source": "github"
+  },
+  "version": "0.8.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "stv",
+      "version": "0.8.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "TV platform: lg, samsung, roku, or android",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false,
+          "name": "TV_PLATFORM"
+        },
+        {
+          "description": "TV IP address on your local network",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false,
+          "name": "TV_IP"
+        },
+        {
+          "description": "TV MAC address for Wake-on-LAN (optional)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "TV_MAC"
+        }
+      ]
+    }
+  ]
+}

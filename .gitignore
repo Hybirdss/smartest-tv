@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+*.db
+*.mp4
+.env
+.gstack/
+.codex
+.codex/
+request.token
+.mcpregistry_*
+launch-posts.md
+
+# Private engine — resolution logic, TV drivers, discovery
+# Distributed via PyPI only, not on GitHub
+src/smartest_tv/_engine/
