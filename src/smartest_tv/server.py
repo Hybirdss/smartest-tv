@@ -1,4 +1,7 @@
-"""smartest-tv MCP Server — unified TV control across platforms."""
+"""smartest-tv MCP Server — unified TV control across platforms.
+
+Optimized for AI agents: fewer tools, each does more.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +20,6 @@ _driver_lock = asyncio.Lock()
 
 
 def _create_driver(tv_name: str | None = None) -> TVDriver:
-    """Create a driver from config file (with env var overrides)."""
     from smartest_tv.drivers.factory import create_driver
     return create_driver(tv_name)
 
@@ -36,307 +38,94 @@ async def _get_driver(tv_name: str | None = None) -> TVDriver:
 mcp = FastMCP(
     "smartest-tv",
     instructions=(
-        "Control a smart TV (LG, Samsung, Android TV, Roku). "
-        "Supports power, volume, app launching with deep linking, "
-        "media playback, input switching, and notifications.\n\n"
-        "**Deep Linking:** Pass a content_id to tv_launch to open specific content:\n"
-        "- Netflix: numeric episode/movie ID (e.g. 82656797)\n"
-        "- YouTube: video ID (e.g. dQw4w9WgXcQ)\n"
-        "- Spotify: URI (e.g. spotify:album:5poA9SAx0Xiz1cd17fWBLS)\n\n"
-        "Content IDs are the same across all TV platforms. "
-        "The server auto-formats deep links for each platform.\n\n"
-        "For Netflix: close the app first with tv_close, then tv_launch with content_id."
+        "Control smart TVs (LG, Samsung, Android TV, Roku) with natural language. "
+        "Play Netflix/YouTube/Spotify by name, cast URLs, queue content, get recommendations, "
+        "run scene presets, sync across multiple TVs.\n\n"
+        "Key tools:\n"
+        "- tv_play: search + play content by name (most common)\n"
+        "- tv_cast: play a URL directly\n"
+        "- tv_next: continue watching\n"
+        "- tv_whats_on: trending content\n"
+        "- tv_recommend: personalized suggestions\n"
+        "- tv_scene: run presets (movie-night, kids, sleep)\n"
+        "- tv_queue: manage play queue\n"
+        "- tv_sync: play on multiple TVs at once"
     ),
 )
 
 
-# -- Power -------------------------------------------------------------------
+# -- Play Content (most important tool) -------------------------------------
 
 
 @mcp.tool()
-async def tv_on(tv_name: str | None = None) -> str:
-    """Turn on the TV (Wake-on-LAN or platform equivalent).
+async def tv_play(
+    platform: str,
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+    title_id: int | None = None,
+    tv_name: str | None = None,
+) -> str:
+    """Find content by name and play it on TV.
+
+    This is the primary tool. Resolves the content ID automatically,
+    then deep-links into the app on your TV.
 
     Args:
-        tv_name: Target TV name (default: primary TV). Use stv multi list to see names.
+        platform: "netflix", "youtube", or "spotify".
+        query: Content name (e.g. "Stranger Things", "baby shark", "Ye White Lines").
+        season: Season number (Netflix series only).
+        episode: Episode number (Netflix series only).
+        title_id: Netflix title ID if already known (skips search).
+        tv_name: Target TV name. Omit for default TV.
+
+    Examples:
+        tv_play("netflix", "Stranger Things", season=4, episode=7)
+        tv_play("youtube", "baby shark")
+        tv_play("spotify", "Ye White Lines")
     """
+    from smartest_tv.resolve import resolve
+
+    content_id = resolve(platform, query, season, episode, title_id)
+
     d = await _get_driver(tv_name)
-    await d.power_on()
-    return "TV turning on."
+    app_id, name = resolve_app(platform, d.platform)
 
+    if platform.lower() == "netflix":
+        try:
+            await d.close_app(app_id)
+            await asyncio.sleep(2)
+        except Exception:
+            pass
 
-@mcp.tool()
-async def tv_off(tv_name: str | None = None) -> str:
-    """Turn off the TV (standby).
+    await d.launch_app_deep(app_id, content_id)
 
-    Args:
-        tv_name: Target TV name (default: primary TV). Use stv multi list to see names.
-    """
-    d = await _get_driver(tv_name)
-    await d.power_off()
-    return "TV turned off."
+    from smartest_tv import cache as _cache
+    _cache.record_play(platform, query, content_id, season, episode)
 
+    desc = query
+    if season is not None and episode is not None:
+        desc += f" S{season}E{episode}"
+    return f"Playing {desc} on {name} (content: {content_id})"
 
-# -- Volume ------------------------------------------------------------------
 
-
-@mcp.tool()
-async def tv_volume(tv_name: str | None = None) -> dict:
-    """Get current volume and mute status.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    return {"volume": await d.get_volume(), "muted": await d.get_muted()}
-
-
-@mcp.tool()
-async def tv_set_volume(level: int, tv_name: str | None = None) -> str:
-    """Set volume (0-100).
-
-    Args:
-        level: Volume level 0-100.
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.set_volume(level)
-    return f"Volume set to {level}."
-
-
-@mcp.tool()
-async def tv_volume_up(tv_name: str | None = None) -> str:
-    """Increase volume by one step.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.volume_up()
-    return "Volume increased."
-
-
-@mcp.tool()
-async def tv_volume_down(tv_name: str | None = None) -> str:
-    """Decrease volume by one step.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.volume_down()
-    return "Volume decreased."
-
-
-@mcp.tool()
-async def tv_mute(mute: bool | None = None, tv_name: str | None = None) -> str:
-    """Mute, unmute, or toggle.
-
-    Args:
-        mute: True to mute, False to unmute, None to toggle.
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    if mute is None:
-        mute = not await d.get_muted()
-    await d.set_mute(mute)
-    return f"TV {'muted' if mute else 'unmuted'}."
-
-
-# -- Apps & Deep Linking -----------------------------------------------------
-
-
-@mcp.tool()
-async def tv_launch(app: str, content_id: str | None = None, tv_name: str | None = None) -> str:
-    """Launch an app, optionally deep linking to specific content.
-
-    Args:
-        app: App name (netflix, youtube, spotify, disney, prime, etc.) or raw app ID.
-        content_id: Content identifier for deep linking.
-            - Netflix: episode/movie ID (e.g. "82656797")
-            - YouTube: video ID (e.g. "dQw4w9WgXcQ") or full URL
-            - Spotify: URI (e.g. "spotify:album:5poA9SAx0Xiz1cd17fWBLS")
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    app_id, name = resolve_app(app, d.platform)
-
-    if content_id:
-        await d.launch_app_deep(app_id, content_id)
-        return f"Launched {name} with content: {content_id}"
-    else:
-        await d.launch_app(app_id)
-        return f"Launched {name}."
-
-
-@mcp.tool()
-async def tv_close(app: str, tv_name: str | None = None) -> str:
-    """Close a running app.
-
-    Args:
-        app: App name or ID.
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    app_id, name = resolve_app(app, d.platform)
-    await d.close_app(app_id)
-    return f"Closed {name}."
-
-
-@mcp.tool()
-async def tv_apps(tv_name: str | None = None) -> list[dict[str, str]]:
-    """List all installed apps.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    apps = await d.list_apps()
-    return [{"id": a.id, "name": a.name} for a in apps]
-
-
-# -- Media Playback ----------------------------------------------------------
-
-
-@mcp.tool()
-async def tv_play(tv_name: str | None = None) -> str:
-    """Resume media playback.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.play()
-    return "Playing."
-
-
-@mcp.tool()
-async def tv_pause(tv_name: str | None = None) -> str:
-    """Pause media playback.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.pause()
-    return "Paused."
-
-
-@mcp.tool()
-async def tv_stop(tv_name: str | None = None) -> str:
-    """Stop media playback.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.stop()
-    return "Stopped."
-
-
-# -- Status & Info -----------------------------------------------------------
-
-
-@mcp.tool()
-async def tv_status(tv_name: str | None = None) -> dict:
-    """Get TV status (current app, volume, mute).
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    s = await d.status()
-    return {
-        "platform": d.platform,
-        "current_app": s.current_app,
-        "volume": s.volume,
-        "muted": s.muted,
-        "sound_output": s.sound_output,
-    }
-
-
-@mcp.tool()
-async def tv_info(tv_name: str | None = None) -> dict:
-    """Get TV system info (model, firmware, platform).
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    i = await d.info()
-    return {
-        "platform": i.platform,
-        "model": i.model,
-        "firmware": i.firmware,
-        "ip": i.ip,
-        "name": i.name,
-    }
-
-
-# -- Notifications -----------------------------------------------------------
-
-
-@mcp.tool()
-async def tv_notify(message: str, tv_name: str | None = None) -> str:
-    """Show a toast notification on the TV screen.
-
-    Args:
-        message: Notification text.
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.notify(message)
-    return f"Notification sent: {message}"
-
-
-# -- Screen ------------------------------------------------------------------
-
-
-@mcp.tool()
-async def tv_screen_off(tv_name: str | None = None) -> str:
-    """Turn off screen (audio continues).
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.screen_off()
-    return "Screen off."
-
-
-@mcp.tool()
-async def tv_screen_on(tv_name: str | None = None) -> str:
-    """Turn screen back on.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    d = await _get_driver(tv_name)
-    await d.screen_on()
-    return "Screen on."
-
-
-# -- Resolve & Play ----------------------------------------------------------
+# -- Cast URL ----------------------------------------------------------------
 
 
 @mcp.tool()
 async def tv_cast(url: str, tv_name: str | None = None) -> str:
-    """Cast a URL to the TV. Accepts Netflix, YouTube, Spotify links.
+    """Cast a Netflix/YouTube/Spotify URL to the TV.
 
-    Parses the URL to extract the platform and content ID, then launches
-    the appropriate app with deep linking. For Netflix, closes the app first
-    (required for deep links to work).
+    Paste any streaming URL. stv parses the platform and content ID automatically.
 
     Args:
-        url: Streaming URL. Supported formats:
-            - https://www.netflix.com/watch/82656797
-            - https://www.netflix.com/title/81726714
-            - https://www.youtube.com/watch?v=dQw4w9WgXcQ
-            - https://youtu.be/dQw4w9WgXcQ
-            - https://open.spotify.com/track/3bbjDFVu9BtFtGD2fZpVfz
-            - https://open.spotify.com/album/xxx
-            - https://open.spotify.com/playlist/xxx
-        tv_name: Target TV name (default: primary TV).
+        url: Any Netflix, YouTube, or Spotify URL.
+        tv_name: Target TV name. Omit for default TV.
+
+    Examples:
+        tv_cast("https://youtube.com/watch?v=dQw4w9WgXcQ")
+        tv_cast("https://netflix.com/watch/82656797")
+        tv_cast("https://open.spotify.com/track/3bbjDFVu...")
     """
     from smartest_tv.cli import _parse_cast_url
     from smartest_tv.resolve import resolve
@@ -346,7 +135,6 @@ async def tv_cast(url: str, tv_name: str | None = None) -> str:
     except ValueError as exc:
         return f"Error: {exc}"
 
-    # Netflix title URL → resolve to actual video ID
     if platform == "netflix" and content_id.startswith("title:"):
         title_id = int(content_id.split(":", 1)[1])
         try:
@@ -369,243 +157,19 @@ async def tv_cast(url: str, tv_name: str | None = None) -> str:
     from smartest_tv import cache as _cache
     _cache.record_play(platform, url, content_id, None, None)
 
-    return f"Casting {url} on {name} (content: {content_id})"
+    return f"Casting on {name} (content: {content_id})"
 
 
-@mcp.tool()
-async def tv_resolve(
-    platform: str,
-    query: str,
-    season: int | None = None,
-    episode: int | None = None,
-    title_id: int | None = None,
-) -> str:
-    """Resolve a content name to a platform-specific ID.
-
-    Finds the streaming ID without launching anything.
-    Uses local cache (instant) with HTTP scraping fallback.
-
-    Args:
-        platform: netflix, youtube, or spotify.
-        query: Content name (e.g. "Frieren", "baby shark").
-        season: Season number (Netflix TV shows only).
-        episode: Episode number (Netflix TV shows only).
-        title_id: Netflix title ID if known (e.g. 81726714). Skips search.
-
-    Returns:
-        Content ID string (e.g. "82656797" for Netflix, "dQw4w9WgXcQ" for YouTube).
-    """
-    from smartest_tv.resolve import resolve
-    return resolve(platform, query, season, episode, title_id)
-
-
-@mcp.tool()
-async def tv_play_content(
-    platform: str,
-    query: str,
-    season: int | None = None,
-    episode: int | None = None,
-    title_id: int | None = None,
-    tv_name: str | None = None,
-) -> str:
-    """Find content by name and play it on TV in one step.
-
-    Resolves the content ID, then launches it. For Netflix, automatically
-    closes the app first (required for deep links to work).
-
-    Args:
-        platform: netflix, youtube, or spotify.
-        query: Content name (e.g. "Frieren", "baby shark").
-        season: Season number (Netflix TV shows only).
-        episode: Episode number (Netflix TV shows only).
-        title_id: Netflix title ID if known (e.g. 81726714). Skips search.
-        tv_name: Target TV name (default: primary TV).
-    """
-    from smartest_tv.resolve import resolve
-
-    content_id = resolve(platform, query, season, episode, title_id)
-
-    d = await _get_driver(tv_name)
-    app_id, name = resolve_app(platform, d.platform)
-
-    if platform.lower() == "netflix":
-        try:
-            await d.close_app(app_id)
-            await asyncio.sleep(2)
-        except Exception:
-            pass
-
-    await d.launch_app_deep(app_id, content_id)
-
-    # Record to history
-    from smartest_tv import cache as _cache
-    _cache.record_play(platform, query, content_id, season, episode)
-
-    desc = query
-    if season and episode:
-        desc += f" S{season}E{episode}"
-    return f"Playing {desc} on {name} (content: {content_id})"
-
-
-@mcp.tool()
-async def tv_history(limit: int = 10) -> list[dict]:
-    """Show recent play history.
-
-    Returns the last N items played on the TV.
-    """
-    from smartest_tv import cache as _cache
-    return _cache.get_history(limit)
-
-
-@mcp.tool()
-async def tv_whats_on(platform: str | None = None, limit: int = 10) -> str:
-    """Show trending content on Netflix or YouTube.
-
-    Args:
-        platform: "netflix", "youtube", or None for both.
-        limit: Number of results per platform (default 10).
-
-    Returns:
-        Formatted list of trending titles.
-    """
-    from smartest_tv.resolve import fetch_netflix_trending, fetch_youtube_trending
-
-    def _fmt_views(n) -> str:
-        if n is None:
-            return ""
-        if n >= 1_000_000:
-            return f"{n / 1_000_000:.1f}M views"
-        if n >= 1_000:
-            return f"{n / 1_000:.0f}K views"
-        return f"{n} views"
-
-    parts: list[str] = []
-    show_netflix = platform in (None, "netflix")
-    show_youtube = platform in (None, "youtube")
-
-    if show_netflix:
-        items = fetch_netflix_trending(limit)
-        lines = ["Netflix Top 10:"]
-        if items:
-            for item in items:
-                rank = item.get("rank", "")
-                title = item.get("title", "")
-                cat = item.get("category", "")
-                cat_str = f"  — {cat}" if cat else ""
-                lines.append(f"  {rank:>2}. {title}{cat_str}")
-        else:
-            lines.append("  (Could not fetch trending data)")
-        parts.append("\n".join(lines))
-
-    if show_youtube:
-        items = fetch_youtube_trending(limit)
-        lines = ["YouTube Trending:"]
-        if items:
-            for item in items:
-                rank = item.get("rank", "")
-                title = item.get("title", "")
-                channel = item.get("channel", "")
-                views = _fmt_views(item.get("view_count"))
-                channel_str = f"[{channel}] " if channel else ""
-                views_str = f"  — {views}" if views else ""
-                lines.append(f"  {rank:>2}. {channel_str}{title}{views_str}")
-        else:
-            lines.append("  (Could not fetch trending data)")
-        parts.append("\n".join(lines))
-
-    return "\n\n".join(parts)
-
-
-@mcp.tool()
-async def tv_queue_add(
-    platform: str,
-    query: str,
-    season: int | None = None,
-    episode: int | None = None,
-) -> str:
-    """Add content to the play queue.
-
-    Args:
-        platform: netflix, youtube, or spotify.
-        query: Content name (e.g. "Bridgerton", "Despacito").
-        season: Season number (Netflix TV shows only).
-        episode: Episode number (Netflix TV shows only).
-    """
-    from smartest_tv import cache as _cache
-    item = _cache.queue_add(platform, query, season, episode)
-    desc = item["query"]
-    if item.get("season") and item.get("episode"):
-        desc += f" S{item['season']}E{item['episode']}"
-    return f"Added to queue: [{platform}] {desc}"
-
-
-@mcp.tool()
-async def tv_queue_show() -> list[dict]:
-    """Show the current play queue."""
-    from smartest_tv import cache as _cache
-    return _cache.queue_show()
-
-
-@mcp.tool()
-async def tv_queue_play(tv_name: str | None = None) -> str:
-    """Play the next item in the queue.
-
-    Pops the first item, resolves its content ID, and plays it on TV.
-
-    Args:
-        tv_name: Target TV name (default: primary TV).
-    """
-    from smartest_tv import cache as _cache
-    from smartest_tv.resolve import resolve
-
-    item = _cache.queue_pop()
-    if not item:
-        return "Queue is empty."
-
-    platform = item["platform"]
-    query = item["query"]
-    season = item.get("season")
-    episode = item.get("episode")
-
-    content_id = resolve(platform, query, season, episode)
-
-    d = await _get_driver(tv_name)
-    app_id, name = resolve_app(platform, d.platform)
-
-    if platform.lower() == "netflix":
-        try:
-            await d.close_app(app_id)
-            await asyncio.sleep(2)
-        except Exception:
-            pass
-
-    await d.launch_app_deep(app_id, content_id)
-    _cache.record_play(platform, query, content_id, season, episode)
-
-    desc = query
-    if season and episode:
-        desc += f" S{season}E{episode}"
-    return f"Playing {desc} on {name} (content: {content_id})"
-
-
-@mcp.tool()
-async def tv_queue_clear() -> str:
-    """Clear the entire play queue."""
-    from smartest_tv import cache as _cache
-    _cache.queue_clear()
-    return "Queue cleared."
+# -- Continue Watching -------------------------------------------------------
 
 
 @mcp.tool()
 async def tv_next(query: str | None = None, tv_name: str | None = None) -> str:
-    """Play the next episode of a Netflix show.
-
-    Continues from where the user left off. If no query given,
-    continues the most recently watched Netflix show.
+    """Play the next episode. Continues from watch history.
 
     Args:
-        query: Show name (optional). If omitted, uses most recent.
-        tv_name: Target TV name (default: primary TV).
+        query: Show name. Omit to continue the most recent Netflix show.
+        tv_name: Target TV name. Omit for default TV.
     """
     from smartest_tv import cache as _cache
     from smartest_tv.resolve import resolve
@@ -618,7 +182,7 @@ async def tv_next(query: str | None = None, tv_name: str | None = None) -> str:
 
     result = _cache.get_next_episode(query)
     if not result:
-        return f"No next episode for '{query}'. Finished or not in history."
+        return f"No next episode for '{query}'."
 
     q, season, episode = result
     content_id = resolve("netflix", q, season, episode)
@@ -634,104 +198,403 @@ async def tv_next(query: str | None = None, tv_name: str | None = None) -> str:
 
     await d.launch_app_deep(app_id, content_id)
     _cache.record_play("netflix", q, content_id, season, episode)
-    return f"Playing {q} S{season}E{episode} on Netflix (content: {content_id})"
+    return f"Playing {q} S{season}E{episode}"
 
 
-# -- Multi TV Management -----------------------------------------------------
+# -- Discovery: Trending + Recommend ----------------------------------------
+
+
+@mcp.tool()
+async def tv_whats_on(platform: str | None = None, limit: int = 10) -> str:
+    """Show trending content on Netflix and/or YouTube.
+
+    Args:
+        platform: "netflix", "youtube", or omit for both.
+        limit: Number of results per platform (default 10).
+    """
+    from smartest_tv.resolve import fetch_netflix_trending, fetch_youtube_trending
+
+    parts: list[str] = []
+
+    if platform in (None, "netflix"):
+        items = fetch_netflix_trending(limit)
+        lines = ["Netflix Top 10:"]
+        for item in items:
+            r = item.get("rank", "")
+            t = item.get("title", "")
+            c = item.get("category", "")
+            lines.append(f"  {r:>2}. {t}" + (f"  — {c}" if c else ""))
+        if not items:
+            lines.append("  (unavailable)")
+        parts.append("\n".join(lines))
+
+    if platform in (None, "youtube"):
+        items = fetch_youtube_trending(limit)
+        lines = ["YouTube Trending:"]
+        for item in items:
+            r = item.get("rank", "")
+            t = item.get("title", "")
+            ch = item.get("channel", "")
+            lines.append(f"  {r:>2}. [{ch}] {t}" if ch else f"  {r:>2}. {t}")
+        if not items:
+            lines.append("  (unavailable)")
+        parts.append("\n".join(lines))
+
+    return "\n\n".join(parts)
 
 
 @mcp.tool()
 async def tv_recommend(mood: str | None = None, limit: int = 5) -> str:
-    """Get personalized content recommendations based on watch history.
-
-    Combines watch history patterns with trending content.
-    Set STV_LLM_URL env var to enable AI-powered reasons.
+    """Get personalized recommendations based on watch history + trending.
 
     Args:
-        mood: Optional filter — "chill", "action", "kids", or "random".
+        mood: "chill", "action", "kids", "random", or omit for auto.
         limit: Number of recommendations (default 5).
-
-    Returns:
-        Formatted list of recommendations with title, platform, and reason.
     """
     from smartest_tv.resolve import get_recommendations
     from smartest_tv import cache as _cache
 
-    history_data = _cache.analyze_history()
-    recent = history_data["recent_shows"]
+    recent = _cache.analyze_history()["recent_shows"]
     results = get_recommendations(mood=mood, limit=limit)
 
     if not results:
-        return "No recommendations available. Try tv_whats_on for trending content."
+        return "No recommendations. Try tv_whats_on for trending."
 
-    lines: list[str] = []
+    lines = []
     if recent:
-        lines.append(f"Based on your recent watching ({', '.join(recent[:3])}):\n")
-    else:
-        lines.append("Trending now (no watch history yet):\n")
-
+        lines.append(f"Based on: {', '.join(recent[:3])}\n")
     for i, rec in enumerate(results, 1):
-        title = rec["title"]
-        platform = rec["platform"].capitalize()
-        reason = rec["reason"]
-        lines.append(f"  {i}. {title:<30s}  {platform:<8s}  — {reason}")
-
+        lines.append(f"  {i}. {rec['title']:<30s} {rec['platform']:<8s} — {rec['reason']}")
     return "\n".join(lines)
 
 
-@mcp.tool()
-async def tv_list_tvs() -> list[dict]:
-    """List all configured TVs.
+# -- Power -------------------------------------------------------------------
 
-    Returns a list of all configured TVs with their name, platform, IP, and default status.
-    Use tv_name parameter in other tools to target a specific TV.
+
+@mcp.tool()
+async def tv_power(on: bool, tv_name: str | None = None) -> str:
+    """Turn TV on or off.
+
+    Args:
+        on: True = turn on, False = turn off.
+        tv_name: Target TV name. Omit for default TV.
     """
-    from smartest_tv.config import list_tvs
-    return list_tvs()
+    d = await _get_driver(tv_name)
+    if on:
+        await d.power_on()
+        return "TV turning on."
+    else:
+        await d.power_off()
+        return "TV turned off."
+
+
+# -- Volume ------------------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_volume(
+    level: int | None = None,
+    direction: str | None = None,
+    mute: bool | None = None,
+    tv_name: str | None = None,
+) -> str:
+    """Get or set volume, step up/down, or toggle mute. All in one tool.
+
+    - No args: returns current volume + mute status
+    - level=25: set volume to 25
+    - direction="up"/"down": step volume
+    - mute=True/False/None: mute, unmute, or toggle
+
+    Args:
+        level: Volume level 0-100.
+        direction: "up" or "down" for one step.
+        mute: True=mute, False=unmute, None=toggle.
+        tv_name: Target TV name. Omit for default TV.
+    """
+    d = await _get_driver(tv_name)
+
+    if level is not None:
+        await d.set_volume(level)
+        return f"Volume set to {level}."
+
+    if direction == "up":
+        await d.volume_up()
+        return "Volume up."
+    if direction == "down":
+        await d.volume_down()
+        return "Volume down."
+
+    if mute is not None:
+        if mute is True:
+            await d.set_mute(True)
+            return "Muted."
+        elif mute is False:
+            await d.set_mute(False)
+            return "Unmuted."
+    elif mute is None and level is None and direction is None:
+        # No args = get current status
+        vol = await d.get_volume()
+        muted = await d.get_muted()
+        return f"Volume: {vol}, Muted: {muted}"
+
+    # Toggle mute as default action
+    current = await d.get_muted()
+    await d.set_mute(not current)
+    return f"{'Muted' if not current else 'Unmuted'}."
+
+
+# -- Status ------------------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_status(tv_name: str | None = None) -> dict:
+    """Get TV status: current app, volume, mute, model, firmware.
+
+    Args:
+        tv_name: Target TV name. Omit for default TV.
+    """
+    d = await _get_driver(tv_name)
+    s = await d.status()
+    i = await d.info()
+    return {
+        "platform": d.platform,
+        "model": i.model,
+        "current_app": s.current_app,
+        "volume": s.volume,
+        "muted": s.muted,
+    }
+
+
+# -- Screen ------------------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_screen(on: bool, tv_name: str | None = None) -> str:
+    """Turn screen on or off (audio continues when off).
+
+    Args:
+        on: True = screen on, False = screen off (audio continues).
+        tv_name: Target TV name. Omit for default TV.
+    """
+    d = await _get_driver(tv_name)
+    if on:
+        await d.screen_on()
+        return "Screen on."
+    else:
+        await d.screen_off()
+        return "Screen off."
+
+
+# -- Apps & Launching -------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_launch(app: str, content_id: str | None = None, tv_name: str | None = None) -> str:
+    """Launch an app, optionally with a deep link.
+
+    Use tv_play instead if you have a content name (not ID).
+    Use this when you already have the exact content ID.
+
+    Args:
+        app: App name (netflix, youtube, spotify) or raw app ID.
+        content_id: Platform-specific content ID for deep linking.
+        tv_name: Target TV name. Omit for default TV.
+    """
+    d = await _get_driver(tv_name)
+    app_id, name = resolve_app(app, d.platform)
+
+    if content_id:
+        await d.launch_app_deep(app_id, content_id)
+        return f"Launched {name} with: {content_id}"
+    else:
+        await d.launch_app(app_id)
+        return f"Launched {name}."
+
+
+@mcp.tool()
+async def tv_notify(message: str, tv_name: str | None = None) -> str:
+    """Show a toast notification on the TV screen.
+
+    Args:
+        message: Text to display.
+        tv_name: Target TV name. Omit for default TV.
+    """
+    d = await _get_driver(tv_name)
+    await d.notify(message)
+    return f"Sent: {message}"
+
+
+# -- Queue -------------------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_queue(
+    action: str,
+    platform: str | None = None,
+    query: str | None = None,
+    season: int | None = None,
+    episode: int | None = None,
+    tv_name: str | None = None,
+) -> str:
+    """Manage the play queue. Actions: add, show, play, skip, clear.
+
+    Args:
+        action: "add", "show", "play", "skip", or "clear".
+        platform: Required for "add". netflix/youtube/spotify.
+        query: Required for "add". Content name.
+        season: For "add" — Netflix season number.
+        episode: For "add" — Netflix episode number.
+        tv_name: For "play" — target TV.
+
+    Examples:
+        tv_queue("add", "youtube", "Gangnam Style")
+        tv_queue("add", "netflix", "Dark", season=1, episode=1)
+        tv_queue("show")
+        tv_queue("play")
+        tv_queue("clear")
+    """
+    from smartest_tv import cache as _cache
+
+    if action == "add":
+        if not platform or not query:
+            return "Error: 'add' requires platform and query."
+        item = _cache.queue_add(platform, query, season, episode)
+        desc = item["query"]
+        if item.get("season") is not None:
+            desc += f" S{item['season']}E{item.get('episode', '?')}"
+        return f"Added: [{platform}] {desc}"
+
+    if action == "show":
+        items = _cache.queue_show()
+        if not items:
+            return "Queue is empty."
+        lines = []
+        for i, item in enumerate(items, 1):
+            desc = f"[{item['platform']}] {item['query']}"
+            if item.get("season") is not None:
+                desc += f" S{item['season']}E{item.get('episode', '?')}"
+            lines.append(f"  {i}. {desc}")
+        return "Queue:\n" + "\n".join(lines)
+
+    if action == "play":
+        from smartest_tv.resolve import resolve
+        item = _cache.queue_pop()
+        if not item:
+            return "Queue is empty."
+        p, q = item["platform"], item["query"]
+        s, e = item.get("season"), item.get("episode")
+        content_id = resolve(p, q, s, e)
+        d = await _get_driver(tv_name)
+        app_id, name = resolve_app(p, d.platform)
+        if p.lower() == "netflix":
+            try:
+                await d.close_app(app_id)
+                await asyncio.sleep(2)
+            except Exception:
+                pass
+        await d.launch_app_deep(app_id, content_id)
+        _cache.record_play(p, q, content_id, s, e)
+        return f"Playing {q} on {name}"
+
+    if action == "skip":
+        _cache.queue_skip()
+        return "Skipped."
+
+    if action == "clear":
+        _cache.queue_clear()
+        return "Queue cleared."
+
+    return f"Unknown action: {action}. Use add/show/play/skip/clear."
+
+
+# -- History -----------------------------------------------------------------
+
+
+@mcp.tool()
+async def tv_history(limit: int = 10) -> list[dict]:
+    """Show recent play history."""
+    from smartest_tv import cache as _cache
+    return _cache.get_history(limit)
+
+
+# -- Resolve (advanced) -----------------------------------------------------
+
+
+@mcp.tool()
+async def tv_resolve(
+    platform: str,
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+    title_id: int | None = None,
+) -> str:
+    """Resolve a content name to its platform ID without playing.
+
+    Args:
+        platform: netflix, youtube, or spotify.
+        query: Content name.
+        season: Season number (Netflix).
+        episode: Episode number (Netflix).
+        title_id: Netflix title ID if known.
+
+    Returns:
+        Content ID string.
+    """
+    from smartest_tv.resolve import resolve
+    return resolve(platform, query, season, episode, title_id)
 
 
 # -- Scene Presets -----------------------------------------------------------
 
 
 @mcp.tool()
-async def tv_scene_list() -> list[dict]:
-    """List all available scene presets (built-in and custom).
-
-    Returns a list of scenes with name, description, and steps.
-    Built-in scenes: movie-night, kids, sleep, music.
-    """
-    from smartest_tv.scenes import list_scenes
-    scenes = list_scenes()
-    return [
-        {"name": name, "description": s.get("description", ""), "steps": s.get("steps", [])}
-        for name, s in scenes.items()
-    ]
-
-
-@mcp.tool()
-async def tv_scene_run(name: str, tv_name: str | None = None) -> str:
-    """Run a scene preset — executes all steps in order.
-
-    Built-in scenes: movie-night, kids, sleep, music.
-    Custom scenes are defined in ~/.config/smartest-tv/scenes.json.
+async def tv_scene(action: str = "list", name: str | None = None, tv_name: str | None = None) -> str:
+    """Run or list scene presets. Built-in: movie-night, kids, sleep, music.
 
     Args:
-        name: Scene name (e.g. "movie-night", "sleep").
-        tv_name: Target TV name (default: primary TV).
+        action: "list" or "run".
+        name: Scene name (required for "run").
+        tv_name: Target TV (for "run").
+
+    Examples:
+        tv_scene("list")
+        tv_scene("run", "movie-night")
+        tv_scene("run", "kids", tv_name="kids-room")
     """
-    from smartest_tv.scenes import run_scene
-    try:
-        results = await run_scene(name, tv_name)
-    except KeyError as exc:
-        return f"Error: {exc}"
-    return "\n".join(results) + f"\nScene '{name}' done."
+    from smartest_tv.scenes import list_scenes, run_scene
+
+    if action == "list":
+        scenes = list_scenes()
+        lines = []
+        for sname, s in scenes.items():
+            desc = s.get("description", "")
+            lines.append(f"  {sname}: {desc}")
+        return "Scenes:\n" + "\n".join(lines)
+
+    if action == "run":
+        if not name:
+            return "Error: specify scene name. Use tv_scene('list') to see options."
+        try:
+            results = await run_scene(name, tv_name)
+        except KeyError as exc:
+            return f"Error: {exc}"
+        return "\n".join(results) + f"\nScene '{name}' done."
+
+    return f"Unknown action: {action}. Use 'list' or 'run'."
 
 
-# -- Sync / Party Mode -------------------------------------------------------
+# -- Multi-TV & Sync --------------------------------------------------------
 
 
 @mcp.tool()
-async def tv_sync_play(
+async def tv_list_tvs() -> list[dict]:
+    """List all configured TVs with name, platform, IP, and default status."""
+    from smartest_tv.config import list_tvs
+    return list_tvs()
+
+
+@mcp.tool()
+async def tv_sync(
     platform: str,
     query: str,
     tv_names: list[str] | None = None,
@@ -742,23 +605,20 @@ async def tv_sync_play(
 ) -> str:
     """Play content on multiple TVs simultaneously (party mode).
 
-    Resolves the content ID once, then launches on all target TVs at the same time.
-    Works with both local TVs and remote friends' TVs.
+    Resolves once, launches on all targets via asyncio.gather.
 
     Args:
         platform: netflix, youtube, or spotify.
-        query: Content name (e.g. "Squid Game", "lo-fi beats").
-        tv_names: List of TV names to play on. If omitted, uses group.
-        group: TV group name (e.g. "party", "home"). If omitted, uses tv_names.
-        season: Season number (Netflix TV shows only).
-        episode: Episode number (Netflix TV shows only).
+        query: Content name.
+        tv_names: List of TV names. Or use group.
+        group: TV group name (e.g. "party").
+        season: Netflix season number.
+        episode: Netflix episode number.
         title_id: Netflix title ID if known.
     """
     from smartest_tv.config import get_all_tv_names, get_group_members
     from smartest_tv.resolve import resolve
-    from smartest_tv.sync import broadcast
 
-    # Determine targets
     if tv_names:
         targets = tv_names
     elif group:
@@ -772,59 +632,44 @@ async def tv_sync_play(
     if not targets:
         return "No TVs to play on."
 
-    # Resolve content once
     try:
         content_id = resolve(platform, query, season, episode, title_id)
     except ValueError as e:
-        return f"Error resolving content: {e}"
+        return f"Error: {e}"
 
-    # Connect all drivers
-    drivers: dict[str, TVDriver] = {}
-    for name in targets:
+    async def _play_one(name: str) -> dict:
         try:
             d = await _get_driver(name)
-            drivers[name] = d
+            app_id, app_name = resolve_app(platform, d.platform)
+            if platform.lower() == "netflix":
+                try:
+                    await d.close_app(app_id)
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
+            await d.launch_app_deep(app_id, content_id)
+            return {"tv": name, "status": "ok", "message": f"Playing on {app_name}"}
         except Exception as e:
-            pass  # Skip unreachable TVs
+            return {"tv": name, "status": "error", "message": str(e)}
 
-    if not drivers:
-        return "Could not connect to any target TVs."
+    results = await asyncio.gather(*[_play_one(n) for n in targets])
 
-    # Play on all simultaneously
-    async def _play(d: TVDriver) -> str:
-        app_id, app_name = resolve_app(platform, d.platform)
-        if platform.lower() == "netflix":
-            try:
-                await d.close_app(app_id)
-                await asyncio.sleep(2)
-            except Exception:
-                pass
-        await d.launch_app_deep(app_id, content_id)
-        return f"Playing on {app_name}"
-
-    results = await broadcast(drivers, _play)
-
-    # Record to history
     from smartest_tv import cache as _cache
     _cache.record_play(platform, query, content_id, season, episode)
 
     desc = query
-    if season and episode:
+    if season is not None and episode is not None:
         desc += f" S{season}E{episode}"
 
-    lines = [f"Sync play: {desc} ({content_id})"]
+    lines = [f"Sync: {desc}"]
     for r in results:
-        icon = "✓" if r["status"] == "ok" else "✗"
-        lines.append(f"  {icon} [{r['tv']}] {r['message']}")
+        icon = "ok" if r["status"] == "ok" else "FAIL"
+        lines.append(f"  [{icon}] {r['tv']}: {r['message']}")
     return "\n".join(lines)
 
 
 @mcp.tool()
-async def tv_group_list() -> list[dict]:
-    """List all configured TV groups.
-
-    Returns groups with their member TV names.
-    """
+async def tv_groups() -> list[dict]:
+    """List all TV groups and their members."""
     from smartest_tv.config import get_groups
-    groups = get_groups()
-    return [{"name": name, "members": members} for name, members in groups.items()]
+    return [{"name": n, "members": m} for n, m in get_groups().items()]

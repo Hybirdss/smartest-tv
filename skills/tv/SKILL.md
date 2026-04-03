@@ -43,6 +43,9 @@ User wants to...
 ├── Control the TV → stv volume / stv mute / stv on / stv off
 ├── Send a message to the screen → stv notify
 ├── Use a different TV → add --tv <name> to any command
+├── Play on ALL TVs → add --all to play/off/volume/mute/notify
+├── Play on a GROUP of TVs → add --group <name> to play/off/volume/mute/notify
+├── Watch with friends (remote) → tv_sync (MCP) or --group with remote TVs
 └── Don't know what to do → stv whats-on, then stv recommend
 ```
 
@@ -154,6 +157,26 @@ stv off --tv kids-room
 stv scene kids --tv kids-room
 ```
 
+### Sync / Party mode
+
+"Play on all TVs", "play in every room", "watch with friends" → use --all or --group.
+
+```bash
+stv --all play youtube "lo-fi beats"             # every TV in the house
+stv --group party play netflix "Wednesday" s1e1   # group of TVs
+stv --all volume 20                               # same volume everywhere
+stv --all off                                     # good night, all TVs
+stv --group home notify "Dinner's ready!"        # toast on group
+```
+
+For AI agents (MCP), use `tv_sync_play` to play on multiple TVs at once:
+
+```
+tv_sync_play(platform="netflix", query="Squid Game", season=2, episode=3, group="watch-party")
+```
+
+**Remote TVs:** Friends run `stv serve`, you add them as `--platform remote`. Groups can mix local and remote TVs. See [Sync & Party Mode guide](docs/guides/sync-party.md).
+
 ### TV control
 
 ```bash
@@ -190,6 +213,13 @@ Or: `stv history` → show the list → user picks → `stv play`
 ### "Someone sent me a link"
 1. `stv cast <URL>` (auto-detects platform + ID)
 
+### "Watch party with friends"
+1. `stv --group watch-party play netflix "Wednesday" s1e1`
+Or MCP: `tv_sync_play(platform="netflix", query="Wednesday", season=1, episode=1, group="watch-party")`
+
+### "Play music in every room"
+1. `stv --all play youtube "lo-fi hip hop"` or `stv --all play spotify "chill vibes"`
+
 ## Setup
 
 If `stv status` fails with "No TV configured":
@@ -200,33 +230,28 @@ stv setup --ip 192.168.1.100     # direct IP
 stv doctor                        # diagnose issues
 ```
 
-## MCP Tools Reference
-
-For AI agents using MCP (stdio or HTTP):
+## MCP Tools (18 tools, optimized for AI agents)
 
 | Tool | When to use | Key params |
 |------|------------|------------|
-| `tv_play_content` | User wants to watch something by name | `platform`, `query`, `season?`, `episode?`, `tv_name?` |
+| `tv_play` | Play content by name (most common) | `platform`, `query`, `season?`, `episode?`, `tv_name?` |
 | `tv_cast` | User shares a URL | `url`, `tv_name?` |
 | `tv_next` | "Continue watching", "next episode" | `query?`, `tv_name?` |
 | `tv_whats_on` | "What's trending?", "what's popular?" | `platform?`, `limit?` |
 | `tv_recommend` | "Suggest something", "I'm bored" | `mood?`, `limit?` |
-| `tv_scene_run` | "Movie night", "kids mode", "sleep" | `name`, `tv_name?` |
-| `tv_scene_list` | "What scenes are available?" | |
-| `tv_queue_add` | "Add this to the queue" | `platform`, `query`, `season?`, `episode?` |
-| `tv_queue_play` | "Start the queue" | `tv_name?` |
-| `tv_queue_show` | "What's in the queue?" | |
-| `tv_queue_clear` | "Clear the queue" | |
-| `tv_history` | "What did I watch?" | `limit?` |
-| `tv_resolve` | Just get the ID, don't play | `platform`, `query`, `season?`, `episode?` |
-| `tv_volume` | Check current volume | `tv_name?` |
-| `tv_set_volume` | Set volume to a number | `level`, `tv_name?` |
-| `tv_mute` | Toggle mute | `tv_name?` |
-| `tv_on` / `tv_off` | Power control | `tv_name?` |
-| `tv_status` | Current state (app, volume) | `tv_name?` |
-| `tv_notify` | Send a toast to the screen | `message`, `tv_name?` |
+| `tv_scene` | Scene presets (list or run) | `action: list/run`, `name?`, `tv_name?` |
+| `tv_queue` | Play queue (add/show/play/skip/clear) | `action`, `platform?`, `query?`, `tv_name?` |
+| `tv_power` | Turn TV on/off | `on: bool`, `tv_name?` |
+| `tv_volume` | Get/set volume, step, mute — all in one | `level?`, `direction?`, `mute?`, `tv_name?` |
+| `tv_screen` | Screen on/off (audio continues) | `on: bool`, `tv_name?` |
+| `tv_status` | Current app, volume, model | `tv_name?` |
+| `tv_notify` | Toast notification on screen | `message`, `tv_name?` |
+| `tv_launch` | Launch app with known ID | `app`, `content_id?`, `tv_name?` |
+| `tv_history` | Recent play history | `limit?` |
+| `tv_resolve` | Get content ID without playing | `platform`, `query`, `season?`, `episode?` |
+| `tv_sync` | Play on multiple TVs at once | `platform`, `query`, `group?`, `tv_names?` |
 | `tv_list_tvs` | Show all configured TVs | |
-| `tv_launch` | Launch app with deep link ID | `app`, `content_id?`, `tv_name?` |
+| `tv_groups` | List TV groups | |
 
 ## Notes
 
