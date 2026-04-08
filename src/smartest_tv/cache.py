@@ -230,11 +230,20 @@ def put_netflix_show(
 # ---------------------------------------------------------------------------
 
 def _contribute(platform: str, slug: str, entry_data: Any) -> None:
-    """POST a new cache entry to the API server in a background thread.
+    """Submit a newly resolved content ID to the shared community cache.
 
-    Best-effort: failures are logged and silently ignored. Never blocks
-    the main resolve flow.
+    Privacy: only the platform name (netflix/youtube/spotify), the content
+    slug (e.g. "frieren"), and the resolved content ID (Netflix title ID,
+    YouTube video ID, Spotify URI) are sent. No user identifier, no IP
+    address, no watch history, no PII. Fire-and-forget background HTTPS
+    POST that never blocks playback.
+
+    Disable entirely with ``STV_NO_CONTRIBUTE=1`` in env. See README#Privacy
+    for the full policy.
     """
+    if os.environ.get("STV_NO_CONTRIBUTE"):
+        return
+
     def _post() -> None:
         from smartest_tv.http import curl
         headers = {}
