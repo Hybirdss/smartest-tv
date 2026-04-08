@@ -1,0 +1,33 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like?
+      description: Describe the feature or improvement
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage
+    attributes:
+      label: How do you use stv?
+      options:
+        - CLI only
+        - MCP server (Claude Code / Cursor)
+        - Claude Code Skill
+        - Python library (import)
+        - Home Assistant integration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: "What's your setup? (e.g. 3 LG TVs in a homelab, single bedroom TV, hotel with 100 rooms...)"
+    validations:
+      required: false

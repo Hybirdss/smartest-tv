@@ -1,0 +1,59 @@
+name: Bug Report
+description: Something isn't working
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect vs what actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands to reproduce the issue
+      placeholder: |
+        1. stv play netflix "Dark" s1e1
+        2. Error: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "stv doctor output"
+      description: "Run `stv doctor` and paste the output here."
+      render: text
+    validations:
+      required: false
+
+  - type: dropdown
+    id: usage
+    attributes:
+      label: How do you use stv?
+      options:
+        - CLI only
+        - MCP server (Claude Code / Cursor)
+        - Claude Code Skill
+        - Python library (import)
+        - Home Assistant integration
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: TV platform
+      options:
+        - LG webOS
+        - Samsung Tizen
+        - Roku
+        - Android TV / Fire TV
+        - Multiple
+        - Not applicable
+    validations:
+      required: true
