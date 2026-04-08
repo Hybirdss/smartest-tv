@@ -8,6 +8,19 @@ import smartest_tv.cache as cache_mod
 import smartest_tv.http as http_mod
 from smartest_tv.resolve import fetch_netflix_trending, fetch_youtube_trending
 
+# These tests patch `smartest_tv._engine.resolve.curl` / .ytdlp — attributes
+# that only exist when the real private engine is present. In CI (git clone
+# + empty stub), skip the entire module.
+_engine_resolve = pytest.importorskip(
+    "smartest_tv._engine.resolve",
+    reason="Private _engine package not available (CI stub / source clone)",
+)
+if not hasattr(_engine_resolve, "curl"):
+    pytest.skip(
+        "Private _engine.resolve is stubbed; engine-level tests skipped",
+        allow_module_level=True,
+    )
+
 
 @pytest.fixture(autouse=True)
 def isolated_cache(tmp_path, monkeypatch):

@@ -7,10 +7,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from smartest_tv.resolve import _slugify
-from smartest_tv._engine.resolve import (
-    _find_all_sequential_clusters,
-    _scrape_netflix_all_seasons,
+
+# The real `_engine` package is gitignored and only ships in the PyPI wheel.
+# In CI (git clone) it's a stub, so these tests must be skipped cleanly.
+_engine_resolve = pytest.importorskip(
+    "smartest_tv._engine.resolve",
+    reason="Private _engine package not available (CI stub / source clone)",
 )
+try:
+    _find_all_sequential_clusters = _engine_resolve._find_all_sequential_clusters
+    _scrape_netflix_all_seasons = _engine_resolve._scrape_netflix_all_seasons
+except AttributeError:
+    pytest.skip(
+        "Private _engine.resolve is stubbed; engine-level tests skipped",
+        allow_module_level=True,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      # `src/smartest_tv/_engine/` is gitignored — real engine ships only
+      # in the PyPI wheel. Create an empty package dir so hatch's
+      # `force-include` check passes. resolve.py already has a runtime
+      # `_has_engine()` fallback that uses the public API when the private
+      # engine is missing, so tests run fine with an empty stub.
+      - name: Scaffold empty _engine package for CI
+        run: |
+          mkdir -p src/smartest_tv/_engine
+          echo '"""CI stub — real _engine ships in the PyPI wheel."""' \
+            > src/smartest_tv/_engine/__init__.py
+
       - name: Install package with dev dependencies
         run: pip install -e ".[dev]"
 
