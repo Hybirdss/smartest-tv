@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-09
+
+### Added
+- **Rich-powered UI across every command** — 56 CLI commands now render with
+  Catppuccin Mocha theme, semantic colors, volume bars, app icons, tables, and
+  health-check trees. Every screen looks like a product, not a debug log.
+- `smartest_tv.ui` package with theme system, semantic icons, and 24 render
+  functions (one per page). Pure rendering — zero driver dependencies.
+- Three built-in themes: `mocha` (default), `nord`, `gruvbox`. Switch with
+  `STV_THEME=nord`.
+- App ID → human name mapping (50+ apps): `com.frograms.watchaplay.webos` now
+  displays as `Watcha`, `com.webos.app.netflix` as `Netflix`, etc.
+- Portfolio screenshots in `docs/assets/screenshots/` (SVG + PNG, 10 pages).
+- `STV_NO_COLOR=1` env var to force monochrome output for CI/tests.
+- Added `rich>=13.7.0` as a dependency.
+
+### Changed
+- `stv status` now shows a Now Playing panel with volume bar, app icon, power
+  state, and sound output — instead of a 5-line debug dump.
+- `stv multi list` → TV inventory table with default-TV star, platform badges,
+  and MAC addresses.
+- `stv scene list` → scene grid with step-by-step action icons.
+- `stv doctor` → hierarchical health-check tree with ok/warn/fail colored nodes.
+- `stv whats-on` → Netflix Top 10 + YouTube Trending tables with view counts.
+- `stv insights` → weekly report panel with platform bar chart, top shows,
+  peak hour, binge sessions, watch streak.
+- `stv history`, `stv queue`, `stv recommend`, `stv sub-value`, `stv apps`,
+  `stv cache show`, `stv license status` — all upgraded to Rich panels/tables.
+- `stv --all <cmd>` broadcast results now render as a unified panel with an
+  `ok_count/total` footer instead of one line per TV.
+- Error messages are now bordered panels with optional hints.
+
+### Preserved
+- `--format json` still outputs plain JSON with zero Rich markup — pipelines
+  and scripts continue to work unchanged.
+- All 211 existing tests pass; added 1 new test for JSON-format broadcast
+  preservation (212 total).
+
 ## [0.8.0] - 2026-04-03
 
 ### Added

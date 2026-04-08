@@ -117,12 +117,28 @@ def test_broadcast_action_reports_connection_failures(monkeypatch):
 
 
 def test_print_results_handles_sync_broadcast_format(capsys):
+    """Rich broadcast panel contains both TV names and the ok/fail counter."""
     cli._print_results([
         {"tv": "living-room", "status": "ok", "message": "done"},
         {"tv": "bedroom", "status": "error", "message": "boom"},
     ])
 
-    assert capsys.readouterr().out.splitlines() == [
-        "  [living-room] ✅ done",
-        "  [bedroom] ❌ boom",
-    ]
+    captured = capsys.readouterr().out
+    assert "living-room" in captured
+    assert "bedroom" in captured
+    assert "done" in captured
+    assert "boom" in captured
+    assert "1/2 succeeded" in captured
+
+
+def test_print_results_json_format_preserves_structure(capsys):
+    """fmt=json → raw JSON, no Rich markup."""
+    cli._print_results(
+        [{"tv": "a", "status": "ok", "message": "ok"}],
+        fmt="json",
+    )
+    out = capsys.readouterr().out
+    assert '"tv": "a"' in out
+    assert '"status": "ok"' in out
+    # No Rich box characters should leak
+    assert "╭" not in out and "│" not in out

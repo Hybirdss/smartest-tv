@@ -1,6 +1,6 @@
 [project]
 name = "stv"
-version = "0.8.1"
+version = "0.9.0"
 description = "Talk to your TV. Control any smart TV with natural language."
 readme = "README.md"
 license = "MIT"
@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.0.0",
+    "rich>=13.7.0",
     "tomli>=2.0.0; python_version < '3.11'",
 ]
 

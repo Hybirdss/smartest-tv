@@ -25,6 +25,8 @@ from smartest_tv.config import (
 from smartest_tv.drivers.base import TVDriver
 from smartest_tv.playback import launch_content
 from smartest_tv.sync import broadcast, connect_all
+from smartest_tv.ui import console as _ui_console
+from smartest_tv.ui import render as _ui
 
 
 def _get_driver(tv_name: str | None = None) -> TVDriver:
@@ -42,7 +44,7 @@ def _run(coro):
 
 
 def _output(data, fmt: str):
-    """Print data in the requested format."""
+    """Print data in the requested format (JSON or fallback text)."""
     if fmt == "json":
         click.echo(json.dumps(data, ensure_ascii=False, indent=2))
     else:
@@ -57,6 +59,30 @@ def _output(data, fmt: str):
                     click.echo(item)
         else:
             click.echo(data)
+
+
+def _print(renderable):
+    """Print a Rich renderable through the themed console."""
+    _ui_console.print(renderable)
+
+
+def _success(message: str):
+    """Short success line with a green check."""
+    from smartest_tv.ui.theme import ICONS
+    _ui_console.print(f"[success]{ICONS['ok']}  {message}[/success]")
+
+
+def _fail(message: str, hint: str = "", exit_code: int = 1):
+    """Red-bordered error panel. Exits with non-zero by default."""
+    _ui_console.print(_ui.render_error(message, hint))
+    if exit_code is not None:
+        sys.exit(exit_code)
+
+
+def _info(message: str, icon: str = ""):
+    """Dim info/status line."""
+    prefix = f"{icon}  " if icon else ""
+    _ui_console.print(f"[info]{prefix}{message}[/info]")
 
 
 @click.group()
@@ -106,14 +132,12 @@ async def _broadcast_action(targets: list[str], action_fn):
     return [result_by_tv[tv_name] for tv_name in targets if tv_name in result_by_tv]
 
 
-def _print_results(results):
+def _print_results(results, fmt: str = "text"):
     """Print multi-TV broadcast results."""
-    for result in results:
-        name = result["tv"]
-        success = result["status"] == "ok"
-        msg = result["message"]
-        icon = "✅" if success else "❌"
-        click.echo(f"  [{name}] {icon} {msg}")
+    if fmt == "json":
+        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
+        return
+    _print(_ui.render_broadcast_results(results))
 
 
 # -- Remote MCP Server -------------------------------------------------------
@@ -132,16 +156,27 @@ def serve(host, port, transport):
     """Start stv as a remote MCP server (+ REST API for party mode)."""
     from smartest_tv.server import mcp
     from smartest_tv.api import start_api_server
+    from smartest_tv.ui.common import kv_table, boxed
+    from smartest_tv.ui.theme import ICONS
+    from rich.console import Group
+    from rich.text import Text
 
     api_port = port + 1
     start_api_server(host, api_port)
 
     path = "sse" if transport == "sse" else "mcp"
-    click.echo(f"MCP server:  http://{host}:{port}/{path}")
-    click.echo(f"REST API:    http://{host}:{api_port}/api/ping")
-    click.echo()
-    click.echo("Friends can add your TV:  stv multi add friend --platform remote --url http://YOUR_IP:" + str(api_port))
-    click.echo("Press Ctrl+C to stop.")
+    content = Group(
+        kv_table({
+            "MCP server": f"http://{host}:{port}/{path}",
+            "REST API":   f"http://{host}:{api_port}/api/ping",
+        }),
+        Text(""),
+        Text("Friends can add your TV:", style="accent"),
+        Text(f"  stv multi add friend --platform remote --url http://YOUR_IP:{api_port}", style="primary"),
+        Text(""),
+        Text("Press Ctrl+C to stop.", style="muted"),
+    )
+    _print(boxed(content, title=f"{ICONS['cast']} stv server"))
     mcp.run(transport=transport, host=host, port=port)
 
 
@@ -164,40 +199,45 @@ def doctor(ctx):
     try:
         tv = get_tv_config(tv_name)
     except KeyError as e:
-        click.echo(f"❌ {e}")
+        _fail(str(e))
         return
     if not tv.get("platform"):
-        click.echo("❌ No TV configured. Run: stv setup")
+        _fail("No TV configured.", hint="Run: stv setup")
         return
 
-    click.echo(f"📺 {tv.get('name', 'TV')} ({tv['platform'].upper()}, {tv['ip']})")
-    click.echo()
+    tv_label = f"{tv.get('name', 'TV')} ({tv['platform'].upper()}, {tv['ip']})"
+    checks: list[dict] = []
 
     d = _get_driver(tv_name)
     try:
         _run(d.connect())
-        click.echo("✅ TV reachable")
+        checks.append({"name": "TV reachable", "status": "ok", "detail": tv['ip']})
     except Exception as e:
-        click.echo(f"❌ Can't connect: {e}")
+        checks.append({"name": "TV reachable", "status": "fail", "detail": str(e)[:60]})
+        _print(_ui.render_doctor(checks, tv_label=tv_label))
         return
 
     try:
         s = _run(d.status())
-        click.echo(f"✅ Status OK — {s.current_app or 'idle'}, vol {s.volume}")
+        detail = f"{s.current_app or 'idle'}, vol {s.volume}"
+        checks.append({"name": "Status query", "status": "ok", "detail": detail})
     except Exception:
-        click.echo("⚠️  Status query failed")
+        checks.append({"name": "Status query", "status": "warn", "detail": "failed"})
 
     try:
         apps = _run(d.list_apps())
         app_names = {a.name.lower() for a in apps}
         for service in ["Netflix", "YouTube", "Spotify"]:
             found = any(service.lower() in n for n in app_names)
-            click.echo(f"{'✅' if found else '⚠️ '} {service} {'found' if found else 'not found'}")
+            checks.append({
+                "name": service,
+                "status": "ok" if found else "warn",
+                "detail": "installed" if found else "not found",
+            })
     except Exception:
-        click.echo("⚠️  App list unavailable")
+        checks.append({"name": "App list", "status": "warn", "detail": "unavailable"})
 
-    click.echo()
-    click.echo("All good! 🎉" if True else "")
+    _print(_ui.render_doctor(checks, tv_label=tv_label))
 
 
 # -- Power -------------------------------------------------------------------
@@ -207,25 +247,27 @@ def doctor(ctx):
 @click.pass_context
 def on(ctx):
     """Turn on the TV (or all TVs with --all / --group)."""
+    from smartest_tv.ui.theme import ICONS
     if _is_multi(ctx):
         targets = _get_targets(ctx)
         results = _run(_broadcast_action(targets, lambda d: d.power_on() or "turning on"))
-        _print_results(results)
+        _print_results(results, ctx.obj["fmt"])
     else:
         d = _get_driver(ctx.obj["tv_name"])
         _run(d.connect())
         _run(d.power_on())
-        click.echo("TV turning on.")
+        _success(f"{ICONS['on']} TV turning on.")
 
 
 @main.command()
 @click.pass_context
 def off(ctx):
     """Turn off the TV (or all TVs with --all / --group)."""
+    from smartest_tv.ui.theme import ICONS
     if _is_multi(ctx):
         targets = _get_targets(ctx)
         results = _run(_broadcast_action(targets, lambda d: d.power_off() or "turned off"))
-        _print_results(results)
+        _print_results(results, ctx.obj["fmt"])
     else:
         d = _get_driver(ctx.obj["tv_name"])
 
@@ -234,7 +276,7 @@ def off(ctx):
             await d.power_off()
 
         _run(_do())
-        click.echo("TV turned off.")
+        _success(f"{ICONS['off']} TV turned off.")
 
 
 # -- Volume ------------------------------------------------------------------
@@ -253,7 +295,7 @@ def volume(ctx, level):
             return f"volume → {level}"
 
         results = _run(_broadcast_action(targets, _set_vol))
-        _print_results(results)
+        _print_results(results, ctx.obj["fmt"])
     else:
         d = _get_driver(ctx.obj["tv_name"])
 
@@ -266,16 +308,19 @@ def volume(ctx, level):
                 return {"volume": await d.get_volume(), "muted": await d.get_muted()}
 
         result = _run(_do())
-        if level is not None:
-            click.echo(f"Volume set to {level}.")
+        if ctx.obj["fmt"] == "json":
+            _output(result, "json")
+        elif level is not None:
+            _success(f"Volume set to {level}.")
         else:
-            _output(result, ctx.obj["fmt"])
+            _print(_ui.render_volume(int(result.get("volume", 0)), muted=bool(result.get("muted", False))))
 
 
 @main.command()
 @click.pass_context
 def mute(ctx):
     """Toggle mute. Supports --all / --group."""
+    from smartest_tv.ui.theme import ICONS
     if _is_multi(ctx):
         targets = _get_targets(ctx)
 
@@ -285,7 +330,7 @@ def mute(ctx):
             return "muted" if not current else "unmuted"
 
         results = _run(_broadcast_action(targets, _toggle_mute))
-        _print_results(results)
+        _print_results(results, ctx.obj["fmt"])
     else:
         d = _get_driver(ctx.obj["tv_name"])
 
@@ -296,7 +341,8 @@ def mute(ctx):
             return not current
 
         muted = _run(_do())
-        click.echo(f"TV {'muted' if muted else 'unmuted'}.")
+        icon = ICONS['mute'] if muted else ICONS['volume']
+        _success(f"{icon} TV {'muted' if muted else 'unmuted'}.")
 
 
 # -- Apps & Deep Linking -----------------------------------------------------
@@ -308,6 +354,7 @@ def mute(ctx):
 @click.pass_context
 def launch(ctx, app, content_id):
     """Launch an app, optionally with deep link content ID."""
+    from smartest_tv.ui.theme import ICONS, app_icon
     d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
@@ -315,12 +362,17 @@ def launch(ctx, app, content_id):
         app_id, name = resolve_app(app, d.platform)
         if content_id:
             await d.launch_app_deep(app_id, content_id)
-            return f"Launched {name} with content: {content_id}"
+            return name, app_id, content_id
         else:
             await d.launch_app(app_id)
-            return f"Launched {name}."
+            return name, app_id, None
 
-    click.echo(_run(_do()))
+    name, app_id, content = _run(_do())
+    icon = app_icon(app_id)
+    if content:
+        _success(f"{icon} Launched {name} → {content}")
+    else:
+        _success(f"{icon} Launched {name}")
 
 
 @main.command()
@@ -328,16 +380,17 @@ def launch(ctx, app, content_id):
 @click.pass_context
 def close(ctx, app):
     """Close a running app."""
+    from smartest_tv.ui.theme import app_icon
     d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
         await d.connect()
         app_id, name = resolve_app(app, d.platform)
         await d.close_app(app_id)
-        return name
+        return name, app_id
 
-    name = _run(_do())
-    click.echo(f"Closed {name}.")
+    name, app_id = _run(_do())
+    _success(f"{app_icon(app_id)} Closed {name}.")
 
 
 @main.command()
@@ -350,7 +403,11 @@ def apps(ctx):
         await d.connect()
         return [{"id": a.id, "name": a.name} for a in await d.list_apps()]
 
-    _output(_run(_do()), ctx.obj["fmt"])
+    result = _run(_do())
+    if ctx.obj["fmt"] == "json":
+        _output(result, "json")
+    else:
+        _print(_ui.render_apps(result))
 
 
 # -- Media -------------------------------------------------------------------
@@ -360,20 +417,22 @@ def apps(ctx):
 @click.pass_context
 def play(ctx):
     """Resume playback."""
+    from smartest_tv.ui.theme import ICONS
     d = _get_driver(ctx.obj["tv_name"])
     _run(d.connect())
     _run(d.play())
-    click.echo("Playing.")
+    _success(f"{ICONS['play']} Playing.")
 
 
 @main.command()
 @click.pass_context
 def pause(ctx):
     """Pause playback."""
+    from smartest_tv.ui.theme import ICONS
     d = _get_driver(ctx.obj["tv_name"])
     _run(d.connect())
     _run(d.pause())
-    click.echo("Paused.")
+    _success(f"{ICONS['pause']} Paused.")
 
 
 # -- Status ------------------------------------------------------------------
@@ -396,7 +455,17 @@ def status(ctx):
             "sound_output": s.sound_output,
         }
 
-    _output(_run(_do()), ctx.obj["fmt"])
+    data = _run(_do())
+    if ctx.obj["fmt"] == "json":
+        _output(data, "json")
+    else:
+        tv_label = ctx.obj.get("tv_name") or "TV"
+        try:
+            cfg = get_tv_config(tv_label if ctx.obj.get("tv_name") else None)
+            tv_label = cfg.get("name", tv_label)
+        except Exception:
+            pass
+        _print(_ui.render_status(data, tv_name=tv_label))
 
 
 @main.command()
@@ -416,7 +485,11 @@ def info(ctx):
             "name": i.name,
         }
 
-    _output(_run(_do()), ctx.obj["fmt"])
+    data = _run(_do())
+    if ctx.obj["fmt"] == "json":
+        _output(data, "json")
+    else:
+        _print(_ui.render_info(data))
 
 
 # -- Notifications -----------------------------------------------------------
@@ -427,6 +500,7 @@ def info(ctx):
 @click.pass_context
 def notify(ctx, message):
     """Show a notification on the TV. Supports --all / --group."""
+    from smartest_tv.ui.theme import ICONS
     if _is_multi(ctx):
         targets = _get_targets(ctx)
 
@@ -435,7 +509,7 @@ def notify(ctx, message):
             return f"sent: {message}"
 
         results = _run(_broadcast_action(targets, _send))
-        _print_results(results)
+        _print_results(results, ctx.obj["fmt"])
     else:
         d = _get_driver(ctx.obj["tv_name"])
 
@@ -444,7 +518,7 @@ def notify(ctx, message):
             await d.notify(message)
 
         _run(_do())
-        click.echo(f"Sent: {message}")
+        _success(f"{ICONS['info']} Sent: {message}")
 
 
 # -- What's On ---------------------------------------------------------------
@@ -466,57 +540,23 @@ def whats_on(ctx, platform, limit):
     """
     from smartest_tv.resolve import fetch_netflix_trending, fetch_youtube_trending
 
-    def _fmt_views(n) -> str:
-        if n is None:
-            return ""
-        if n >= 1_000_000:
-            return f"{n / 1_000_000:.1f}M views"
-        if n >= 1_000:
-            return f"{n / 1_000:.0f}K views"
-        return f"{n} views"
-
     fmt = ctx.obj["fmt"]
     show_netflix = platform in (None, "netflix")
     show_youtube = platform in (None, "youtube")
 
-    result = {}
-
+    result: dict = {}
     if show_netflix:
-        items = fetch_netflix_trending(limit)
-        result["netflix"] = items
-        if fmt != "json":
-            click.echo("Netflix Top 10:")
-            if items:
-                for item in items:
-                    rank = item.get("rank", "")
-                    title = item.get("title", "")
-                    cat = item.get("category", "")
-                    cat_str = f"  — {cat}" if cat else ""
-                    click.echo(f"  {rank:>2}. {title}{cat_str}")
-            else:
-                click.echo("  (Could not fetch trending data)")
-            if show_youtube:
-                click.echo()
-
+        result["netflix"] = fetch_netflix_trending(limit)
     if show_youtube:
-        items = fetch_youtube_trending(limit)
-        result["youtube"] = items
-        if fmt != "json":
-            click.echo("YouTube Trending:")
-            if items:
-                for item in items:
-                    rank = item.get("rank", "")
-                    title = item.get("title", "")
-                    channel = item.get("channel", "")
-                    views = _fmt_views(item.get("view_count"))
-                    channel_str = f"[{channel}] " if channel else ""
-                    views_str = f"  — {views}" if views else ""
-                    click.echo(f"  {rank:>2}. {channel_str}{title}{views_str}")
-            else:
-                click.echo("  (Could not fetch trending data)")
+        result["youtube"] = fetch_youtube_trending(limit)
 
     if fmt == "json":
         _output(result, "json")
+    else:
+        _print(_ui.render_trending(
+            netflix=result.get("netflix") if show_netflix else None,
+            youtube=result.get("youtube") if show_youtube else None,
+        ))
 
 
 # -- Search ------------------------------------------------------------------
@@ -545,8 +585,8 @@ def search(ctx, platform, query):
     if p == "netflix":
         title_id = _search_netflix_title_id(query_str)
         if not title_id:
-            click.echo(f"❌ No Netflix results for: {query_str}", err=True)
-            sys.exit(1)
+            _fail(f"No Netflix results for: {query_str}")
+            return
 
         result = {"title_id": title_id, "url": f"https://www.netflix.com/title/{title_id}"}
         try:
@@ -562,51 +602,40 @@ def search(ctx, platform, query):
         if ctx.obj["fmt"] == "json":
             _output(result, "json")
         else:
-            click.echo(f"📺 {query_str}")
-            click.echo(f"   Netflix ID: {title_id}")
-            click.echo(f"   URL: https://www.netflix.com/title/{title_id}")
-            if "seasons" in result:
-                click.echo(f"   {result['seasons']} seasons:")
-                for sn, info in result["episodes"].items():
-                    click.echo(f"     {sn}: {info}")
+            _print(_ui.render_netflix_search(query_str, result))
 
     elif p == "spotify":
         uri = _search_spotify(query_str)
         if not uri:
-            click.echo(f"❌ No Spotify results for: {query_str}", err=True)
-            sys.exit(1)
+            _fail(f"No Spotify results for: {query_str}")
+            return
         if ctx.obj["fmt"] == "json":
             _output({"uri": uri}, "json")
         else:
-            click.echo(f"🎵 {query_str}")
-            click.echo(f"   URI: {uri}")
+            _print(_ui.render_spotify_search(query_str, uri))
 
     elif p == "youtube":
         import shutil, subprocess as sp
         if not shutil.which("yt-dlp"):
-            click.echo("❌ yt-dlp not found", err=True)
-            sys.exit(1)
+            _fail("yt-dlp not found")
+            return
         r = sp.run(
             ["yt-dlp", f"ytsearch3:{query_str}", "--get-id", "--get-title", "--no-download"],
             capture_output=True, text=True, timeout=30,
         )
         lines = r.stdout.strip().split("\n")
         if len(lines) < 2:
-            click.echo(f"❌ No YouTube results for: {query_str}", err=True)
-            sys.exit(1)
-        # yt-dlp alternates: title, id, title, id, ...
+            _fail(f"No YouTube results for: {query_str}")
+            return
         results = []
         for i in range(0, len(lines) - 1, 2):
             results.append({"title": lines[i], "id": lines[i + 1]})
         if ctx.obj["fmt"] == "json":
             _output(results, "json")
         else:
-            click.echo(f"🔍 YouTube: {query_str}")
-            for r in results:
-                click.echo(f"   {r['id']}  {r['title']}")
+            _print(_ui.render_youtube_search(query_str, results))
     else:
-        click.echo(f"❌ Unsupported: {platform}", err=True)
-        sys.exit(1)
+        _fail(f"Unsupported: {platform}")
 
 
 # -- Cast --------------------------------------------------------------------
@@ -628,11 +657,12 @@ def cast(ctx, url):
         stv cast https://youtu.be/dQw4w9WgXcQ
         stv cast https://open.spotify.com/track/3bbjDFVu9BtFtGD2fZpVfz
     """
+    from smartest_tv.ui.theme import ICONS
     try:
         platform, content_id = _parse_cast_url(url)
     except ValueError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
+        return
 
     # Netflix title URL → resolve to an actual video/episode ID
     if platform == "netflix" and content_id.startswith("title:"):
@@ -641,8 +671,8 @@ def cast(ctx, url):
         try:
             content_id = do_resolve("netflix", str(title_id), title_id=title_id)
         except ValueError as exc:
-            click.echo(f"❌ {exc}", err=True)
-            sys.exit(1)
+            _fail(str(exc))
+            return
 
     d = _get_driver(ctx.obj["tv_name"])
     app_id, name = resolve_app(platform, d.platform)
@@ -656,7 +686,7 @@ def cast(ctx, url):
     from smartest_tv import cache as _cache
     _cache.record_play(platform, url, content_id, None, None)
 
-    click.echo(f"▶ Casting {url} on {name} (content: {content_id})")
+    _success(f"{ICONS['cast']} Casting {url} → {name} ({content_id})")
 
 
 # -- Resolve & Play ----------------------------------------------------------
@@ -704,16 +734,20 @@ def resolve(ctx, platform, query, season, episode, title_id):
 
     query_str = " ".join(query_parts)
     if not query_str:
-        click.echo("❌ No query provided.", err=True)
-        sys.exit(1)
+        _fail("No query provided.")
+        return
 
     try:
         content_id = do_resolve(platform, query_str, season, episode, title_id)
     except ValueError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
+        return
 
-    _output(content_id, ctx.obj["fmt"])
+    if ctx.obj["fmt"] == "json":
+        _output(content_id, "json")
+    else:
+        from smartest_tv.ui.theme import app_icon
+        _success(f"{app_icon(platform)} {platform}: {content_id}")
 
 
 @main.command()
@@ -748,19 +782,23 @@ def play(ctx, platform, query, season, episode, title_id):
 
     query_str = " ".join(query_parts)
     if not query_str:
-        click.echo("❌ No query provided.", err=True)
-        sys.exit(1)
+        _fail("No query provided.")
+        return
+
+    from smartest_tv.ui.theme import ICONS, app_icon
 
     # Step 1: Resolve content ID (once — works for all TVs)
     try:
         content_id = do_resolve(platform, query_str, season, episode, title_id)
     except ValueError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
+        return
 
     desc = f"{query_str}"
     if season and episode:
         desc += f" S{season}E{episode}"
+
+    icon = app_icon(platform)
 
     # Step 2: Launch on TV(s)
     if _is_multi(ctx):
@@ -769,10 +807,10 @@ def play(ctx, platform, query, season, episode, title_id):
         async def _play_on(d):
             app_id, name = resolve_app(platform, d.platform)
             await launch_content(d, platform, app_id, content_id)
-            return f"▶ {desc} on {name} ({content_id})"
+            return f"{ICONS['play']} {desc} on {name} ({content_id})"
 
         results = _run(_broadcast_action(targets, _play_on))
-        _print_results(results)
+        _print_results(results, ctx.obj["fmt"])
     else:
         d = _get_driver(ctx.obj["tv_name"])
         app_id, name = resolve_app(platform, d.platform)
@@ -782,7 +820,7 @@ def play(ctx, platform, query, season, episode, title_id):
             await launch_content(d, platform, app_id, content_id)
 
         _run(_do())
-        click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
+        _success(f"{icon} Playing {desc} on {name}  ({content_id})")
 
     # Record to history
     from smartest_tv import cache as _cache
@@ -803,22 +841,12 @@ def history(ctx, limit):
         stv history -n 5
     """
     from smartest_tv import cache as _cache
-    import time as _time
 
     entries = _cache.get_history(limit)
-    if not entries:
-        click.echo("No play history yet.")
-        return
-
     if ctx.obj["fmt"] == "json":
         _output(entries, "json")
     else:
-        for e in entries:
-            ts = _time.strftime("%m/%d %H:%M", _time.localtime(e["time"]))
-            desc = e["query"]
-            if e.get("season") and e.get("episode"):
-                desc += f" S{e['season']}E{e['episode']}"
-            click.echo(f"  {ts}  {e['platform']:8s}  {desc}")
+        _print(_ui.render_history(entries))
 
 
 @main.command()
@@ -846,26 +874,10 @@ def recommend(ctx, mood, limit):
 
     results = get_recommendations(mood=mood, limit=limit)
 
-    if not results:
-        click.echo("No recommendations available. Try: stv whats-on")
-        return
-
-    fmt = ctx.obj["fmt"]
-    if fmt == "json":
-        import json
-        click.echo(json.dumps(results, ensure_ascii=False, indent=2))
-        return
-
-    if recent:
-        click.echo(f"Based on your recent watching ({', '.join(recent[:3])}):\n")
+    if ctx.obj["fmt"] == "json":
+        _output(results, "json")
     else:
-        click.echo("Trending now (no watch history yet):\n")
-
-    for i, rec in enumerate(results, 1):
-        title = rec["title"]
-        platform = rec["platform"].capitalize()
-        reason = rec["reason"]
-        click.echo(f"  {i}. {title:<30s}  {platform:<8s}  — {reason}")
+        _print(_ui.render_recommendations(results, recent_shows=recent))
 
 
 @main.command()
@@ -885,26 +897,27 @@ def next(ctx, query):
 
     query_str = " ".join(query) if query else None
 
+    from smartest_tv.ui.theme import ICONS
     if not query_str:
         # Find most recent Netflix play
         last = _cache.get_last_played(platform="netflix")
         if not last:
-            click.echo("❌ No Netflix history. Play something first.", err=True)
-            sys.exit(1)
+            _fail("No Netflix history. Play something first.")
+            return
         query_str = last["query"]
 
     result = _cache.get_next_episode(query_str)
     if not result:
-        click.echo(f"❌ No next episode for '{query_str}'. Finished or not in history.", err=True)
-        sys.exit(1)
+        _fail(f"No next episode for '{query_str}'. Finished or not in history.")
+        return
 
     q, season, episode = result
 
     try:
         content_id = do_resolve("netflix", q, season, episode)
     except ValueError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
+        return
 
     d = _get_driver(ctx.obj["tv_name"])
     app_id, name = resolve_app("netflix", d.platform)
@@ -915,7 +928,7 @@ def next(ctx, query):
 
     _run(_do())
     _cache.record_play("netflix", q, content_id, season, episode)
-    click.echo(f"▶ Playing {q} S{season}E{episode} on Netflix (content: {content_id})")
+    _success(f"{ICONS['netflix']} Playing {q} S{season}E{episode} on Netflix  ({content_id})")
 
 
 # -- Queue -------------------------------------------------------------------
@@ -940,11 +953,12 @@ def queue_add_cmd(platform, query, season, episode):
         stv queue add spotify "Ye White Lines"
     """
     from smartest_tv import cache as _cache
+    from smartest_tv.ui.theme import ICONS, app_icon
     item = _cache.queue_add(platform, query, season, episode)
     desc = item["query"]
     if item.get("season") and item.get("episode"):
         desc += f" S{item['season']}E{item['episode']}"
-    click.echo(f"Added to queue: [{platform}] {desc}")
+    _success(f"{ICONS['queue']}  Added  {app_icon(platform)} {platform}  —  {desc}")
 
 
 @queue_group.command("show")
@@ -953,17 +967,10 @@ def queue_show_cmd(ctx):
     """Show the current play queue."""
     from smartest_tv import cache as _cache
     items = _cache.queue_show()
-    if not items:
-        click.echo("Queue is empty.")
-        return
     if ctx.obj["fmt"] == "json":
         _output(items, "json")
     else:
-        for i, item in enumerate(items, 1):
-            desc = item["query"]
-            if item.get("season") and item.get("episode"):
-                desc += f" S{item['season']}E{item['episode']}"
-            click.echo(f"  {i}. [{item['platform']}] {desc}")
+        _print(_ui.render_queue(items))
 
 
 @queue_group.command("play")
@@ -972,10 +979,11 @@ def queue_play_cmd(ctx):
     """Play the next item in the queue."""
     from smartest_tv import cache as _cache
     from smartest_tv.resolve import resolve as do_resolve
+    from smartest_tv.ui.theme import ICONS, app_icon
 
     item = _cache.queue_pop()
     if not item:
-        click.echo("Queue is empty.")
+        _info("Queue is empty.", icon=ICONS['queue'])
         return
 
     platform = item["platform"]
@@ -986,8 +994,8 @@ def queue_play_cmd(ctx):
     try:
         content_id = do_resolve(platform, query, season, episode)
     except ValueError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
+        return
 
     d = _get_driver(ctx.obj["tv_name"])
     app_id, name = resolve_app(platform, d.platform)
@@ -1002,23 +1010,24 @@ def queue_play_cmd(ctx):
     desc = query
     if season and episode:
         desc += f" S{season}E{episode}"
-    click.echo(f"▶ Playing {desc} on {name} (content: {content_id})")
+    _success(f"{app_icon(platform)} Playing {desc} on {name}  ({content_id})")
 
 
 @queue_group.command("skip")
 def queue_skip_cmd():
     """Skip the current queue item (remove without playing)."""
     from smartest_tv import cache as _cache
+    from smartest_tv.ui.theme import ICONS, app_icon
     items = _cache.queue_show()
     if not items:
-        click.echo("Queue is empty.")
+        _info("Queue is empty.", icon=ICONS['queue'])
         return
     skipped = items[0]
     _cache.queue_skip()
     desc = skipped["query"]
     if skipped.get("season") and skipped.get("episode"):
         desc += f" S{skipped['season']}E{skipped['episode']}"
-    click.echo(f"Skipped: [{skipped['platform']}] {desc}")
+    _success(f"{ICONS['next']} Skipped  {app_icon(skipped['platform'])} {skipped['platform']}  —  {desc}")
 
     remaining = _cache.queue_show()
     if remaining:
@@ -1026,17 +1035,21 @@ def queue_skip_cmd():
         next_desc = next_item["query"]
         if next_item.get("season") and next_item.get("episode"):
             next_desc += f" S{next_item['season']}E{next_item['episode']}"
-        click.echo(f"Next: [{next_item['platform']}] {next_desc}")
+        _info(
+            f"Next: {next_item['platform']} — {next_desc}",
+            icon=app_icon(next_item['platform']),
+        )
     else:
-        click.echo("Queue is now empty.")
+        _info("Queue is now empty.", icon=ICONS['queue'])
 
 
 @queue_group.command("clear")
 def queue_clear_cmd():
     """Clear the entire play queue."""
     from smartest_tv import cache as _cache
+    from smartest_tv.ui.theme import ICONS
     _cache.queue_clear()
-    click.echo("Queue cleared.")
+    _success(f"{ICONS['queue']} Queue cleared.")
 
 
 # -- Cache -------------------------------------------------------------------
@@ -1071,16 +1084,16 @@ def cache_set(platform, query, season, first_ep_id, count, title_id, content_id)
     slug = _slugify(query)
     p = platform.lower()
 
+    from smartest_tv.ui.theme import ICONS
     if p == "netflix" and season and first_ep_id and count:
         cache.put_netflix_show(slug, title_id or 0, season, first_ep_id, count)
         last_ep_id = first_ep_id + count - 1
-        click.echo(f"Cached: {query} S{season} episodes {first_ep_id}–{last_ep_id} ({count} eps)")
+        _success(f"{ICONS['cache']} Cached  {query} S{season}  eps {first_ep_id}–{last_ep_id}  ({count} eps)")
     elif content_id:
         cache.put(p, slug, content_id)
-        click.echo(f"Cached: {query} → {content_id}")
+        _success(f"{ICONS['cache']} Cached  {query} → {content_id}")
     else:
-        click.echo("❌ Need --content-id or (--season + --first-ep-id + --count)", err=True)
-        sys.exit(1)
+        _fail("Need --content-id or (--season + --first-ep-id + --count)")
 
 
 @cache_group.command("get")
@@ -1107,10 +1120,13 @@ def cache_get(ctx, platform, query, season, episode):
         result = cache.get(platform.lower(), slug)
 
     if result:
-        _output(result, ctx.obj["fmt"])
+        if ctx.obj["fmt"] == "json":
+            _output(result, "json")
+        else:
+            from smartest_tv.ui.theme import ICONS
+            _success(f"{ICONS['cache']} {result}")
     else:
-        click.echo("(not cached)", err=True)
-        sys.exit(1)
+        _fail("(not cached)")
 
 
 @cache_group.command("show")
@@ -1120,10 +1136,10 @@ def cache_show(ctx):
     from smartest_tv import cache
 
     data = cache._load()
-    if not data:
-        click.echo("Cache is empty.")
-        return
-    _output(data, ctx.obj["fmt"])
+    if ctx.obj["fmt"] == "json":
+        _output(data, "json")
+    else:
+        _print(_ui.render_cache_show(data))
 
 
 @cache_group.command("contribute")
@@ -1143,14 +1159,18 @@ def cache_contribute():
     # Strip private data (_history)
     clean = {k: v for k, v in data.items() if not k.startswith("_")}
     if not clean:
-        click.echo("Nothing to contribute. Play some content first.", err=True)
-        sys.exit(1)
+        _fail("Nothing to contribute. Play some content first.")
+        return
 
+    # stdout: raw JSON so users can pipe to a file (no Rich markup)
     click.echo(json.dumps(clean, ensure_ascii=False, indent=2))
-    click.echo("", err=True)
-    click.echo("☝ Copy this and submit a PR to:", err=True)
-    click.echo("  https://github.com/Hybirdss/smartest-tv", err=True)
-    click.echo("  Add entries to community-cache.json", err=True)
+    # stderr: themed instructions
+    _ui_console.print(
+        "\n[muted]☝  Copy this and submit a PR:[/muted]\n"
+        "  [accent]https://github.com/Hybirdss/smartest-tv[/accent]\n"
+        "  [dim]Add entries to community-cache.json[/dim]",
+        file=sys.stderr,
+    )
 
 
 # -- Scene Presets -----------------------------------------------------------
@@ -1176,26 +1196,7 @@ def scene_list_cmd(ctx):
         _output(scenes, "json")
         return
 
-    for name, scene in scenes.items():
-        tag = "" if name in BUILTIN_SCENES else " [custom]"
-        click.echo(f"  {name}{tag}")
-        click.echo(f"    {scene.get('description', '')}")
-        for step in scene.get("steps", []):
-            action = step.get("action")
-            if action == "volume":
-                click.echo(f"      volume -> {step.get('value')}")
-            elif action == "notify":
-                click.echo(f"      notify -> {step.get('message')}")
-            elif action == "screen_off":
-                click.echo(f"      screen off")
-            elif action == "screen_on":
-                click.echo(f"      screen on")
-            elif action == "play":
-                click.echo(f"      play {step.get('platform')} \"{step.get('query')}\"")
-            elif action == "webhook":
-                click.echo(f"      webhook -> {step.get('url')}")
-            else:
-                click.echo(f"      {action}")
+    _print(_ui.render_scenes(scenes, set(BUILTIN_SCENES.keys()) if isinstance(BUILTIN_SCENES, dict) else set(BUILTIN_SCENES)))
 
 
 @scene_group.command("run")
@@ -1219,12 +1220,10 @@ def scene_run_cmd(ctx, name):
     try:
         results = _run(_do())
     except KeyError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
+        return
 
-    for msg in results:
-        click.echo(f"  {msg}")
-    click.echo(f"Scene '{name}' done.")
+    _print(_ui.render_scene_run(name, results))
 
 
 @scene_group.command("create")
@@ -1239,8 +1238,8 @@ def scene_create_cmd(name, description):
     from smartest_tv.scenes import BUILTIN_SCENES, save_custom_scene
 
     if name in BUILTIN_SCENES:
-        click.echo(f"❌ '{name}' is a built-in scene. Choose a different name.", err=True)
-        sys.exit(1)
+        _fail(f"'{name}' is a built-in scene. Choose a different name.")
+        return
 
     click.echo(f"Creating scene '{name}'. Add steps one by one (empty action to finish).")
     click.echo("Actions: volume, notify, screen_off, screen_on, play, webhook")
@@ -1276,11 +1275,12 @@ def scene_create_cmd(name, description):
         click.echo(f"  Step added: {step}")
 
     if not steps:
-        click.echo("No steps added. Scene not saved.")
+        _info("No steps added. Scene not saved.")
         return
 
     save_custom_scene(name, description, steps)
-    click.echo(f"Scene '{name}' saved with {len(steps)} step(s).")
+    from smartest_tv.ui.theme import ICONS
+    _success(f"{ICONS['scene']} Scene '{name}' saved with {len(steps)} step(s).")
 
 
 @scene_group.command("delete")
@@ -1292,13 +1292,13 @@ def scene_delete_cmd(name):
         stv scene delete my-scene
     """
     from smartest_tv.scenes import delete_custom_scene
+    from smartest_tv.ui.theme import ICONS
 
     try:
         delete_custom_scene(name)
-        click.echo(f"Scene '{name}' deleted.")
+        _success(f"{ICONS['scene']} Scene '{name}' deleted.")
     except KeyError as exc:
-        click.echo(f"❌ {exc}", err=True)
-        sys.exit(1)
+        _fail(str(exc))
 
 
 # -- Multi TV Management -----------------------------------------------------
@@ -1314,16 +1314,10 @@ def multi_group():
 def multi_list(ctx):
     """List all configured TVs and their status."""
     tvs = list_tvs()
-    if not tvs:
-        click.echo("No TVs configured. Run: stv setup")
-        return
     if ctx.obj["fmt"] == "json":
         _output(tvs, "json")
     else:
-        for tv in tvs:
-            default_marker = " (default)" if tv.get("default") else ""
-            mac_str = f"  mac={tv['mac']}" if tv.get("mac") else ""
-            click.echo(f"  {tv['name']}: {tv['platform'].upper()} @ {tv['ip']}{mac_str}{default_marker}")
+        _print(_ui.render_tv_list(tvs))
 
 
 @multi_group.command("add")
@@ -1343,23 +1337,23 @@ def multi_add(name, platform, ip, url, mac, is_default):
         stv multi add living-room --platform lg --ip 192.168.1.100 --default
         stv multi add friend --platform remote --url http://203.0.113.50:8911
     """
+    from smartest_tv.ui.theme import ICONS
     if platform == "remote" and not url:
-        click.echo("❌ Remote TVs require --url. Example: --url http://friend-ip:8911", err=True)
-        sys.exit(1)
+        _fail("Remote TVs require --url.", hint="Example: --url http://friend-ip:8911")
+        return
     if platform != "remote" and not ip:
-        click.echo("❌ Local TVs require --ip.", err=True)
-        sys.exit(1)
+        _fail("Local TVs require --ip.")
+        return
 
     try:
         add_tv(name, platform, ip or url, mac=mac, default=is_default)
         if platform == "remote":
-            click.echo(f"Added remote TV '{name}': {url}")
+            _success(f"{ICONS['tv']} Added remote TV '{name}' → {url}")
         else:
-            default_str = " (set as default)" if is_default else ""
-            click.echo(f"Added TV '{name}': {platform.upper()} @ {ip}{default_str}")
+            default_str = "  (default)" if is_default else ""
+            _success(f"{ICONS['tv']} Added TV '{name}': {platform.upper()} @ {ip}{default_str}")
     except Exception as e:
-        click.echo(f"❌ {e}", err=True)
-        sys.exit(1)
+        _fail(str(e))
 
 
 @multi_group.command("remove")
@@ -1370,12 +1364,12 @@ def multi_remove(name):
     Example:
         stv multi remove bedroom
     """
+    from smartest_tv.ui.theme import ICONS
     try:
         remove_tv(name)
-        click.echo(f"Removed TV '{name}'.")
+        _success(f"{ICONS['tv']} Removed TV '{name}'.")
     except KeyError as e:
-        click.echo(f"❌ {e}", err=True)
-        sys.exit(1)
+        _fail(str(e))
 
 
 @multi_group.command("default")
@@ -1386,12 +1380,12 @@ def multi_default(name):
     Example:
         stv multi default living-room
     """
+    from smartest_tv.ui.theme import ICONS
     try:
         set_default_tv(name)
-        click.echo(f"Default TV set to '{name}'.")
+        _success(f"{ICONS['star']}  Default TV set to '{name}'.")
     except KeyError as e:
-        click.echo(f"❌ {e}", err=True)
-        sys.exit(1)
+        _fail(str(e))
 
 
 # -- Group Management --------------------------------------------------------
@@ -1411,16 +1405,10 @@ def group_list_cmd(ctx):
         stv group list
     """
     groups = get_groups()
-    if not groups:
-        click.echo("No groups configured.")
-        click.echo("Create one: stv group create party living-room bedroom")
-        return
-
     if ctx.obj["fmt"] == "json":
         _output(groups, "json")
     else:
-        for name, members in groups.items():
-            click.echo(f"  {name}: {', '.join(members)}")
+        _print(_ui.render_group_list(groups))
 
 
 @group_group.command("create")
@@ -1433,12 +1421,12 @@ def group_create_cmd(name, members):
         stv group create party living-room bedroom
         stv group create everywhere living-room bedroom friend-tv
     """
+    from smartest_tv.ui.theme import ICONS
     try:
         save_group(name, list(members))
-        click.echo(f"Group '{name}' created: {', '.join(members)}")
+        _success(f"{ICONS['group']} Group '{name}' created: {', '.join(members)}")
     except (ValueError, KeyError) as e:
-        click.echo(f"❌ {e}", err=True)
-        sys.exit(1)
+        _fail(str(e))
 
 
 @group_group.command("delete")
@@ -1449,12 +1437,12 @@ def group_delete_cmd(name):
     Example:
         stv group delete party
     """
+    from smartest_tv.ui.theme import ICONS
     try:
         delete_group(name)
-        click.echo(f"Group '{name}' deleted.")
+        _success(f"{ICONS['group']} Group '{name}' deleted.")
     except KeyError as e:
-        click.echo(f"❌ {e}", err=True)
-        sys.exit(1)
+        _fail(str(e))
 
 
 # -- Insights ----------------------------------------------------------------
@@ -1472,13 +1460,13 @@ def insights_cmd(ctx, period):
         stv insights --period day      # today's viewing
         stv insights --period month    # monthly overview
     """
-    from smartest_tv.insights import get_insights, format_report
+    from smartest_tv.insights import get_insights
 
     data = get_insights(period)
     if ctx.obj["fmt"] == "json":
         _output(data, "json")
     else:
-        click.echo(format_report(data))
+        _print(_ui.render_insights(data))
 
 
 @main.command("screen-time")
@@ -1498,16 +1486,7 @@ def screen_time_cmd(ctx, period):
     if ctx.obj["fmt"] == "json":
         _output(data, "json")
     else:
-        total = data.get("total_minutes", 0)
-        hours = total // 60
-        mins = total % 60
-        click.echo(f"Screen time ({period}): {hours}h {mins}m")
-        for platform, minutes in data.get("by_platform", {}).items():
-            h, m = divmod(minutes, 60)
-            click.echo(f"  {platform}: {h}h {m}m")
-        if data.get("first_play"):
-            click.echo(f"  First play: {data['first_play']}")
-            click.echo(f"  Last play:  {data['last_play']}")
+        _print(_ui.render_screen_time(period, data))
 
 
 @main.command("sub-value")
@@ -1527,11 +1506,7 @@ def sub_value_cmd(ctx, platform, cost):
     if ctx.obj["fmt"] == "json":
         _output(data, "json")
     else:
-        verdict = data.get("verdict", "unknown")
-        emoji = {"good_value": "✅", "ok": "🤔", "consider_canceling": "❌"}.get(verdict, "❓")
-        click.echo(f"{emoji} {platform.capitalize()}: ${data.get('cost_per_hour', 0):.2f}/hour")
-        click.echo(f"  {data.get('plays_this_month', 0)} plays · ~{data.get('estimated_hours', 0):.1f}h this month")
-        click.echo(f"  ${cost}/month → {verdict.replace('_', ' ')}")
+        _print(_ui.render_sub_value(platform, cost, data))
 
 
 # -- Display -----------------------------------------------------------------
@@ -1618,10 +1593,11 @@ def display_url(ctx, url):
 def _cast_html(ctx, html: str, port: int = 8765):
     """Helper: serve HTML and open on TV via browser app."""
     from smartest_tv.display import serve
+    from smartest_tv.ui.theme import ICONS
 
     url, stop = serve(html, port)
     tv_name = ctx.obj.get("tv_name")
-    click.echo(f"Serving at {url}")
+    _info(f"Serving at {url}", icon=ICONS['cast'])
 
     try:
         d = _get_driver(tv_name)
@@ -1637,9 +1613,9 @@ def _cast_html(ctx, html: str, port: int = 8765):
         browser_id = browser_ids.get(d.platform, "")
         if browser_id:
             _run(d.launch_app_deep(browser_id, url))
-            click.echo(f"Opened on TV. Press Ctrl+C to stop serving.")
+            _success(f"{ICONS['tv']} Opened on TV. Press Ctrl+C to stop serving.")
         else:
-            click.echo(f"Open {url} on your TV's browser. Press Ctrl+C to stop.")
+            _info(f"Open {url} on your TV's browser. Press Ctrl+C to stop.")
 
         # Keep serving until interrupted
         import signal
@@ -1649,7 +1625,7 @@ def _cast_html(ctx, html: str, port: int = 8765):
         pass
     finally:
         stop()
-        click.echo("Server stopped.")
+        _info("Server stopped.")
 
 
 # -- Audio Mode --------------------------------------------------------------
@@ -1677,9 +1653,7 @@ def audio_play_cmd(ctx, query, platform, rooms):
 
     room_list = rooms.split(",") if rooms else None
     results = _run(audio_play(query, platform, room_list))
-    for r in results:
-        icon = "✅" if r["status"] == "ok" else "❌"
-        click.echo(f"  [{r['tv']}] {icon} {r['message']}")
+    _print(_ui.render_broadcast_results(results))
 
 
 @audio_group.command("stop")
@@ -1695,9 +1669,7 @@ def audio_stop_cmd(rooms):
 
     room_list = rooms.split(",") if rooms else None
     results = _run(audio_stop(room_list))
-    for r in results:
-        icon = "✅" if r["status"] == "ok" else "❌"
-        click.echo(f"  [{r['tv']}] {icon} {r['message']}")
+    _print(_ui.render_broadcast_results(results))
 
 
 @audio_group.command("volume")
@@ -1711,9 +1683,10 @@ def audio_volume_cmd(room, level):
         stv audio volume bedroom 15
     """
     from smartest_tv.audio import audio_volume
+    from smartest_tv.ui.theme import ICONS
 
     result = _run(audio_volume(room, level))
-    click.echo(result)
+    _success(f"{ICONS['volume']} {room} → {level}  ({result})")
 
 
 # -- License Management ------------------------------------------------------
@@ -1737,8 +1710,9 @@ def license_set(key):
     license_file = CONFIG_DIR / "license.key"
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     license_file.write_text(key.strip())
-    click.echo(f"License key saved. Pro features activated.")
-    click.echo(f"  Stored: {license_file}")
+    from smartest_tv.ui.theme import ICONS
+    _success(f"{ICONS['bolt']} License key saved. Pro features activated.")
+    _info(f"Stored: {license_file}")
 
 
 @license_group.command("status")
@@ -1761,14 +1735,7 @@ def license_status():
             key = license_file.read_text().strip()
             source = str(license_file)
 
-    if not key:
-        click.echo("No license key found.")
-        click.echo("  Using free tier (100 API resolves/day)")
-        return
-
-    click.echo(f"License key: {key[:8]}...{key[-4:]}")
-    click.echo(f"  Source: {source}")
-    click.echo(f"  Tier: Pro (unlimited resolves)")
+    _print(_ui.render_license_status(key or None, source))
 
 
 @license_group.command("remove")
@@ -1779,13 +1746,14 @@ def license_remove():
         stv license remove
     """
     from smartest_tv.config import CONFIG_DIR
+    from smartest_tv.ui.theme import ICONS
 
     license_file = CONFIG_DIR / "license.key"
     if license_file.exists():
         license_file.unlink()
-        click.echo("License key removed. Reverted to free tier.")
+        _success(f"{ICONS['bolt']} License key removed. Reverted to free tier.")
     else:
-        click.echo("No license key found.")
+        _info("No license key found.")
 
 
 if __name__ == "__main__":
