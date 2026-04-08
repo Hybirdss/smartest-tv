@@ -50,6 +50,40 @@ def test_get_missing_returns_none(no_community):
     assert cache_module.get("youtube", "missing-key") is None
 
 
+def test_contribute_respects_opt_out(monkeypatch):
+    """STV_NO_CONTRIBUTE=1 must short-circuit before any network call."""
+    posted = {"called": False}
+
+    def fake_post(*args, **kwargs):
+        posted["called"] = True
+
+    # Replace threading so the inner closure runs synchronously
+    class _SyncThread:
+        def __init__(self, target, daemon=False, args=(), kwargs=None):
+            self._target = target
+            self._args = args
+            self._kwargs = kwargs or {}
+
+        def start(self):
+            self._target(*self._args, **self._kwargs)
+
+    monkeypatch.setattr(cache_module.threading, "Thread", _SyncThread)
+    monkeypatch.setenv("STV_NO_CONTRIBUTE", "1")
+    monkeypatch.setattr("smartest_tv.http.curl", fake_post)
+
+    # Call the real (un-mocked) _contribute via cache_module attribute lookup
+    real_contribute = cache_module._contribute.__wrapped__ if hasattr(cache_module._contribute, "__wrapped__") else cache_module._contribute
+    # Bypass the autouse fixture's monkeypatched stub
+    from smartest_tv import cache as fresh_cache
+    import importlib
+    importlib.reload(fresh_cache)
+    monkeypatch.setattr(fresh_cache.threading, "Thread", _SyncThread)
+    monkeypatch.setattr("smartest_tv.http.curl", fake_post)
+    fresh_cache._contribute("youtube", "test-slug", {"video_id": "abc"})
+
+    assert posted["called"] is False, "STV_NO_CONTRIBUTE=1 should prevent the POST"
+
+
 def test_put_overwrites(no_community):
     cache_module.put("youtube", "key", "v1")
     cache_module.put("youtube", "key", "v2")

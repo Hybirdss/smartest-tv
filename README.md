@@ -450,6 +450,43 @@ stv setup                          # auto-discover + pair your TV
 
 ---
 
+## 🔒 Privacy
+
+stv runs on your **local network**. No telemetry, no analytics, no cloud
+sync, no phoning home about what you watch. There is no `posthog`, no
+`amplitude`, no `sentry`, no `mixpanel` — grep the source.
+
+**One exception — community cache contribution.** When you play content
+that isn't in the local cache, stv resolves it (via web parsing) and
+submits the resolved ID to a shared community cache so the next user
+gets an instant lookup. This is the same pattern as Wikipedia or a
+package mirror — many small contributions, anonymous.
+
+What's sent (background HTTPS, fire-and-forget, never blocks playback):
+
+- Platform name (`netflix` / `youtube` / `spotify`)
+- Content slug (e.g. `frieren`)
+- Resolved content ID (Netflix title ID, YouTube video ID, Spotify URI)
+
+What's **not** sent:
+
+- Your name, email, or any user identifier
+- Your IP address (the CDN sees a connection IP per standard HTTP, but
+  the client never reads or transmits it)
+- Your watch history or play timestamps
+- Your TV's IP address or hardware info
+- Anything about how often or when you use stv
+
+To disable cache contribution entirely:
+
+```bash
+export STV_NO_CONTRIBUTE=1
+```
+
+Source: [`src/smartest_tv/cache.py`](src/smartest_tv/cache.py) — search for `_contribute`.
+
+---
+
 ## 🤝 Contributing
 
 211 tests. No TV needed to run them.
