@@ -75,6 +75,26 @@ stv play netflix "Dark" s1e1
 
 ---
 
+## 🎯 Just type `stv`
+
+<p align="center">
+  <img src="docs/assets/screenshots/12-home-connected.png" alt="stv home dashboard" width="720">
+</p>
+
+No subcommand? You get a Now Playing card and three contextual next-actions
+based on your watch history — not a 30-command help dump.
+
+```bash
+$ stv "play dark on netflix"     # natural language works
+$ stv youtube lofi beats         # platform shorthand
+$ stv next                       # continue last show
+$ stv stats                      # → insights
+```
+
+Unknown input? You get a friendly hint, not an error.
+
+---
+
 ## 🎨 A CLI that looks like a product
 
 <table>
@@ -85,6 +105,10 @@ stv play netflix "Dark" s1e1
 <tr>
 <td><img src="docs/assets/screenshots/03-scenes.png" alt="stv scene list"></td>
 <td><img src="docs/assets/screenshots/02-multi-list.png" alt="stv multi list"></td>
+</tr>
+<tr>
+<td><img src="docs/assets/screenshots/06-doctor.png" alt="stv doctor"></td>
+<td><img src="docs/assets/screenshots/16-nl-demo.png" alt="natural language"></td>
 </tr>
 </table>
 
