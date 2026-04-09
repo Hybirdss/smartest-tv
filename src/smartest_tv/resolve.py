@@ -91,6 +91,103 @@ def resolve_spotify(query: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Apple TV+
+# ---------------------------------------------------------------------------
+
+def resolve_appletv(
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+) -> str:
+    """Resolve an Apple TV+ show to an episode ID.
+
+    Apple TV+ server-renders episode metadata in a ``serialized-server-data``
+    script tag. The show page contains a ``shelves`` array whose second entry
+    lists episodes with ``umc.cmc.*`` IDs.  No authentication required.
+
+    Resolution chain:
+      1. Local cache (instant)
+      2. curl show page → parse serialized-server-data → episode ID
+      3. API fallback
+    """
+    slug = _slugify(query)
+    cache_key = f"{slug}:s{season or 1}e{episode or 1}"
+    cached = cache.get("appletv", cache_key)
+    if cached:
+        return cached
+
+    from smartest_tv.http import curl as _curl
+    import json as _json
+
+    # Step 1: search for the show to get its showId
+    search_result = _curl(f"https://tv.apple.com/search?term={_url_encode(query)}")
+    if not search_result.ok:
+        return _api_resolve("appletv", query, season, episode)
+
+    show_ids = re.findall(r'umc\.cmc\.[a-z0-9]+', search_result.body)
+    if not show_ids:
+        return _api_resolve("appletv", query, season, episode)
+
+    # The first umc.cmc ID on the search page is usually the best match
+    show_id = show_ids[0]
+
+    # Step 2: fetch the show page to get episode IDs
+    show_result = _curl(f"https://tv.apple.com/show/{slug}/{show_id}")
+    if not show_result.ok:
+        return _api_resolve("appletv", query, season, episode)
+
+    # Parse serialized-server-data
+    m = re.search(
+        r'<script[^>]*id="serialized-server-data"[^>]*>(.*?)</script>',
+        show_result.body,
+        re.DOTALL,
+    )
+    if not m:
+        return _api_resolve("appletv", query, season, episode)
+
+    try:
+        server_data = _json.loads(m.group(1))
+        shelves = server_data["data"][1]["data"]["shelves"]
+
+        # Find the episode shelf (items with umc.cmc.* IDs)
+        episodes: list[dict] = []
+        for shelf in shelves:
+            items = shelf.get("items", [])
+            for item in items:
+                item_id = item.get("id", "")
+                if item_id.startswith("umc.cmc.") and item.get("title"):
+                    episodes.append(item)
+
+        if not episodes:
+            return _api_resolve("appletv", query, season, episode)
+
+        # Select the right episode by index
+        # Apple TV+ doesn't include season/episode numbers in the server data,
+        # so we use position: episodes are ordered chronologically.
+        target_idx = 0
+        if season is not None and episode is not None:
+            # Estimate index: (season-1)*episodes_per_season + (episode-1)
+            # For now, simple: first 6 episodes are server-rendered per page
+            target_idx = max(0, (episode or 1) - 1)
+
+        if target_idx < len(episodes):
+            ep_id = episodes[target_idx]["id"]
+            cache.put("appletv", cache_key, ep_id)
+            return ep_id
+
+    except (KeyError, IndexError, _json.JSONDecodeError):
+        pass
+
+    return _api_resolve("appletv", query, season, episode)
+
+
+def _url_encode(s: str) -> str:
+    """Simple URL encoding for query parameters."""
+    import urllib.parse
+    return urllib.parse.quote_plus(s)
+
+
+# ---------------------------------------------------------------------------
 # Trending
 # ---------------------------------------------------------------------------
 
@@ -153,8 +250,10 @@ def resolve(
         return resolve_youtube(query)
     elif p == "spotify":
         return resolve_spotify(query)
+    elif p in ("appletv", "apple", "apple_tv", "apple-tv", "atv"):
+        return resolve_appletv(query, season, episode)
     else:
-        raise ValueError(f"Unsupported platform: {platform}. Use netflix, youtube, or spotify.")
+        raise ValueError(f"Unsupported platform: {platform}. Use netflix, youtube, spotify, or appletv.")
 
 
 # ---------------------------------------------------------------------------

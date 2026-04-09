@@ -30,8 +30,9 @@ def _fallback_resolve(name: str, platform: str) -> tuple[str, str]:
         "netflix": {"lg": "netflix", "samsung": "11101200001", "roku": "12", "android": "com.netflix.ninja"},
         "youtube": {"lg": "youtube.leanback.v4", "samsung": "111299001912", "roku": "837", "android": "com.google.android.youtube.tv"},
         "spotify": {"lg": "spotify-beehive", "samsung": "3201606009684", "roku": "22297", "android": "com.spotify.tv.android"},
+        "appletv": {"lg": "com.apple.appletv", "samsung": "3201807016598", "roku": "2", "android": "com.apple.atve.androidtv.appletv"},
     }
-    _NAMES = {"netflix": "Netflix", "youtube": "YouTube", "spotify": "Spotify"}
+    _NAMES = {"netflix": "Netflix", "youtube": "YouTube", "spotify": "Spotify", "appletv": "Apple TV+"}
 
     key = name.lower().strip()
     if key in _BASIC and platform in _BASIC[key]:
