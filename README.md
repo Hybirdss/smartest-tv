@@ -504,20 +504,9 @@ This does what HA's built-in `media_player.play_media` can't: resolve a show by 
 
 ---
 
-## 🔓 Open source, mostly
+## 🔓 Fully open source
 
-~90% of stv is fully open — the CLI, cache layer, sync engine, scenes, and all 252 tests. The `_engine/` directory (~2,000 lines) contains the Netflix/Apple TV+ HTML parsers and the 4 TV driver implementations. It's shipped in the PyPI wheel but not in the GitHub repo.
-
-Why: other Netflix scraping projects have been DMCA'd after publishing their parsers. The resolver reads HTML that Netflix already serves to any browser, but their legal team doesn't always make that distinction.
-
-To inspect `_engine/` before running:
-
-```bash
-pip download stv && unzip stv-*.whl
-# plain Python, no obfuscation, no compiled binaries
-```
-
-Not thrilled about the split. If there's a better way to handle the DMCA risk while keeping things fully open, [open an issue](https://github.com/Hybirdss/smartest-tv/issues).
+Every line of stv is on GitHub — the CLI, resolvers (Netflix, Apple TV+, YouTube, Spotify), all 4 TV drivers (LG, Samsung, Roku, Android), cache, sync engine, scenes, and all 252 tests. `_engine/` was previously closed due to DMCA concerns but is now fully open.
 
 ---
 

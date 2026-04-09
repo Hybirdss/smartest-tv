@@ -13,6 +13,3 @@ request.token
 .mcpregistry_*
 launch-posts.md
 
-# Private engine — resolution logic, TV drivers, discovery
-# Distributed via PyPI only, not on GitHub
-src/smartest_tv/_engine/
