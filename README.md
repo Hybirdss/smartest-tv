@@ -103,6 +103,8 @@ clawhub install smartest-tv
 # now "play Frieren", "good night", "next episode" just work mid-session
 ```
 
+<sub>Also available as an MCP server (21 tools) for Claude Code, Codex, Antigravity, and other MCP clients.</sub>
+
 ---
 
 ## 🎯 Just type `stv`
