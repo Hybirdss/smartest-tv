@@ -9,7 +9,7 @@
 <h4 align="center">The CLI your TV has been waiting for.</h4>
 
 <p align="center">
-  <b>Play Netflix by name. Cast URLs. Multi-room audio. AI concierge. All from your terminal.</b>
+  <b>Play Netflix / Apple TV+ / YouTube / Spotify by name. Cast URLs. Multi-room audio. AI concierge. All from your terminal.</b>
 </p>
 
 <p align="center">
@@ -160,10 +160,11 @@ visual hierarchy. Prefer another palette? Set `STV_THEME=nord` or `STV_THEME=gru
 ### 🎬 Play by name
 ```bash
 stv play netflix "Dark" s1e1
+stv play appletv "Severance" s1e1
 stv play youtube "baby shark"
 stv play spotify "chill vibes"
 ```
-Say the name. stv finds the ID, opens the app, starts playback.
+Say the name. stv finds the ID, opens the app, starts playback. Netflix and Apple TV+ resolve via server-rendered HTML — one curl, no login, no Playwright.
 
 </td>
 <td width="33%" valign="top">
