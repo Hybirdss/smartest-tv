@@ -77,6 +77,36 @@ stv play netflix "Dark" s1e1
 
 ---
 
+## 🛋 Vibe-code and chill
+
+Vibe-coding at 2am. Claude writes your code. You tell it to put on a show. It does.
+
+```
+you: play frieren on the living room tv
+claude: Playing Frieren s2e8 on Living Room. (3s)
+
+you: bit quieter
+claude: Volume → 18.
+
+you: good night
+claude: All 3 TVs off.
+```
+
+Already installed stv? Just tell Claude:
+
+```bash
+# Option 1 — just talk (zero config)
+"run stv play netflix Frieren s2e8"
+
+# Option 2 — install the Skill for auto-trigger
+clawhub install smartest-tv
+# now "play Frieren", "good night", "next episode" just work mid-session
+```
+
+> Power users: stv also runs as an MCP server with 21 tools. Add to `~/.claude/mcp.json` for structured tool calls. [Details →](docs/guides/ai-agents.md)
+
+---
+
 ## 🎯 Just type `stv`
 
 <p align="center">
