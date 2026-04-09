@@ -22,6 +22,7 @@
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-21%20tools-8A2BE2?style=flat-square" alt="MCP Tools"></a>
   <a href="https://glama.ai/mcp/servers/Hybirdss/smartest-tv"><img src="https://img.shields.io/badge/Glama-A%20A%20A-00d992?style=flat-square" alt="Glama Score"></a>
   <a href="https://github.com/vitalets/awesome-smart-tv"><img src="https://img.shields.io/badge/awesome--smart--tv-listed-fc60a8?style=flat-square&logo=awesome-lists&logoColor=white" alt="Awesome Smart TV"></a>
+  <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5?style=flat-square" alt="HACS"></a>
 </p>
 
 <p align="center">
@@ -420,15 +421,37 @@ stv setup                          # auto-discover + pair your TV
 
 > Supports **LG webOS** · **Samsung Tizen** · **Android TV / Fire TV** · **Roku**
 
+### Home Assistant (HACS)
+
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
+
+```
+HACS → Integrations → + → "Smartest TV" → Install
+Settings → Integrations → Add → "Smartest TV" → auto-discovers your TVs
+```
+
+Then use in automations:
+
+```yaml
+service: media_player.play_media
+target:
+  entity_id: media_player.living_room
+data:
+  media_content_type: stv
+  media_content_id: "netflix:Frieren:s2e8"
+```
+
+This does what HA's built-in `media_player.play_media` can't: resolve a show by name and deep-link into the streaming app. Power, volume, and playback controls also work as standard HA media player entities.
+
 ---
 
 ## 🔌 Works with
 
 | Integration | How |
 |------------|-----|
+| **Home Assistant** | HACS custom integration → `media_player.play_media` with content resolution |
 | **Claude Code / Cursor** | Add MCP config → `"play Dark s1e1"` |
 | **OpenClaw** | `clawhub install smartest-tv` → Telegram bot |
-| **Home Assistant** | Shell commands in automations |
 | **cron** | `0 7 * * * stv display dashboard ...` |
 | **Shell scripts** | `sleep-mode`, `party-mode` one-liners |
 | **Any MCP client** | 21 tools, stdio or HTTP (`stv serve`) |

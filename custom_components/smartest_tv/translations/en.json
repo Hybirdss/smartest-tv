@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Smartest TV",
+        "description": "Set up a TV to control with stv.",
+        "data": {
+          "tv_name": "TV name",
+          "platform": "Platform",
+          "ip": "IP address",
+          "mac": "MAC address (optional, for Wake-on-LAN)"
+        }
+      },
+      "discover": {
+        "title": "Select a TV",
+        "description": "Found {count} TV(s) on your network.",
+        "data": {
+          "tv_index": "TV"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to TV. Check the IP address.",
+      "discovery_failed": "No TVs found on the network. Try manual setup.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This TV is already configured."
+    }
+  }
+}

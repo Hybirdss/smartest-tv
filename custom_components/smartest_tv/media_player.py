@@ -1,0 +1,184 @@
+"""Media player platform for Smartest TV."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+from typing import Any
+
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
+    MediaType,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, POLL_INTERVAL
+
+_LOGGER = logging.getLogger(__name__)
+
+SUPPORT_FLAGS = (
+    MediaPlayerEntityFeature.TURN_ON
+    | MediaPlayerEntityFeature.TURN_OFF
+    | MediaPlayerEntityFeature.VOLUME_SET
+    | MediaPlayerEntityFeature.VOLUME_MUTE
+    | MediaPlayerEntityFeature.VOLUME_STEP
+    | MediaPlayerEntityFeature.PLAY_MEDIA
+    | MediaPlayerEntityFeature.PLAY
+    | MediaPlayerEntityFeature.PAUSE
+    | MediaPlayerEntityFeature.STOP
+)
+
+# Parse "netflix:Frieren:s2e8" → ("netflix", "Frieren", 2, 8)
+_MEDIA_ID_RE = re.compile(
+    r"^(?P<platform>\w+):(?P<query>.+?)(?::s(?P<season>\d+)e(?P<episode>\d+))?$"
+)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Smartest TV media player from a config entry."""
+    driver = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities(
+        [StvMediaPlayer(entry, driver)],
+        update_before_add=True,
+    )
+
+
+class StvMediaPlayer(MediaPlayerEntity):
+    """Representation of a TV controlled by stv."""
+
+    _attr_has_entity_name = True
+    _attr_supported_features = SUPPORT_FLAGS
+
+    def __init__(self, entry: ConfigEntry, driver: Any) -> None:
+        """Initialize the media player."""
+        self._driver = driver
+        self._entry = entry
+        self._tv_name: str = entry.data[CONF_TV_NAME]
+        self._platform: str = entry.data[CONF_PLATFORM]
+        self._connected = False
+
+        self._attr_unique_id = f"stv_{entry.data[CONF_IP]}_{self._tv_name}"
+        self._attr_name = self._tv_name
+        self._attr_state = MediaPlayerState.OFF
+        self._attr_volume_level: float | None = None
+        self._attr_is_volume_muted: bool | None = None
+        self._attr_app_name: str | None = None
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        """Return device info for the TV."""
+        return {
+            "identifiers": {(DOMAIN, self._attr_unique_id)},
+            "name": self._tv_name,
+            "manufacturer": self._platform.capitalize(),
+            "model": f"{self._platform} TV",
+        }
+
+    async def async_update(self) -> None:
+        """Poll the TV for current state."""
+        try:
+            if not self._connected:
+                await self._driver.connect()
+                self._connected = True
+
+            status = await self._driver.status()
+            self._attr_state = (
+                MediaPlayerState.ON if status.powered else MediaPlayerState.OFF
+            )
+            if status.volume is not None:
+                self._attr_volume_level = status.volume / 100.0
+            self._attr_is_volume_muted = status.muted
+            self._attr_app_name = status.current_app
+        except Exception:
+            self._connected = False
+            self._attr_state = MediaPlayerState.OFF
+            _LOGGER.debug("Failed to poll %s, will reconnect", self._tv_name)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the TV on."""
+        await self._driver.power_on()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the TV off."""
+        await self._driver.power_off()
+
+    async def async_set_volume_level(self, volume: float) -> None:
+        """Set volume level (0.0 to 1.0)."""
+        await self._driver.set_volume(int(volume * 100))
+
+    async def async_volume_up(self) -> None:
+        """Turn volume up."""
+        await self._driver.volume_up()
+
+    async def async_volume_down(self) -> None:
+        """Turn volume down."""
+        await self._driver.volume_down()
+
+    async def async_mute_volume(self, mute: bool) -> None:
+        """Mute or unmute."""
+        await self._driver.set_mute(mute)
+
+    async def async_media_play(self) -> None:
+        """Send play command."""
+        await self._driver.play()
+
+    async def async_media_pause(self) -> None:
+        """Send pause command."""
+        await self._driver.pause()
+
+    async def async_media_stop(self) -> None:
+        """Send stop command."""
+        await self._driver.stop()
+
+    async def async_play_media(
+        self, media_type: MediaType | str, media_id: str, **kwargs: Any
+    ) -> None:
+        """Play media by content name.
+
+        media_id format: "netflix:Frieren:s2e8" or "youtube:lofi beats" or "spotify:track name"
+        """
+        match = _MEDIA_ID_RE.match(media_id)
+        if not match:
+            _LOGGER.error("Invalid media_id format: %s (expected platform:query[:sNeN])", media_id)
+            return
+
+        platform = match.group("platform")
+        query = match.group("query")
+        season = int(match.group("season")) if match.group("season") else None
+        episode = int(match.group("episode")) if match.group("episode") else None
+
+        try:
+            from smartest_tv.resolve import resolve
+            from smartest_tv.apps import resolve_app
+            from smartest_tv.playback import launch_content
+
+            content_id = await self.hass.async_add_executor_job(
+                resolve, platform, query, season, episode
+            )
+            app_id, _ = resolve_app(platform, self._platform)
+
+            if not self._connected:
+                await self._driver.connect()
+                self._connected = True
+
+            await launch_content(self._driver, platform, app_id, content_id)
+            _LOGGER.info("Playing %s on %s", media_id, self._tv_name)
+        except Exception:
+            _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Disconnect driver when entity is removed."""
+        if self._connected:
+            try:
+                await self._driver.disconnect()
+            except Exception:
+                pass

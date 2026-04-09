@@ -1,0 +1,13 @@
+{
+  "domain": "smartest_tv",
+  "name": "Smartest TV",
+  "version": "0.1.0",
+  "codeowners": ["@Hybirdss"],
+  "config_flow": true,
+  "documentation": "https://github.com/Hybirdss/smartest-tv",
+  "issue_tracker": "https://github.com/Hybirdss/smartest-tv/issues",
+  "requirements": ["stv[all]>=0.10.0"],
+  "dependencies": [],
+  "iot_class": "local_polling",
+  "integration_type": "device"
+}
