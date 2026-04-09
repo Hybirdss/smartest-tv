@@ -103,8 +103,6 @@ clawhub install smartest-tv
 # now "play Frieren", "good night", "next episode" just work mid-session
 ```
 
-> Power users: stv also runs as an MCP server with 21 tools. Add to `~/.claude/mcp.json` for structured tool calls. [Details →](docs/guides/ai-agents.md)
-
 ---
 
 ## 🎯 Just type `stv`
