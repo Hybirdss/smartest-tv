@@ -6,6 +6,8 @@ import json
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from smartest_tv import api
 
 
@@ -179,9 +181,7 @@ class TestApiEndpoints:
 class TestApiServerStart:
     """Test server startup."""
 
-    def test_warns_on_open_bind_without_key(self, monkeypatch, capsys):
+    def test_refuses_open_bind_without_key(self, monkeypatch):
         monkeypatch.setattr(api, "_api_key", None)
-        server = api.start_api_server(host="0.0.0.0", port=0)
-        server.shutdown()
-        captured = capsys.readouterr()
-        assert "WARNING" in captured.err or "authentication" in captured.err.lower()
+        with pytest.raises(ValueError, match="STV_API_KEY"):
+            api.start_api_server(host="0.0.0.0", port=0)
