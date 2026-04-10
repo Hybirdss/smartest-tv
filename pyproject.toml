@@ -1,7 +1,7 @@
 [project]
 name = "stv"
-version = "0.10.0"
-description = "Talk to your TV. Control any smart TV with natural language."
+version = "0.11.0"
+description = "Talk to your TV. Play Netflix, Disney+, and 20+ streaming platforms by name on any smart TV."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -9,7 +9,9 @@ authors = [{ name = "Yunsu Kim" }]
 keywords = [
     "tv", "smart-tv", "mcp", "cli", "ai-agent",
     "lg", "samsung", "roku", "android-tv", "fire-tv",
-    "deep-link", "netflix", "youtube", "spotify",
+    "deep-link", "netflix", "youtube", "spotify", "disney-plus",
+    "hbo-max", "prime-video", "hulu", "crunchyroll", "justwatch",
+    "home-assistant", "claude-code",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
