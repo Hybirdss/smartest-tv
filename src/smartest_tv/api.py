@@ -336,16 +336,17 @@ def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> HTTPServer:
     log = logging.getLogger("smartest-tv")
 
     if host == "0.0.0.0" and not _api_key:
-        log.warning(
-            "API server binding to 0.0.0.0 WITHOUT authentication. "
-            "Set STV_API_KEY env var to secure remote access."
-        )
         import sys
         print(
-            "\n⚠️  WARNING: API exposed to network without authentication.\n"
-            "   Anyone on your network can control your TV.\n"
-            "   Fix: export STV_API_KEY=\"your-secret\" before running stv serve.\n",
+            "\n❌  Refusing to bind to 0.0.0.0 without authentication.\n"
+            "   Anyone on your network could control your TV.\n"
+            "   Fix: export STV_API_KEY=\"your-secret\" before running stv serve.\n"
+            "   Or bind to localhost only (default): stv serve\n",
             file=sys.stderr,
+        )
+        raise ValueError(
+            "Cannot expose API to network without STV_API_KEY. "
+            "Set STV_API_KEY env var or bind to 127.0.0.1."
         )
 
     server = HTTPServer((host, port), ApiHandler)
