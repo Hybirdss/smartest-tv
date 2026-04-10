@@ -555,6 +555,221 @@ def _enhance_with_llm(llm_url: str, results: list[dict], recent_shows: list[str]
 
 
 # ---------------------------------------------------------------------------
+# JustWatch GraphQL — universal resolver for Disney+, Max, Prime, Paramount+, etc.
+# ---------------------------------------------------------------------------
+
+_JUSTWATCH_URL = "https://apis.justwatch.com/graphql"
+
+# Map stv platform names → JustWatch package names
+_JW_PLATFORM_MAP = {
+    "disney": "Disney Plus",
+    "disneyplus": "Disney Plus",
+    "disney+": "Disney Plus",
+    "max": "Max",
+    "hbo": "Max",
+    "hbomax": "Max",
+    "prime": "Amazon Prime Video",
+    "primevideo": "Amazon Prime Video",
+    "amazon": "Amazon Prime Video",
+    "paramount": "Paramount Plus",
+    "paramount+": "Paramount Plus",
+    "paramountplus": "Paramount Plus",
+    "peacock": "Peacock",
+    "hulu": "Hulu",
+    "appletv": "Apple TV Plus",
+    "appletv+": "Apple TV Plus",
+}
+
+
+def _justwatch_search(query: str) -> str | None:
+    """Search JustWatch for a show/movie and return its URL path.
+
+    Tries Brave first, then DuckDuckGo, then direct JustWatch search API.
+    """
+    from urllib.parse import quote
+    slug = _slugify(query)
+
+    # 1) Try Brave
+    for search_url in [
+        f"https://search.brave.com/search?q={quote(query)}+site:justwatch.com/us",
+        f"https://html.duckduckgo.com/html/?q={quote(query)}+justwatch.com+us",
+    ]:
+        r = curl(search_url, timeout=5)
+        if r.body:
+            m = re.search(r'justwatch\.com/us/(tv-show|movie)/([a-z0-9-]+)', r.body)
+            if m:
+                return f"/us/{m.group(1)}/{m.group(2)}"
+
+    # 2) Try JustWatch's own search API
+    import json as _json
+    gql = _json.dumps({
+        "query": 'query { popularTitles(country: US, first: 5, filter: { searchQuery: "%s" }) { edges { node { content(country: US, language: en) { fullPath title } } } } }' % query.replace('"', '\\"'),
+    })
+    r = curl(
+        _JUSTWATCH_URL,
+        method="POST",
+        data=gql,
+        headers={"Content-Type": "application/json"},
+        timeout=5,
+    )
+    if r.body:
+        try:
+            data = _json.loads(r.body)
+            edges = data.get("data", {}).get("popularTitles", {}).get("edges", [])
+            if edges:
+                path = edges[0].get("node", {}).get("content", {}).get("fullPath")
+                if path:
+                    return path
+        except (ValueError, KeyError, IndexError):
+            pass
+
+    return None
+
+
+def _justwatch_resolve_show(
+    jw_path: str,
+    target_package: str,
+    season: int | None = None,
+    episode: int | None = None,
+) -> str | None:
+    """Query JustWatch GraphQL for episode-level deep links.
+
+    Returns the streaming URL for the target platform, or None.
+    """
+    import json as _json
+
+    if season and episode:
+        # Get season data with episodes
+        season_path = f"{jw_path}/season-{season}"
+        query = """query {
+            urlV2(fullPath: "%s") {
+                id node {
+                    ... on Season {
+                        episodes {
+                            content(country: US, language: en) {
+                                ... on EpisodeContent { title episodeNumber }
+                            }
+                            offers(country: US, platform: WEB) {
+                                standardWebURL
+                                package { clearName }
+                            }
+                        }
+                    }
+                }
+            }
+        }""" % season_path
+    else:
+        # Show/movie level
+        query = """query {
+            urlV2(fullPath: "%s") {
+                id node {
+                    ... on Show {
+                        offers(country: US, platform: WEB) {
+                            standardWebURL
+                            package { clearName }
+                        }
+                    }
+                    ... on Movie {
+                        offers(country: US, platform: WEB) {
+                            standardWebURL
+                            package { clearName }
+                        }
+                    }
+                }
+            }
+        }""" % jw_path
+
+    r = curl(
+        _JUSTWATCH_URL,
+        method="POST",
+        data=_json.dumps({"query": query}),
+        headers={"Content-Type": "application/json"},
+        timeout=5,
+    )
+    if not r.body:
+        return None
+
+    try:
+        data = _json.loads(r.body)
+    except (ValueError, KeyError):
+        return None
+
+    node = data.get("data", {}).get("urlV2", {}).get("node", {})
+
+    if season and episode:
+        # Find the specific episode
+        episodes = node.get("episodes", [])
+        for ep in episodes:
+            ep_num = ep.get("content", {}).get("episodeNumber")
+            if ep_num == episode:
+                for offer in ep.get("offers", []):
+                    if offer.get("package", {}).get("clearName", "") == target_package:
+                        return offer.get("standardWebURL")
+                # If target not found, return first available
+                if ep.get("offers"):
+                    return ep["offers"][0].get("standardWebURL")
+        return None
+    else:
+        # Show/movie level
+        for offer in node.get("offers", []):
+            if offer.get("package", {}).get("clearName", "") == target_package:
+                return offer.get("standardWebURL")
+        if node.get("offers"):
+            return node["offers"][0].get("standardWebURL")
+        return None
+
+
+def resolve_justwatch(
+    platform: str,
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+) -> str:
+    """Resolve content via JustWatch GraphQL API.
+
+    Works for Disney+, Max (HBO), Prime Video, Paramount+, Peacock, Hulu.
+    Returns a streaming deep link URL.
+    """
+    slug = _slugify(query)
+    cache_key = f"{slug}:s{season}e{episode}" if season and episode else slug
+    cached = cache.get(platform, cache_key)
+    if cached:
+        return cached
+
+    target_package = _JW_PLATFORM_MAP.get(platform.lower().strip(), "")
+    if not target_package:
+        raise ValueError(f"Unknown platform for JustWatch: {platform}")
+
+    # Step 1: Find the show on JustWatch
+    jw_path = _justwatch_search(query)
+    if not jw_path:
+        raise ValueError(
+            f"Could not find '{query}' on JustWatch. Try:\n"
+            f"  stv search {platform} \"{query}\""
+        )
+
+    # Step 2: Get the deep link
+    url = _justwatch_resolve_show(jw_path, target_package, season, episode)
+    if not url:
+        raise ValueError(
+            f"Found '{query}' on JustWatch but no {target_package} link"
+            + (f" for S{season}E{episode}" if season else "")
+            + ". It may not be available on this platform."
+        )
+
+    # Clean affiliate tracking from URL
+    if "?" in url:
+        # Extract the actual streaming URL from JustWatch affiliate redirect
+        m = re.search(r'[?&]u=(https?%3A%2F%2F[^&]+)', url)
+        if m:
+            from urllib.parse import unquote
+            url = unquote(m.group(1))
+
+    cache.put(platform, cache_key, url)
+    return url
+
+
+# ---------------------------------------------------------------------------
 # Unified
 # ---------------------------------------------------------------------------
 
@@ -565,16 +780,29 @@ def resolve(
     episode: int | None = None,
     title_id: int | None = None,
 ) -> str:
-    """Resolve content to a platform-specific ID."""
+    """Resolve content to a platform-specific ID or deep link URL.
+
+    Platform-specific resolvers (Netflix, YouTube, Spotify) are tried first.
+    For all other platforms, JustWatch GraphQL is used as a universal fallback.
+    """
     p = platform.lower().strip()
+
+    # Platform-specific resolvers (fastest, most precise)
     if p == "netflix":
         return resolve_netflix(query, season, episode, title_id)
     elif p == "youtube":
         return resolve_youtube(query)
     elif p == "spotify":
         return resolve_spotify(query)
-    else:
-        raise ValueError(f"Unsupported platform: {platform}. Use netflix, youtube, or spotify.")
+
+    # JustWatch universal resolver (Disney+, Max, Prime, Paramount+, etc.)
+    if p in _JW_PLATFORM_MAP:
+        return resolve_justwatch(p, query, season, episode)
+
+    raise ValueError(
+        f"Unsupported platform: {platform}. Supported: "
+        "netflix, youtube, spotify, disney, max, prime, paramount, peacock, hulu, appletv"
+    )
 
 
 # ---------------------------------------------------------------------------
