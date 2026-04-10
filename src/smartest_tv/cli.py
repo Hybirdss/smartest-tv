@@ -1724,10 +1724,9 @@ def _cast_html(ctx, html: str, port: int = 8765):
         else:
             _info(f"Open {url} on your TV's browser. Press Ctrl+C to stop.")
 
-        # Keep serving until interrupted
-        import signal
-        signal.signal(signal.SIGINT, lambda *_: None)
-        signal.pause()
+        # Keep serving until interrupted (cross-platform, works on Windows too)
+        import threading
+        threading.Event().wait()
     except KeyboardInterrupt:
         pass
     finally:
