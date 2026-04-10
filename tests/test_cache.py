@@ -342,26 +342,28 @@ def test_maybe_revalidate_no_timestamp_triggers(no_community, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# YouTube/Spotify local-only (no contribute to community cache)
+# YouTube/Spotify community cache contribution (oembed-verified server-side)
 # ---------------------------------------------------------------------------
 
 
-def test_youtube_does_not_contribute(no_community, monkeypatch):
-    """YouTube entries should not be contributed to the community cache."""
+def test_youtube_contributes_with_video_id_key(no_community, monkeypatch):
+    """YouTube entries contribute with video_id key for server-side oembed verify."""
     contributed = []
     monkeypatch.setattr(cache_module, "_contribute", lambda *a, **kw: contributed.append(a))
 
     cache_module.put("youtube", "test", "dQw4w9WgXcQ")
-    assert len(contributed) == 0
+    assert len(contributed) == 1
+    assert contributed[0] == ("youtube", "test", {"video_id": "dQw4w9WgXcQ"})
 
 
-def test_spotify_does_not_contribute(no_community, monkeypatch):
-    """Spotify entries should not be contributed to the community cache."""
+def test_spotify_contributes_with_uri_key(no_community, monkeypatch):
+    """Spotify entries contribute with uri key for server-side oembed verify."""
     contributed = []
     monkeypatch.setattr(cache_module, "_contribute", lambda *a, **kw: contributed.append(a))
 
     cache_module.put("spotify", "test", "spotify:track:123")
-    assert len(contributed) == 0
+    assert len(contributed) == 1
+    assert contributed[0] == ("spotify", "test", {"uri": "spotify:track:123"})
 
 
 def test_other_platform_contributes(no_community, monkeypatch):
