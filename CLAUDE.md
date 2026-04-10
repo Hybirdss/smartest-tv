@@ -8,7 +8,7 @@ CLI + MCP server for controlling smart TVs with natural language. Play, cast, qu
 - **CLI**: Click
 - **MCP**: FastMCP (18 tools)
 - **Build**: Hatchling
-- **Tests**: pytest (253 tests, no TV required)
+- **Tests**: pytest (270+ tests, no TV required)
 - **TV drivers**: bscpylgtv (LG), samsungtvws (Samsung), adb-shell (Android), aiohttp (Roku), RemoteDriver (HTTP)
 
 ## Commands
@@ -171,7 +171,7 @@ Each driver (in `_engine/drivers/`) translates a content ID into the platform's 
 
 ```bash
 # Unit tests (no TV, no network)
-python -m pytest tests/ -v                   # 253 tests
+python -m pytest tests/ -v                   # 270+ tests
 
 # Manual smoke tests
 stv cast https://youtube.com/watch?v=dQw4w9WgXcQ
