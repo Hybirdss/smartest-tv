@@ -94,6 +94,7 @@ src/smartest_tv/
     remote.py     — Remote TV via friend's stv REST API (HTTP)
   _engine/        — Resolution logic + driver implementations (open source)
 skills/tv/        — AI agent skill (Markdown, ClawHub-compatible)
+custom_components/smartest_tv/ — Home Assistant HACS integration (media_player entity)
 tests/            — 253 unit tests (pytest, no TV required)
 docs/
   getting-started/  — Installation, first TV setup

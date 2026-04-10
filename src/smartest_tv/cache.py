@@ -318,7 +318,6 @@ def _contribute(platform: str, slug: str, entry_data: Any) -> None:
 def record_play(platform: str, query: str, content_id: str,
                 season: int | None = None, episode: int | None = None) -> None:
     """Record a play event to history."""
-    import time
     data = _load()
     if "_history" not in data:
         data["_history"] = []

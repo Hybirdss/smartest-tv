@@ -67,8 +67,6 @@ def test_contribute_respects_opt_out(monkeypatch):
     monkeypatch.setenv("STV_NO_CONTRIBUTE", "1")
     monkeypatch.setattr("smartest_tv.http.curl", fake_post)
 
-    # Call the real (un-mocked) _contribute via cache_module attribute lookup
-    cache_module._contribute.__wrapped__ if hasattr(cache_module._contribute, "__wrapped__") else cache_module._contribute
     # Bypass the autouse fixture's monkeypatched stub
     import importlib
 
@@ -266,3 +264,112 @@ def test_next_episode_without_cached_show_still_increments(no_community):
 
     result = cache_module.get_next_episode("Frieren")
     assert result == ("Frieren", 2, 9)
+
+
+# ---------------------------------------------------------------------------
+# TTL-based revalidation
+# ---------------------------------------------------------------------------
+
+
+def test_maybe_revalidate_fresh_entry_no_thread(no_community, monkeypatch):
+    """Fresh entries (within TTL) should NOT trigger background revalidation."""
+    import time
+    import threading
+
+    cache_module.put("youtube", "test", "abc123")
+    data = cache_module._load()
+
+    threads_before = threading.active_count()
+    cache_module._maybe_revalidate(data, "youtube", "test")
+    threads_after = threading.active_count()
+
+    # No new thread should be spawned for a fresh entry
+    assert threads_after <= threads_before
+
+
+def test_maybe_revalidate_stale_entry_spawns_thread(no_community, monkeypatch):
+    """Stale entries (beyond TTL) should trigger background revalidation."""
+    import time
+    import threading
+
+    cache_module.put("youtube", "test", "abc123")
+
+    # Make it stale by backdating the timestamp
+    data = cache_module._load()
+    data["_timestamps"]["youtube:test"] = int(time.time()) - cache_module.CACHE_TTL_SECONDS - 100
+    cache_module._save(data)
+
+    data = cache_module._load()
+    threads_before = threading.active_count()
+    cache_module._maybe_revalidate(data, "youtube", "test")
+    # Give thread a moment to spawn
+    time.sleep(0.1)
+    threads_after = threading.active_count()
+
+    assert threads_after >= threads_before
+
+
+def test_maybe_revalidate_skips_internal_keys(no_community):
+    """Keys starting with _ should not be revalidated."""
+    import threading
+
+    data = {"_timestamps": {}, "_history": []}
+    threads_before = threading.active_count()
+    cache_module._maybe_revalidate(data, "youtube", "_internal")
+    threads_after = threading.active_count()
+
+    assert threads_after <= threads_before
+
+
+def test_maybe_revalidate_no_timestamp_triggers(no_community, monkeypatch):
+    """Entry with no timestamp (cached_at=0) should trigger revalidation."""
+    import time
+    import threading
+
+    cache_module.put("youtube", "test", "abc123")
+
+    # Remove timestamp
+    data = cache_module._load()
+    data.get("_timestamps", {}).pop("youtube:test", None)
+    cache_module._save(data)
+
+    data = cache_module._load()
+    threads_before = threading.active_count()
+    cache_module._maybe_revalidate(data, "youtube", "test")
+    time.sleep(0.1)
+    threads_after = threading.active_count()
+
+    assert threads_after >= threads_before
+
+
+# ---------------------------------------------------------------------------
+# YouTube/Spotify local-only (no contribute to community cache)
+# ---------------------------------------------------------------------------
+
+
+def test_youtube_does_not_contribute(no_community, monkeypatch):
+    """YouTube entries should not be contributed to the community cache."""
+    contributed = []
+    monkeypatch.setattr(cache_module, "_contribute", lambda *a, **kw: contributed.append(a))
+
+    cache_module.put("youtube", "test", "dQw4w9WgXcQ")
+    assert len(contributed) == 0
+
+
+def test_spotify_does_not_contribute(no_community, monkeypatch):
+    """Spotify entries should not be contributed to the community cache."""
+    contributed = []
+    monkeypatch.setattr(cache_module, "_contribute", lambda *a, **kw: contributed.append(a))
+
+    cache_module.put("spotify", "test", "spotify:track:123")
+    assert len(contributed) == 0
+
+
+def test_other_platform_contributes(no_community, monkeypatch):
+    """Non-YouTube/Spotify platforms should contribute to community cache."""
+    contributed = []
+    monkeypatch.setattr(cache_module, "_contribute", lambda *a, **kw: contributed.append(a))
+
+    cache_module.put("disney", "percy-jackson", "https://disneyplus.com/...")
+    assert len(contributed) == 1
+    assert contributed[0][0] == "disney"

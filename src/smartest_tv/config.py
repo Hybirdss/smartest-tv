@@ -21,10 +21,7 @@ def load() -> dict[str, Any]:
     config: dict[str, Any] = {}
 
     if CONFIG_FILE.exists():
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            import tomli as tomllib  # type: ignore
+        import tomllib
         config = tomllib.loads(CONFIG_FILE.read_text())
 
     # Env var overrides — only apply in legacy/single-tv mode
