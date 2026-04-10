@@ -9,7 +9,6 @@ Only checks newly added/modified entries (compares with base branch).
 """
 
 import json
-import os
 import re
 import subprocess
 import sys
