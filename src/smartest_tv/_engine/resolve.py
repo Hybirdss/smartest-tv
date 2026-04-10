@@ -578,6 +578,14 @@ _JW_PLATFORM_MAP = {
     "hulu": "Hulu",
     "appletv": "Apple TV Plus",
     "appletv+": "Apple TV Plus",
+    "crunchyroll": "Crunchyroll",
+    "viki": "Viki",
+    "starz": "Starz",
+    "showtime": "Paramount Plus with Showtime",
+    "mubi": "Mubi",
+    "tubi": "Tubi",
+    "britbox": "BritBox",
+    "stan": "Stan",
 }
 
 
@@ -801,7 +809,8 @@ def resolve(
 
     raise ValueError(
         f"Unsupported platform: {platform}. Supported: "
-        "netflix, youtube, spotify, disney, max, prime, paramount, peacock, hulu, appletv"
+        "netflix, youtube, spotify, appletv, disney, max, prime, paramount, "
+        "hulu, peacock, crunchyroll, viki, starz, showtime, mubi, tubi, britbox, stan"
     )
 
 
