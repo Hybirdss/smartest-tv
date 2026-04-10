@@ -150,6 +150,16 @@ def run_setup(ip: str | None = None) -> None:
         f"  [primary]stv scene movie-night[/primary]         [muted]— cinema mode[/muted]"
     ))
 
+    # --- Cache contribution notice ---
+    success_lines.append(Text())
+    success_lines.append(Text.from_markup(
+        "[muted]Community cache:[/muted] [success]ON[/success] "
+        "[muted]— anonymous content IDs only, no personal data.[/muted]"
+    ))
+    success_lines.append(Text.from_markup(
+        "[muted]Disable:[/muted] [dim]export STV_NO_CONTRIBUTE=1[/dim]"
+    ))
+
     _print(boxed(Group(*success_lines), title=f"{ICONS['tv']} You're all set"))
 
     # --- Detect AI clients ---

@@ -393,11 +393,11 @@ _cached_region: str | None = None
 def get_region() -> str:
     """Get the user's country code (e.g. 'US', 'KR', 'JP').
 
-    Detection order:
+    Detection order (no network calls):
       1. STV_REGION env var (explicit override)
       2. Config file [region] key
       3. LANG/LC_ALL env var (e.g. ko_KR.UTF-8 → KR)
-      4. ipinfo.io API (one-time, cached to config)
+      4. System timezone (e.g. KST → KR, PST → US)
       5. Fallback: 'US'
     """
     global _cached_region
@@ -421,7 +421,6 @@ def get_region() -> str:
     for var in ("LC_ALL", "LANG", "LANGUAGE"):
         lang = os.environ.get(var, "")
         if "_" in lang:
-            # ko_KR.UTF-8 → KR
             parts = lang.split("_")
             if len(parts) >= 2:
                 cc = parts[1][:2].upper()
@@ -429,17 +428,23 @@ def get_region() -> str:
                     _cached_region = cc
                     return cc
 
-    # 4) ipinfo.io (one-time)
-    try:
-        from smartest_tv.http import curl
-        r = curl("https://ipinfo.io/country", timeout=3)
-        if r.body:
-            cc = r.body.strip().upper()[:2]
-            if len(cc) == 2 and cc.isalpha():
-                _cached_region = cc
-                return cc
-    except Exception:
-        pass
+    # 4) Timezone → country (no network call)
+    import time as _time
+    _TZ_TO_COUNTRY = {
+        "KST": "KR", "JST": "JP",
+        "PST": "US", "PDT": "US", "EST": "US", "EDT": "US",
+        "CST": "US", "CDT": "US", "MST": "US", "MDT": "US",
+        "GMT": "GB", "BST": "GB",
+        "CET": "DE", "CEST": "DE",
+        "AEST": "AU", "AEDT": "AU", "ACST": "AU",
+        "IST": "IN", "CST": "CN",
+        "BRT": "BR", "BRST": "BR",
+    }
+    tz = _time.tzname[0] if _time.tzname else ""
+    cc = _TZ_TO_COUNTRY.get(tz, "")
+    if cc:
+        _cached_region = cc
+        return cc
 
     # 5) Fallback
     _cached_region = "US"

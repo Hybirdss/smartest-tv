@@ -611,9 +611,10 @@ def _justwatch_search(query: str, country: str = "US") -> str | None:
     region = country.lower()
     lang = "ko" if country == "KR" else "en"
 
-    # 1) JustWatch GraphQL search (most reliable)
+    # 1) JustWatch GraphQL search (parameterized — no injection risk)
     gql = _json.dumps({
-        "query": 'query { popularTitles(country: %s, first: 5, filter: { searchQuery: "%s" }) { edges { node { content(country: %s, language: %s) { fullPath title } } } } }' % (country, query.replace('"', '\\"'), country, lang),
+        "query": "query Search($q: String!, $country: Country!, $lang: Language!) { popularTitles(country: $country, first: 5, filter: { searchQuery: $q }) { edges { node { content(country: $country, language: $lang) { fullPath title } } } } }",
+        "variables": {"q": query, "country": country, "lang": lang},
     })
     r = curl(
         _JUSTWATCH_URL,
@@ -664,47 +665,16 @@ def _justwatch_resolve_show(
 
     if season and episode:
         season_path = f"{jw_path}/season-{season}"
-        query = """query {
-            urlV2(fullPath: "%s") {
-                id node {
-                    ... on Season {
-                        episodes {
-                            content(country: %s, language: %s) {
-                                ... on EpisodeContent { title episodeNumber }
-                            }
-                            offers(country: %s, platform: WEB) {
-                                standardWebURL
-                                package { clearName }
-                            }
-                        }
-                    }
-                }
-            }
-        }""" % (season_path, country, lang, country)
+        gql_query = "query Episodes($path: String!, $country: Country!, $lang: Language!) { urlV2(fullPath: $path) { id node { ... on Season { episodes { content(country: $country, language: $lang) { ... on EpisodeContent { title episodeNumber } } offers(country: $country, platform: WEB) { standardWebURL package { clearName } } } } } } }"
+        gql_vars = {"path": season_path, "country": country, "lang": lang}
     else:
-        query = """query {
-            urlV2(fullPath: "%s") {
-                id node {
-                    ... on Show {
-                        offers(country: %s, platform: WEB) {
-                            standardWebURL
-                            package { clearName }
-                        }
-                    }
-                    ... on Movie {
-                        offers(country: %s, platform: WEB) {
-                            standardWebURL
-                            package { clearName }
-                        }
-                    }
-                }
-            }
-        }""" % (jw_path, country, country)
+        gql_query = "query ShowOffers($path: String!, $country: Country!) { urlV2(fullPath: $path) { id node { ... on Show { offers(country: $country, platform: WEB) { standardWebURL package { clearName } } } ... on Movie { offers(country: $country, platform: WEB) { standardWebURL package { clearName } } } } } }"
+        gql_vars = {"path": jw_path, "country": country}
 
     r = curl(
         _JUSTWATCH_URL,
         method="POST",
-        data=_json.dumps({"query": query}),
+        data=_json.dumps({"query": gql_query, "variables": gql_vars}),
         headers={"Content-Type": "application/json"},
         timeout=5,
     )
@@ -857,9 +827,10 @@ def resolve_auto(
     if not jw_path:
         raise ValueError(f"Could not find '{query}' on any platform.")
 
-    # Get all available offers
+    # Get all available offers (parameterized)
     gql = _json.dumps({
-        "query": 'query { urlV2(fullPath: "%s") { id node { ... on Show { offers(country: %s, platform: WEB) { standardWebURL package { clearName } } } ... on Movie { offers(country: %s, platform: WEB) { standardWebURL package { clearName } } } } } }' % (jw_path, country, country),
+        "query": "query Offers($path: String!, $country: Country!) { urlV2(fullPath: $path) { id node { ... on Show { offers(country: $country, platform: WEB) { standardWebURL package { clearName } } } ... on Movie { offers(country: $country, platform: WEB) { standardWebURL package { clearName } } } } } }",
+        "variables": {"path": jw_path, "country": country},
     })
     r = curl(
         _JUSTWATCH_URL,
