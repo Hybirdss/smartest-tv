@@ -8,7 +8,6 @@ Built-in presets are hardcoded here; user presets live in
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from smartest_tv.config import CONFIG_DIR

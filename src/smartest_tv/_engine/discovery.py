@@ -6,7 +6,6 @@ import asyncio
 import re
 import socket
 
-
 SSDP_ADDR = "239.255.255.250"
 SSDP_PORT = 1900
 SSDP_MX = 3

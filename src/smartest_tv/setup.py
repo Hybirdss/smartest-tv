@@ -11,15 +11,13 @@ import shutil
 import sys
 
 import click
-from rich.live import Live
-from rich.spinner import Spinner
 from rich.text import Text
 
 from smartest_tv.config import save as save_config
 from smartest_tv.ui import console as _ui_console
-from smartest_tv.ui.common import boxed, kv_table
-from smartest_tv.ui.home import render_found_tv, render_paired
-from smartest_tv.ui.render import render_error, render_success
+from smartest_tv.ui.common import boxed
+from smartest_tv.ui.home import render_found_tv
+from smartest_tv.ui.render import render_error
 from smartest_tv.ui.theme import ICONS
 
 
@@ -141,13 +139,13 @@ def run_setup(ip: str | None = None) -> None:
     success_lines.append(Text())
     success_lines.append(Text.from_markup("[accent]Try these next:[/accent]"))
     success_lines.append(Text.from_markup(
-        f"  [primary]stv[/primary]                          [muted]— see what's on[/muted]"
+        "  [primary]stv[/primary]                          [muted]— see what's on[/muted]"
     ))
     success_lines.append(Text.from_markup(
-        f"  [primary]stv play netflix \"Wednesday\"[/primary]   [muted]— play by name[/muted]"
+        "  [primary]stv play netflix \"Wednesday\"[/primary]   [muted]— play by name[/muted]"
     ))
     success_lines.append(Text.from_markup(
-        f"  [primary]stv scene movie-night[/primary]         [muted]— cinema mode[/muted]"
+        "  [primary]stv scene movie-night[/primary]         [muted]— cinema mode[/muted]"
     ))
 
     # --- Cache contribution notice ---

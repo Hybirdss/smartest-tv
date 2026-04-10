@@ -233,8 +233,8 @@ async def tv_recommend(mood: str | None = None, limit: int = 5) -> str:
         mood: "chill", "action", "kids", "random", or omit for auto.
         limit: Number of recommendations (default 5).
     """
-    from smartest_tv.resolve import get_recommendations
     from smartest_tv import cache as _cache
+    from smartest_tv.resolve import get_recommendations
 
     recent = _cache.analyze_history()["recent_shows"]
     results = get_recommendations(mood=mood, limit=limit)
@@ -665,7 +665,7 @@ async def tv_insights(
         tv_insights("day", "screen_time")
         tv_insights("month", "sub_value:netflix:17.99")
     """
-    from smartest_tv.insights import get_insights, get_screen_time, get_subscription_value, format_report
+    from smartest_tv.insights import format_report, get_insights, get_screen_time, get_subscription_value
 
     if report_type == "screen_time":
         data = get_screen_time(period)

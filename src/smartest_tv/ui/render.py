@@ -12,11 +12,8 @@ import time
 from typing import Any
 
 from rich import box
-from rich.columns import Columns
 from rich.console import Group
-from rich.padding import Padding
 from rich.panel import Panel
-from rich.progress_bar import ProgressBar
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
@@ -24,12 +21,10 @@ from rich.tree import Tree
 from smartest_tv.ui.common import (
     boxed,
     error_panel,
-    info_line,
     kv_table,
     simple_table,
     status_dot,
     success_line,
-    title_bar,
     volume_bar,
 )
 from smartest_tv.ui.theme import (

@@ -14,11 +14,9 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 
 from smartest_tv import cache
-from smartest_tv.http import curl, ytdlp, curl_json
-
+from smartest_tv.http import curl, curl_json, ytdlp
 
 # ---------------------------------------------------------------------------
 # Netflix
@@ -407,7 +405,7 @@ def get_recommendations(mood: str | None = None, limit: int = 5) -> list[dict]:
       for natural language recommendation reasons.
     """
     import os
-    import time as _time
+
     from smartest_tv import cache as _cache
 
     history_data = _cache.analyze_history()
@@ -418,7 +416,6 @@ def get_recommendations(mood: str | None = None, limit: int = 5) -> list[dict]:
     trending_yt = fetch_youtube_trending(20)
 
     # Build candidate pool
-    candidates: list[dict] = []
 
     def _score_netflix(item: dict) -> int:
         title = item.get("title", "").lower()
@@ -478,7 +475,7 @@ def get_recommendations(mood: str | None = None, limit: int = 5) -> list[dict]:
         elif mood and mood != "random":
             reason = f"Matches {mood} mood"
         elif platform == top_platform:
-            reason = f"Your most-watched platform"
+            reason = "Your most-watched platform"
         else:
             reason = "Trending now"
 
@@ -605,8 +602,8 @@ def _justwatch_search(query: str, country: str = "US") -> str | None:
     Tries JustWatch GraphQL search API first (most reliable),
     then web search as fallback.
     """
-    from urllib.parse import quote
     import json as _json
+    from urllib.parse import quote
 
     region = country.lower()
     lang = "ko" if country == "KR" else "en"
@@ -816,8 +813,9 @@ def resolve_auto(
     Uses JustWatch to find all available platforms, then picks the best one
     based on: user history > preferred_platform arg > default priority.
     """
-    from smartest_tv.config import get_region
     import json as _json
+
+    from smartest_tv.config import get_region
 
     slug = _slugify(query)
     country = get_region()

@@ -15,7 +15,7 @@ import json
 import threading
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
-from smartest_tv.http import curl, curl_json
+from smartest_tv.http import curl
 
 
 class RemoteDriver(TVDriver):

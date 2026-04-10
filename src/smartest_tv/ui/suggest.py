@@ -9,7 +9,6 @@ Pure functions — take cache snapshot in, return list of suggestion dicts out.
 """
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from smartest_tv.ui.theme import ICONS, app_icon

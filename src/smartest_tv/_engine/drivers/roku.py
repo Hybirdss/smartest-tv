@@ -24,7 +24,6 @@ except ImportError:
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
-
 # ---------------------------------------------------------------------------
 # Well-known Roku app IDs (ECP numeric IDs)
 # ---------------------------------------------------------------------------

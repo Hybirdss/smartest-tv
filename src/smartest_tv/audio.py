@@ -11,11 +11,11 @@ Main API:
 
 from __future__ import annotations
 
+from smartest_tv.apps import resolve_app
 from smartest_tv.config import get_all_tv_names, get_group_members
 from smartest_tv.drivers.factory import create_driver
-from smartest_tv.sync import broadcast, connect_all
 from smartest_tv.resolve import resolve
-from smartest_tv.apps import resolve_app
+from smartest_tv.sync import broadcast, connect_all
 
 
 def _resolve_rooms(rooms: list[str] | None) -> list[str]:

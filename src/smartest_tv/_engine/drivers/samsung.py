@@ -18,9 +18,9 @@ from typing import Any
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
 try:
+    import aiohttp
     from samsungtvws.async_remote import SamsungTVWSAsyncRemote
     from samsungtvws.async_rest import SamsungTVAsyncRest
-    import aiohttp
 except ImportError:
     raise ImportError("Install Samsung driver: pip install 'smartest-tv[samsung]'")
 

@@ -9,7 +9,7 @@ The caller is responsible for printing via `console.print(renderable)`.
 
 JSON output is never routed through this module — cli.py handles that directly.
 """
-from smartest_tv.ui.theme import get_console, get_theme, THEMES, ICONS
+from smartest_tv.ui.theme import ICONS, THEMES, get_console, get_theme
 
 console = get_console()
 theme = get_theme()

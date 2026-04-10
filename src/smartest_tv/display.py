@@ -27,7 +27,6 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Callable
 
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -327,7 +326,6 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
   100% {{ opacity: 0; }}
 }}
 """
-            delay = 0  # animation starts at page load; offset is in keyframe
             images_html += f"""\
 <div style="
   position: absolute; inset: 0;

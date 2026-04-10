@@ -54,11 +54,14 @@ build-backend = "hatchling.build"
 [tool.ruff]
 target-version = "py311"
 line-length = 120
-exclude = ["src/smartest_tv/_engine", "custom_components"]
+exclude = ["custom_components"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/smartest_tv/cli.py" = ["F811"]
 
 [tool.hatch.build]
 
