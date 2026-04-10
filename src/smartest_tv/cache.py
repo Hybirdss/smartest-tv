@@ -2,7 +2,7 @@
 
 Three-tier cache:
   1. Local cache (~/.config/smartest-tv/cache.json) — instant
-  2. Remi API (api.remi.dev) — ~0.1s, shared across all users
+  2. Remi API (remi-api.narukys.workers.dev) — ~0.1s, shared across all users
   3. GitHub fallback — ~0.3s, static seed data
   4. Web search + scraping — 2-3s last resort
 
@@ -159,10 +159,14 @@ def put(platform: str, key: str, value: Any) -> None:
     data.setdefault("_timestamps", {})[f"{platform}:{key}"] = int(time.time())
     _save(data)
 
-    # Contribute resolutions to community cache (YouTube/Spotify: local only)
+    # Contribute resolutions to community cache
     if platform == "netflix":
         pass  # Netflix contributes via put_netflix_show()
-    elif platform not in ("youtube", "spotify"):
+    elif platform == "youtube" and isinstance(value, str):
+        _contribute(platform, key, {"video_id": value})
+    elif platform == "spotify" and isinstance(value, str):
+        _contribute(platform, key, {"uri": value})
+    else:
         _contribute(platform, key, {"url": value} if isinstance(value, str) else value)
 
 
