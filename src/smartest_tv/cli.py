@@ -948,7 +948,7 @@ def play(ctx, platform, query, season, episode, title_id):
                 await asyncio.wait_for(d.connect(), timeout=10)
             except asyncio.TimeoutError:
                 raise click.ClickException(
-                    f"Could not connect to TV within 10s. Is it on? Run: stv doctor"
+                    "Could not connect to TV within 10s. Is it on? Run: stv doctor"
                 )
             await launch_content(d, platform, app_id, content_id)
 
