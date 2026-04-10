@@ -3,11 +3,8 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from smartest_tv import cli
 from smartest_tv.cli import _parse_season_episode
-
 
 # ---------------------------------------------------------------------------
 # _parse_season_episode

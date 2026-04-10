@@ -4,11 +4,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 import smartest_tv.audio as audio_module
 from smartest_tv.audio import audio_play, audio_stop, audio_volume
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -65,7 +62,7 @@ def test_audio_play_broadcasts_to_multiple_tvs(monkeypatch):
     monkeypatch.setattr(audio_module, "resolve_app", lambda name, plat: ("youtube.leanback.v4", "youtube"))
     monkeypatch.setattr(audio_module, "connect_all", fake_connect)
 
-    results = asyncio.run(audio_play("chill music"))
+    asyncio.run(audio_play("chill music"))
 
     d1.launch_app_deep.assert_awaited_once()
     d2.launch_app_deep.assert_awaited_once()

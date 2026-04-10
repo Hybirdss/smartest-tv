@@ -1,8 +1,6 @@
 """Tests for the natural-language fallback parser (ui/nl.py)."""
 from __future__ import annotations
 
-import pytest
-
 from smartest_tv.ui.nl import parse, suggestions_for
 
 

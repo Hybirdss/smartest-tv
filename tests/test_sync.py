@@ -1,9 +1,6 @@
 """Tests for sync broadcast engine."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
 
 from smartest_tv.drivers.base import TVDriver, TVStatus
 from smartest_tv.sync import broadcast, connect_all
@@ -130,7 +127,7 @@ def test_broadcast_deep_link():
         await d.launch_app_deep("netflix", "82656797")
         return "playing"
 
-    results = asyncio.run(broadcast({"living-room": d1, "bedroom": d2}, action))
+    asyncio.run(broadcast({"living-room": d1, "bedroom": d2}, action))
     assert d1.actions == ["deep_link:netflix:82656797"]
     assert d2.actions == ["deep_link:netflix:82656797"]
 
@@ -158,7 +155,7 @@ def test_broadcast_notify():
         await d.notify("Dinner's ready!")
         return "sent"
 
-    results = asyncio.run(broadcast({"tv1": d1, "tv2": d2}, action))
+    asyncio.run(broadcast({"tv1": d1, "tv2": d2}, action))
     assert d1.actions == ["notify:Dinner's ready!"]
     assert d2.actions == ["notify:Dinner's ready!"]
 

@@ -2,14 +2,10 @@
 from __future__ import annotations
 
 import json
-import time
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 import smartest_tv.cache as cache_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -72,10 +68,11 @@ def test_contribute_respects_opt_out(monkeypatch):
     monkeypatch.setattr("smartest_tv.http.curl", fake_post)
 
     # Call the real (un-mocked) _contribute via cache_module attribute lookup
-    real_contribute = cache_module._contribute.__wrapped__ if hasattr(cache_module._contribute, "__wrapped__") else cache_module._contribute
+    cache_module._contribute.__wrapped__ if hasattr(cache_module._contribute, "__wrapped__") else cache_module._contribute
     # Bypass the autouse fixture's monkeypatched stub
-    from smartest_tv import cache as fresh_cache
     import importlib
+
+    from smartest_tv import cache as fresh_cache
     importlib.reload(fresh_cache)
     monkeypatch.setattr(fresh_cache.threading, "Thread", _SyncThread)
     monkeypatch.setattr("smartest_tv.http.curl", fake_post)

@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -15,7 +14,6 @@ from smartest_tv.scenes import (
     list_scenes,
     save_custom_scene,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

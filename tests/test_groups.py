@@ -13,7 +13,6 @@ from smartest_tv.config import (
     get_group_members,
     get_groups,
     get_tv_config,
-    list_tvs,
     save_group,
 )
 

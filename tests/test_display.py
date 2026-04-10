@@ -1,13 +1,11 @@
 """Unit tests for smartest_tv.display — no TV, no network required."""
 from __future__ import annotations
 
-import re
 import urllib.request
 
 import pytest
 
-from smartest_tv.display import generate_html, serve, _get_local_ip
-
+from smartest_tv.display import _get_local_ip, generate_html, serve
 
 # ---------------------------------------------------------------------------
 # generate_html — message

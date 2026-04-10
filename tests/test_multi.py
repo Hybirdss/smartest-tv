@@ -1,6 +1,5 @@
 """Tests for multi-TV config (config.py)."""
 
-import os
 import textwrap
 from pathlib import Path
 

@@ -1,9 +1,6 @@
 """Tests for play queue (cache.py queue_* functions)."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 

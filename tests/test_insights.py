@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 import smartest_tv.insights as insights_module
 from smartest_tv.insights import (
     format_report,
@@ -12,7 +10,6 @@ from smartest_tv.insights import (
     get_screen_time,
     get_subscription_value,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -138,7 +135,7 @@ def test_insights_no_binge_two_episodes(monkeypatch):
 
 def test_insights_peak_hour(monkeypatch):
     """peak_hour is the clock-hour with the most plays."""
-    now = int(time.time())
+    int(time.time())
     # Create entries clustered at a specific hour (UTC midnight +/- some hours).
     # We pin the timestamp to be exactly 22:00 UTC on a recent day.
     import datetime as dt
