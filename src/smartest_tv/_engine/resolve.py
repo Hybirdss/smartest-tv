@@ -586,32 +586,34 @@ _JW_PLATFORM_MAP = {
     "tubi": "Tubi",
     "britbox": "BritBox",
     "stan": "Stan",
+    # Korean platforms (use country=KR)
+    "watcha": "Watcha",
+    "tving": "TVING",
+    "wavve": "Wavve",
+    "coupangplay": "Coupang Play",
+    "coupang": "Coupang Play",
+    # Laftel has its own API (not JustWatch)
 }
 
+# Platforms that need KR region on JustWatch
+_JW_KR_PLATFORMS = {"watcha", "tving", "wavve", "coupangplay", "coupang"}
 
-def _justwatch_search(query: str) -> str | None:
+
+def _justwatch_search(query: str, country: str = "US") -> str | None:
     """Search JustWatch for a show/movie and return its URL path.
 
-    Tries Brave first, then DuckDuckGo, then direct JustWatch search API.
+    Tries JustWatch GraphQL search API first (most reliable),
+    then web search as fallback.
     """
     from urllib.parse import quote
-    slug = _slugify(query)
-
-    # 1) Try Brave
-    for search_url in [
-        f"https://search.brave.com/search?q={quote(query)}+site:justwatch.com/us",
-        f"https://html.duckduckgo.com/html/?q={quote(query)}+justwatch.com+us",
-    ]:
-        r = curl(search_url, timeout=5)
-        if r.body:
-            m = re.search(r'justwatch\.com/us/(tv-show|movie)/([a-z0-9-]+)', r.body)
-            if m:
-                return f"/us/{m.group(1)}/{m.group(2)}"
-
-    # 2) Try JustWatch's own search API
     import json as _json
+
+    region = country.lower()
+    lang = "ko" if country == "KR" else "en"
+
+    # 1) JustWatch GraphQL search (most reliable)
     gql = _json.dumps({
-        "query": 'query { popularTitles(country: US, first: 5, filter: { searchQuery: "%s" }) { edges { node { content(country: US, language: en) { fullPath title } } } } }' % query.replace('"', '\\"'),
+        "query": 'query { popularTitles(country: %s, first: 5, filter: { searchQuery: "%s" }) { edges { node { content(country: %s, language: %s) { fullPath title } } } } }' % (country, query.replace('"', '\\"'), country, lang),
     })
     r = curl(
         _JUSTWATCH_URL,
@@ -631,6 +633,17 @@ def _justwatch_search(query: str) -> str | None:
         except (ValueError, KeyError, IndexError):
             pass
 
+    # 2) Web search fallback
+    for search_url in [
+        f"https://search.brave.com/search?q={quote(query)}+site:justwatch.com/{region}",
+        f"https://html.duckduckgo.com/html/?q={quote(query)}+justwatch.com+{region}",
+    ]:
+        r = curl(search_url, timeout=5)
+        if r.body:
+            m = re.search(rf'justwatch\.com/{region}/(tv-show|movie)/([a-z0-9-]+)', r.body)
+            if m:
+                return f"/{region}/{m.group(1)}/{m.group(2)}"
+
     return None
 
 
@@ -639,6 +652,7 @@ def _justwatch_resolve_show(
     target_package: str,
     season: int | None = None,
     episode: int | None = None,
+    country: str = "US",
 ) -> str | None:
     """Query JustWatch GraphQL for episode-level deep links.
 
@@ -646,18 +660,19 @@ def _justwatch_resolve_show(
     """
     import json as _json
 
+    lang = "ko" if country == "KR" else "en"
+
     if season and episode:
-        # Get season data with episodes
         season_path = f"{jw_path}/season-{season}"
         query = """query {
             urlV2(fullPath: "%s") {
                 id node {
                     ... on Season {
                         episodes {
-                            content(country: US, language: en) {
+                            content(country: %s, language: %s) {
                                 ... on EpisodeContent { title episodeNumber }
                             }
-                            offers(country: US, platform: WEB) {
+                            offers(country: %s, platform: WEB) {
                                 standardWebURL
                                 package { clearName }
                             }
@@ -665,27 +680,26 @@ def _justwatch_resolve_show(
                     }
                 }
             }
-        }""" % season_path
+        }""" % (season_path, country, lang, country)
     else:
-        # Show/movie level
         query = """query {
             urlV2(fullPath: "%s") {
                 id node {
                     ... on Show {
-                        offers(country: US, platform: WEB) {
+                        offers(country: %s, platform: WEB) {
                             standardWebURL
                             package { clearName }
                         }
                     }
                     ... on Movie {
-                        offers(country: US, platform: WEB) {
+                        offers(country: %s, platform: WEB) {
                             standardWebURL
                             package { clearName }
                         }
                     }
                 }
             }
-        }""" % jw_path
+        }""" % (jw_path, country, country)
 
     r = curl(
         _JUSTWATCH_URL,
@@ -744,12 +758,18 @@ def resolve_justwatch(
     if cached:
         return cached
 
-    target_package = _JW_PLATFORM_MAP.get(platform.lower().strip(), "")
+    from smartest_tv.config import get_region
+
+    p_lower = platform.lower().strip()
+    target_package = _JW_PLATFORM_MAP.get(p_lower, "")
     if not target_package:
         raise ValueError(f"Unknown platform for JustWatch: {platform}")
 
+    # Auto-detect region, with KR override for Korean-only platforms
+    country = "KR" if p_lower in _JW_KR_PLATFORMS else get_region()
+
     # Step 1: Find the show on JustWatch
-    jw_path = _justwatch_search(query)
+    jw_path = _justwatch_search(query, country=country)
     if not jw_path:
         raise ValueError(
             f"Could not find '{query}' on JustWatch. Try:\n"
@@ -757,7 +777,7 @@ def resolve_justwatch(
         )
 
     # Step 2: Get the deep link
-    url = _justwatch_resolve_show(jw_path, target_package, season, episode)
+    url = _justwatch_resolve_show(jw_path, target_package, season, episode, country=country)
     if not url:
         raise ValueError(
             f"Found '{query}' on JustWatch but no {target_package} link"
@@ -803,20 +823,215 @@ def resolve(
     elif p == "spotify":
         return resolve_spotify(query)
 
-    # JustWatch universal resolver (Disney+, Max, Prime, Paramount+, etc.)
+    # Laftel (own API, not JustWatch)
+    if p == "laftel":
+        return resolve_laftel(query, season, episode)
+
+    # JustWatch universal resolver (Disney+, Max, Prime, Paramount+, Korean platforms, etc.)
     if p in _JW_PLATFORM_MAP:
         return resolve_justwatch(p, query, season, episode)
 
-    raise ValueError(
-        f"Unsupported platform: {platform}. Supported: "
-        "netflix, youtube, spotify, appletv, disney, max, prime, paramount, "
-        "hulu, peacock, crunchyroll, viki, starz, showtime, mubi, tubi, britbox, stan"
+    # Auto-detect: unknown platform → find best available via JustWatch
+    return resolve_auto(query, season, episode, preferred_platform=platform)
+
+
+def resolve_auto(
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+    preferred_platform: str | None = None,
+) -> str:
+    """Auto-detect which platform has the content and resolve it.
+
+    Uses JustWatch to find all available platforms, then picks the best one
+    based on: user history > preferred_platform arg > default priority.
+    """
+    from smartest_tv.config import get_region
+    import json as _json
+
+    slug = _slugify(query)
+    country = get_region()
+
+    # Search JustWatch for the title
+    jw_path = _justwatch_search(query, country=country)
+    if not jw_path:
+        raise ValueError(f"Could not find '{query}' on any platform.")
+
+    # Get all available offers
+    gql = _json.dumps({
+        "query": 'query { urlV2(fullPath: "%s") { id node { ... on Show { offers(country: %s, platform: WEB) { standardWebURL package { clearName } } } ... on Movie { offers(country: %s, platform: WEB) { standardWebURL package { clearName } } } } } }' % (jw_path, country, country),
+    })
+    r = curl(
+        _JUSTWATCH_URL,
+        method="POST",
+        data=gql,
+        headers={"Content-Type": "application/json"},
+        timeout=5,
     )
+    if not r.body:
+        raise ValueError(f"Found '{query}' but couldn't get platform info.")
+
+    try:
+        data = _json.loads(r.body)
+    except ValueError:
+        raise ValueError(f"JustWatch response error for '{query}'.")
+
+    node = data.get("data", {}).get("urlV2", {}).get("node", {})
+    offers = node.get("offers", [])
+    if not offers:
+        raise ValueError(f"'{query}' found but not available for streaming in {country}.")
+
+    # Deduplicate by package name
+    seen: dict[str, str] = {}
+    for o in offers:
+        pkg = o.get("package", {}).get("clearName", "")
+        if pkg and pkg not in seen:
+            seen[pkg] = o.get("standardWebURL", "")
+
+    # Priority order
+    default_priority = [
+        "Netflix", "Disney Plus", "Amazon Prime Video", "Max",
+        "Apple TV Plus", "Hulu", "Paramount Plus", "Peacock",
+        "Crunchyroll", "TVING", "Watcha", "Wavve", "Coupang Play",
+        "Viki", "Starz", "Mubi", "Tubi", "BritBox",
+    ]
+
+    chosen_pkg = None
+    chosen_url = None
+
+    # 1) Preferred platform from arg
+    if preferred_platform:
+        for pkg, url in seen.items():
+            if preferred_platform.lower() in pkg.lower():
+                chosen_pkg, chosen_url = pkg, url
+                break
+
+    # 2) History-based
+    if not chosen_pkg:
+        try:
+            history = cache.analyze_history()
+            top = history.get("top_platform")
+            if top:
+                for pkg, url in seen.items():
+                    if top.lower() in pkg.lower():
+                        chosen_pkg, chosen_url = pkg, url
+                        break
+        except Exception:
+            pass
+
+    # 3) Default priority
+    if not chosen_pkg:
+        for prio in default_priority:
+            if prio in seen:
+                chosen_pkg, chosen_url = prio, seen[prio]
+                break
+
+    # 4) First available
+    if not chosen_pkg and seen:
+        chosen_pkg, chosen_url = next(iter(seen.items()))
+
+    if not chosen_url:
+        raise ValueError(f"'{query}' found but no streaming URL available.")
+
+    # If season+episode, try episode-level link via JustWatch
+    if season and episode and chosen_pkg:
+        stv_key = {v: k for k, v in _JW_PLATFORM_MAP.items()}.get(chosen_pkg, "")
+        if stv_key:
+            try:
+                return resolve_justwatch(stv_key, query, season, episode)
+            except ValueError:
+                pass
+
+    # Clean affiliate URL
+    if chosen_url and "?" in chosen_url:
+        m = re.search(r'[?&]u=(https?%3A%2F%2F[^&]+)', chosen_url)
+        if m:
+            from urllib.parse import unquote
+            chosen_url = unquote(m.group(1))
+
+    cache.put("auto", slug, chosen_url)
+    return chosen_url
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Laftel (Korean anime platform — has its own public API)
+# ---------------------------------------------------------------------------
+
+def resolve_laftel(
+    query: str,
+    season: int | None = None,
+    episode: int | None = None,
+) -> str:
+    """Resolve Laftel content. Returns a laftel.net URL.
+
+    Laftel has a public search API (no auth) + episode list API.
+    """
+    import json as _json
+    slug = _slugify(query)
+
+    # Cache check
+    cache_key = f"{slug}:s{season}e{episode}" if season and episode else slug
+    cached = cache.get("laftel", cache_key)
+    if cached:
+        return cached
+
+    # Step 1: Search for the show
+    r = curl(
+        f"https://laftel.net/api/search/v3/keyword/?keyword={query}&offset=0&size=5",
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=5,
+    )
+    if not r.body:
+        raise ValueError(f"Laftel search failed for: {query}")
+
+    try:
+        results = _json.loads(r.body).get("results", [])
+    except (ValueError, KeyError):
+        raise ValueError(f"Laftel search failed for: {query}")
+
+    if not results:
+        raise ValueError(f"No Laftel results for: {query}")
+
+    item_id = results[0]["id"]
+    item_name = results[0].get("name", query)
+
+    if not season and not episode:
+        url = f"https://laftel.net/item/{item_id}"
+        cache.put("laftel", cache_key, url)
+        return url
+
+    # Step 2: Get episode list
+    r = curl(
+        f"https://laftel.net/api/episodes/v2/list/?item_id={item_id}&sort=oldest&limit=100&offset=0",
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=5,
+    )
+    if not r.body:
+        raise ValueError(f"Laftel episode list failed for: {item_name}")
+
+    try:
+        episodes = _json.loads(r.body).get("results", [])
+    except (ValueError, KeyError):
+        raise ValueError(f"Laftel episode list failed for: {item_name}")
+
+    # Find target episode
+    target_ep = episode or 1
+    if target_ep <= len(episodes):
+        ep = episodes[target_ep - 1]
+        ep_id = ep.get("id")
+        url = f"https://laftel.net/player/{item_id}/{ep_id}"
+        cache.put("laftel", cache_key, url)
+        return url
+
+    raise ValueError(
+        f"Laftel: {item_name} has {len(episodes)} episodes, "
+        f"episode {target_ep} requested."
+    )
+
 
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower().strip()).strip("-")
