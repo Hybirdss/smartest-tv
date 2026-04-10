@@ -381,3 +381,66 @@ def delete_group(name: str) -> None:
 def _write_config_lines(lines: list[str]) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# Region detection
+# ---------------------------------------------------------------------------
+
+_cached_region: str | None = None
+
+
+def get_region() -> str:
+    """Get the user's country code (e.g. 'US', 'KR', 'JP').
+
+    Detection order:
+      1. STV_REGION env var (explicit override)
+      2. Config file [region] key
+      3. LANG/LC_ALL env var (e.g. ko_KR.UTF-8 → KR)
+      4. ipinfo.io API (one-time, cached to config)
+      5. Fallback: 'US'
+    """
+    global _cached_region
+    if _cached_region:
+        return _cached_region
+
+    # 1) Env var override
+    env = os.environ.get("STV_REGION", "").upper().strip()
+    if len(env) == 2:
+        _cached_region = env
+        return env
+
+    # 2) Config file
+    config = load()
+    region = config.get("region", "")
+    if isinstance(region, str) and len(region) == 2:
+        _cached_region = region.upper()
+        return _cached_region
+
+    # 3) LANG env var
+    for var in ("LC_ALL", "LANG", "LANGUAGE"):
+        lang = os.environ.get(var, "")
+        if "_" in lang:
+            # ko_KR.UTF-8 → KR
+            parts = lang.split("_")
+            if len(parts) >= 2:
+                cc = parts[1][:2].upper()
+                if cc.isalpha():
+                    _cached_region = cc
+                    return cc
+
+    # 4) ipinfo.io (one-time)
+    try:
+        from smartest_tv.http import curl
+        r = curl("https://ipinfo.io/country", timeout=3)
+        if r.body:
+            cc = r.body.strip().upper()[:2]
+            if len(cc) == 2 and cc.isalpha():
+                _cached_region = cc
+                return cc
+    except Exception:
+        pass
+
+    # 5) Fallback
+    _cached_region = "US"
+    return "US"
