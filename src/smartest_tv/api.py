@@ -336,6 +336,13 @@ def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> HTTPServer:
             "API server binding to 0.0.0.0 WITHOUT authentication. "
             "Set STV_API_KEY env var to secure remote access."
         )
+        import sys
+        print(
+            "\n⚠️  WARNING: API exposed to network without authentication.\n"
+            "   Anyone on your network can control your TV.\n"
+            "   Fix: export STV_API_KEY=\"your-secret\" before running stv serve.\n",
+            file=sys.stderr,
+        )
 
     server = HTTPServer((host, port), ApiHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

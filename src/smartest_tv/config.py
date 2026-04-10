@@ -437,7 +437,7 @@ def get_region() -> str:
         "GMT": "GB", "BST": "GB",
         "CET": "DE", "CEST": "DE",
         "AEST": "AU", "AEDT": "AU", "ACST": "AU",
-        "IST": "IN", "CST": "CN",
+        "IST": "IN", "HKT": "HK", "SGT": "SG",
         "BRT": "BR", "BRST": "BR",
     }
     tz = _time.tzname[0] if _time.tzname else ""

@@ -125,9 +125,11 @@ def _load_community() -> dict:
 
     from smartest_tv.http import curl
 
+    _MAX_COMMUNITY_CACHE_SIZE = 2 * 1024 * 1024  # 2 MB safety limit
+
     # 1) Try API server (fast, up-to-date)
     r = curl(f"{CACHE_API_URL}/cache", timeout=3)
-    if r.ok and r.body:
+    if r.ok and r.body and len(r.body) < _MAX_COMMUNITY_CACHE_SIZE:
         try:
             _community_cache = json.loads(r.body)
             return _community_cache
@@ -137,7 +139,7 @@ def _load_community() -> dict:
     # 2) Fallback to GitHub static file
     log.debug("API cache unavailable, falling back to GitHub")
     r = curl(_GITHUB_FALLBACK_URL, timeout=3)
-    if r.body:
+    if r.body and len(r.body) < _MAX_COMMUNITY_CACHE_SIZE:
         try:
             _community_cache = json.loads(r.body)
             return _community_cache
