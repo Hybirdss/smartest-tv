@@ -92,7 +92,7 @@ src/smartest_tv/
     android.py    — Wrapper → _engine/drivers/android.py
     roku.py       — Wrapper → _engine/drivers/roku.py
     remote.py     — Remote TV via friend's stv REST API (HTTP)
-  _engine/        — Private (gitignored, PyPI only): resolution logic + driver implementations
+  _engine/        — Resolution logic + driver implementations (open source)
 skills/tv/        — AI agent skill (Markdown, ClawHub-compatible)
 tests/            — 165 unit tests (pytest, no TV required)
 docs/
@@ -109,7 +109,7 @@ docs/
 ### Content Resolution (resolve.py + _engine/)
 
 Public `resolve.py` is a thin wrapper: cache → _engine (local) → API fallback.
-Private `_engine/resolve.py` contains the actual resolution logic (not on GitHub, PyPI only).
+`_engine/resolve.py` contains the actual resolution logic (JustWatch, Netflix HTML parsing, etc.).
 
 Resolution chain: local cache → API single-entry → community cache → web resolution.
 
@@ -164,7 +164,7 @@ Each driver (in `_engine/drivers/`) translates a content ID into the platform's 
 - Skills: single Markdown file, ClawHub-compatible frontmatter
 - Driver factory pattern to avoid cli.py dependency in scenes/server
 - Remote API: stdlib http.server (no new dependency), separate port from MCP
-- `_engine/` is gitignored — resolution and driver logic only in PyPI wheel
+- `_engine/` — resolution and driver logic, fully open source
 
 ## Testing
 
