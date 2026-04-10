@@ -332,9 +332,6 @@ def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> HTTPServer:
         - Set STV_CORS_ORIGIN to restrict CORS (default: *).
         - For remote access, use 0.0.0.0 + STV_API_KEY + firewall/VPN.
     """
-    import logging
-    log = logging.getLogger("smartest-tv")
-
     if host == "0.0.0.0" and not _api_key:
         import sys
         print(
