@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import json
-from http.server import HTTPServer
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from smartest_tv import api
 
@@ -96,8 +93,6 @@ def _make_handler(method: str, path: str, body: dict | None = None,
 
         # Override send_response to not write to wfile directly
         response_data = {}
-
-        original_respond = handler._respond.__func__ if hasattr(handler._respond, '__func__') else None
 
         def capture_respond(code, data):
             response_data["code"] = code

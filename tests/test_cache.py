@@ -273,7 +273,6 @@ def test_next_episode_without_cached_show_still_increments(no_community):
 
 def test_maybe_revalidate_fresh_entry_no_thread(no_community, monkeypatch):
     """Fresh entries (within TTL) should NOT trigger background revalidation."""
-    import time
     import threading
 
     cache_module.put("youtube", "test", "abc123")
@@ -289,8 +288,8 @@ def test_maybe_revalidate_fresh_entry_no_thread(no_community, monkeypatch):
 
 def test_maybe_revalidate_stale_entry_spawns_thread(no_community, monkeypatch):
     """Stale entries (beyond TTL) should trigger background revalidation."""
-    import time
     import threading
+    import time
 
     cache_module.put("youtube", "test", "abc123")
 
@@ -323,8 +322,8 @@ def test_maybe_revalidate_skips_internal_keys(no_community):
 
 def test_maybe_revalidate_no_timestamp_triggers(no_community, monkeypatch):
     """Entry with no timestamp (cached_at=0) should trigger revalidation."""
-    import time
     import threading
+    import time
 
     cache_module.put("youtube", "test", "abc123")
 
