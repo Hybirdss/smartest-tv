@@ -134,7 +134,7 @@ def _show_home(ctx):
         return
 
     async def _do():
-        await d.connect()
+        await asyncio.wait_for(d.connect(), timeout=10)
         s = await d.status()
         return {
             "platform": platform,
@@ -146,6 +146,9 @@ def _show_home(ctx):
 
     try:
         status = _run(_do())
+    except asyncio.TimeoutError:
+        _print(render_home_offline(tv_label, platform, ip, error="Connection timed out (10s)"))
+        return
     except Exception as e:
         _print(render_home_offline(tv_label, platform, ip, error=str(e)[:60]))
         return
@@ -839,6 +842,15 @@ def resolve(ctx, platform, query, season, episode, title_id):
             season, episode = s, e
             query_parts = query_parts[:-1]
 
+    # If platform is not a known platform, treat it as part of the query (auto-detect)
+    _KNOWN_PLATFORMS = {"netflix", "youtube", "spotify", "appletv", "apple", "atv",
+                        "disney", "max", "prime", "paramount", "hulu", "peacock",
+                        "crunchyroll", "viki", "starz", "tubi", "mubi", "britbox",
+                        "watcha", "tving", "wavve", "laftel", "auto"}
+    if platform.lower() not in _KNOWN_PLATFORMS:
+        query_parts = [platform] + query_parts
+        platform = "auto"
+
     query_str = " ".join(query_parts)
     if not query_str:
         _fail("No query provided.")
@@ -887,6 +899,15 @@ def play(ctx, platform, query, season, episode, title_id):
             season, episode = s, e
             query_parts = query_parts[:-1]
 
+    # If platform is not a known platform, treat it as part of the query (auto-detect)
+    _KNOWN_PLATFORMS = {"netflix", "youtube", "spotify", "appletv", "apple", "atv",
+                        "disney", "max", "prime", "paramount", "hulu", "peacock",
+                        "crunchyroll", "viki", "starz", "tubi", "mubi", "britbox",
+                        "watcha", "tving", "wavve", "laftel", "auto"}
+    if platform.lower() not in _KNOWN_PLATFORMS:
+        query_parts = [platform] + query_parts
+        platform = "auto"
+
     query_str = " ".join(query_parts)
     if not query_str:
         _fail("No query provided.")
@@ -923,7 +944,12 @@ def play(ctx, platform, query, season, episode, title_id):
         app_id, name = resolve_app(platform, d.platform)
 
         async def _do():
-            await d.connect()
+            try:
+                await asyncio.wait_for(d.connect(), timeout=10)
+            except asyncio.TimeoutError:
+                raise click.ClickException(
+                    f"Could not connect to TV within 10s. Is it on? Run: stv doctor"
+                )
             await launch_content(d, platform, app_id, content_id)
 
         _run(_do())

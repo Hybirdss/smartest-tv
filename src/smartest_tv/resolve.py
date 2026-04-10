@@ -252,8 +252,18 @@ def resolve(
         return resolve_spotify(query)
     elif p in ("appletv", "apple", "apple_tv", "apple-tv", "atv"):
         return resolve_appletv(query, season, episode)
+    elif p == "auto":
+        # Auto-detect platform via JustWatch
+        if _ENGINE:
+            from smartest_tv._engine.resolve import resolve_auto
+            return resolve_auto(query, season, episode)
+        raise ValueError("Auto-detect requires the resolution engine.")
+    elif _ENGINE:
+        # Try JustWatch-based platforms (disney, max, prime, etc.)
+        from smartest_tv._engine.resolve import resolve as _engine_resolve
+        return _engine_resolve(p, query, season, episode)
     else:
-        raise ValueError(f"Unsupported platform: {platform}. Use netflix, youtube, spotify, or appletv.")
+        raise ValueError(f"Unsupported platform: {platform}.")
 
 
 # ---------------------------------------------------------------------------
