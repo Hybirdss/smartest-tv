@@ -160,11 +160,11 @@ visual hierarchy. Prefer another palette? Set `STV_THEME=nord` or `STV_THEME=gru
 ### 🎬 Play by name
 ```bash
 stv play netflix "Dark" s1e1
-stv play appletv "Severance" s1e1
-stv play youtube "baby shark"
-stv play spotify "chill vibes"
+stv play disney "Percy Jackson" s1e1
+stv play prime "The Boys" s1e1
+stv play "Frieren" s2e8          # auto-detects platform
 ```
-Say the name. stv finds the ID, opens the app, starts playback. Netflix and Apple TV+ resolve via server-rendered HTML — one curl, no login, no Playwright.
+Say the name. stv finds the ID, opens the app, starts playback. Netflix and Apple TV+ resolve via HTML parsing. Disney+, Max, Prime, Hulu, Paramount+, Peacock, Crunchyroll, and [every platform on JustWatch](https://www.justwatch.com/) resolve via their API — no login, no API key. Skip the platform name and stv auto-detects where it's streaming in your region.
 
 </td>
 <td width="33%" valign="top">
