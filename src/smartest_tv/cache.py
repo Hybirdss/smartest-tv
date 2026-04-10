@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,10 @@ from smartest_tv.config import CONFIG_DIR
 log = logging.getLogger("smartest-tv")
 
 CACHE_FILE = CONFIG_DIR / "cache.json"
+
+# Cache entries older than this are re-validated in the background on next access.
+# The stale value is returned immediately — re-resolve never blocks playback.
+CACHE_TTL_SECONDS = 90 * 86400  # 90 days
 
 # API server (primary) — set STV_CACHE_API to override
 CACHE_API_URL = os.environ.get(
@@ -58,10 +63,15 @@ def _save(data: dict[str, Any]) -> None:
 
 
 def get(platform: str, key: str) -> Any | None:
-    """Get a cached value. Checks local → API (single entry) → community (full)."""
+    """Get a cached value. Checks local → API (single entry) → community (full).
+
+    Stale entries (older than CACHE_TTL_SECONDS) are returned immediately
+    but trigger a background re-resolve so the next call gets fresh data.
+    """
     data = _load()
     result = data.get(platform, {}).get(key)
     if result is not None:
+        _maybe_revalidate(data, platform, key)
         return result
 
     # Try API single-entry lookup (faster than loading full cache)
@@ -144,6 +154,8 @@ def put(platform: str, key: str, value: Any) -> None:
     if platform not in data:
         data[platform] = {}
     data[platform][key] = value
+    # Track when this entry was cached for TTL-based revalidation
+    data.setdefault("_timestamps", {})[f"{platform}:{key}"] = int(time.time())
     _save(data)
 
     # Contribute YouTube/Spotify resolutions to API
@@ -156,8 +168,10 @@ def put(platform: str, key: str, value: Any) -> None:
 def get_netflix_episode(title_slug: str, season: int, episode: int) -> str | None:
     """Look up a cached Netflix episode ID. Checks local → API → community."""
     # Try local first
-    result = _lookup_netflix_episode(_load(), title_slug, season, episode)
+    data = _load()
+    result = _lookup_netflix_episode(data, title_slug, season, episode)
     if result:
+        _maybe_revalidate(data, "netflix", title_slug)
         return result
 
     # Try API single-entry lookup
@@ -219,10 +233,42 @@ def put_netflix_show(
         "first_episode_id": first_episode_id,
         "episode_count": episode_count,
     }
+    data.setdefault("_timestamps", {})[f"netflix:{title_slug}"] = int(time.time())
     _save(data)
 
     # Contribute to API (fire-and-forget, never blocks)
     _contribute("netflix", title_slug, data["netflix"][title_slug])
+
+
+# ---------------------------------------------------------------------------
+# TTL-based background revalidation
+# ---------------------------------------------------------------------------
+
+def _maybe_revalidate(data: dict, platform: str, key: str) -> None:
+    """If a cached entry is older than CACHE_TTL_SECONDS, re-resolve in background.
+
+    The stale value is always returned immediately — this never blocks.
+    On success the local cache (and community cache) are silently updated.
+    """
+    ts_key = f"{platform}:{key}"
+    cached_at = data.get("_timestamps", {}).get(ts_key, 0)
+    if cached_at and time.time() - cached_at < CACHE_TTL_SECONDS:
+        return  # still fresh
+
+    # Don't re-resolve internal keys
+    if key.startswith("_"):
+        return
+
+    def _bg_revalidate() -> None:
+        try:
+            fresh = _api_get(platform, key)
+            if fresh is not None:
+                put(platform, key, fresh)
+                log.debug("Revalidated %s:%s from API", platform, key)
+        except Exception:
+            pass  # best-effort, never crash
+
+    threading.Thread(target=_bg_revalidate, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
