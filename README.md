@@ -456,8 +456,13 @@ stv setup                          # auto-discover + pair your TV
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
 
+Add as a custom repository (HACS default listing pending):
+
 ```
-HACS → Integrations → + → "Smartest TV" → Install
+HACS → ⋮ (top right) → Custom repositories
+  URL: https://github.com/Hybirdss/smartest-tv
+  Category: Integration → Add
+Then: Install → Restart HA
 Settings → Integrations → Add → "Smartest TV" → auto-discovers your TVs
 ```
 
