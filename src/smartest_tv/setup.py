@@ -172,7 +172,8 @@ def _pairing_hint(platform: str) -> str:
         return (
             "Quick one-time TV setup:\n"
             "       Settings → About → tap 'Build number' 7 times\n"
-            "       → Developer Options → enable 'ADB debugging'"
+            "       → Developer Options → enable 'ADB debugging'\n"
+            "   (No remote? Use the Google TV / Fire TV app on your phone.)"
         )
     if platform == "lg":
         return "A popup just appeared on your TV. Press OK.\n   (No remote? Use the LG ThinQ app on your phone.)"
