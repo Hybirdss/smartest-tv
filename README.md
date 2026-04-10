@@ -504,9 +504,9 @@ This does what HA's built-in `media_player.play_media` can't: resolve a show by 
 
 ---
 
-## 🔓 Fully open source
+## 🔓 Open source
 
-Every line of stv is on GitHub — the CLI, resolvers (Netflix, Apple TV+, YouTube, Spotify), all 4 TV drivers (LG, Samsung, Roku, Android), cache, sync engine, scenes, and all 252 tests. `_engine/` was previously closed due to DMCA concerns but is now fully open.
+Every line of stv is on GitHub — the CLI, resolvers (Netflix, Apple TV+, YouTube, Spotify), all 4 TV drivers (LG, Samsung, Roku, Android), cache, sync engine, scenes, and all 252 tests.
 
 ---
 
