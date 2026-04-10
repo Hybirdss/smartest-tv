@@ -87,11 +87,14 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._error(401, "Unauthorized. Set Authorization: Bearer <STV_API_KEY>")
         return False
 
-    def _read_json(self) -> dict:
+    def _read_json(self) -> dict | None:
         length = int(self.headers.get("Content-Length", 0))
         if length:
             body = self.rfile.read(length)
-            return json.loads(body)
+            try:
+                return json.loads(body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return None
         return {}
 
     def _respond(self, code: int, data: Any) -> None:
@@ -187,6 +190,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
         path = self.path.rstrip("/")
         data = self._read_json()
+        if data is None:
+            self._error(400, "Invalid JSON body")
+            return
 
         try:
             d = _get_driver()

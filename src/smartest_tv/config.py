@@ -117,8 +117,10 @@ def get_tv_config(tv_name: str | None = None) -> dict[str, str]:
             return {
                 "platform": tv.get("platform", ""),
                 "ip": tv.get("ip", ""),
+                "url": tv.get("url", ""),
                 "mac": tv.get("mac", ""),
                 "name": tv.get("name", name),
+                "api_key": tv.get("api_key", ""),
             }
 
     if len(tvs) == 1:
@@ -126,8 +128,10 @@ def get_tv_config(tv_name: str | None = None) -> dict[str, str]:
         return {
             "platform": tv.get("platform", ""),
             "ip": tv.get("ip", ""),
+            "url": tv.get("url", ""),
             "mac": tv.get("mac", ""),
             "name": tv.get("name", name),
+            "api_key": tv.get("api_key", ""),
         }
 
     # Multiple TVs, none marked default — return first
@@ -135,8 +139,10 @@ def get_tv_config(tv_name: str | None = None) -> dict[str, str]:
     return {
         "platform": tv.get("platform", ""),
         "ip": tv.get("ip", ""),
+        "url": tv.get("url", ""),
         "mac": tv.get("mac", ""),
         "name": tv.get("name", name),
+        "api_key": tv.get("api_key", ""),
     }
 
 
