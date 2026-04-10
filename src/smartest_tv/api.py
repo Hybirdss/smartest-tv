@@ -15,20 +15,18 @@ Authentication:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import hmac
 import json
 import os
 import secrets
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 from smartest_tv.apps import resolve_app
 from smartest_tv.config import get_tv_config
 from smartest_tv.drivers.base import TVDriver
 from smartest_tv.drivers.factory import create_driver
-
 
 # Module-level driver cache (shared with the API handler)
 _driver: TVDriver | None = None

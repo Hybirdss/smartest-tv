@@ -26,7 +26,6 @@ Platform auto-detection:
 from __future__ import annotations
 
 import re
-from typing import Any
 
 _PLATFORM_SYNONYMS = {
     "yt":      "youtube",

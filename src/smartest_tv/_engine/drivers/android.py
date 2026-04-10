@@ -19,8 +19,8 @@ from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
 try:
     from adb_shell.adb_device_async import AdbDeviceTcpAsync
-    from adb_shell.auth.sign_pythonrsa import PythonRSASigner
     from adb_shell.auth.keygen import keygen
+    from adb_shell.auth.sign_pythonrsa import PythonRSASigner
 except ImportError:
     raise ImportError("Install Android driver: pip install 'smartest-tv[android]'")
 

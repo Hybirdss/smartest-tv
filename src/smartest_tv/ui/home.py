@@ -13,16 +13,14 @@ from __future__ import annotations
 from typing import Any
 
 from rich import box
-from rich.align import Align
 from rich.console import Group
 from rich.padding import Padding
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from smartest_tv.ui.common import boxed, kv_table, volume_bar
+from smartest_tv.ui.common import boxed, volume_bar
 from smartest_tv.ui.theme import ICONS, app_display_name, app_icon
-
 
 # ============================================================================
 # State 1: First run — no config exists
@@ -166,7 +164,7 @@ def render_home_offline(tv_label: str, platform: str, ip: str, error: str = "") 
     if error:
         status.append(f"  ({error[:50]})", style="dim")
 
-    sep = Text("")
+    Text("")
 
     suggestions = Table(box=None, show_header=False, pad_edge=False, show_edge=False)
     suggestions.add_column(style="accent", no_wrap=True)

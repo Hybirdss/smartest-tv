@@ -14,7 +14,7 @@ Main API:
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from smartest_tv.cache import get_history

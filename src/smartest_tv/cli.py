@@ -19,8 +19,16 @@ import click
 from smartest_tv.apps import resolve_app
 from smartest_tv.cast import parse_cast_url
 from smartest_tv.config import (
-    get_tv_config, list_tvs, add_tv, remove_tv, set_default_tv,
-    get_all_tv_names, get_group_members, get_groups, save_group, delete_group,
+    add_tv,
+    delete_group,
+    get_all_tv_names,
+    get_group_members,
+    get_groups,
+    get_tv_config,
+    list_tvs,
+    remove_tv,
+    save_group,
+    set_default_tv,
 )
 from smartest_tv.drivers.base import TVDriver
 from smartest_tv.playback import launch_content
@@ -87,13 +95,13 @@ def _info(message: str, icon: str = ""):
 
 def _show_home(ctx):
     """Show the home dashboard: first-run / connected / offline."""
+    from smartest_tv import config as _cfg
     from smartest_tv.ui.home import (
-        render_home_first_run,
         render_home_connected,
+        render_home_first_run,
         render_home_offline,
     )
     from smartest_tv.ui.suggest import suggest_for
-    from smartest_tv import config as _cfg
 
     # State 1: No config at all → first-run welcome
     if not _cfg.CONFIG_FILE.exists():
@@ -250,12 +258,13 @@ def _print_results(results, fmt: str = "text"):
 )
 def serve(host, port, transport):
     """Start stv as a remote MCP server (+ REST API for party mode)."""
-    from smartest_tv.server import mcp
-    from smartest_tv.api import start_api_server
-    from smartest_tv.ui.common import kv_table, boxed
-    from smartest_tv.ui.theme import ICONS
     from rich.console import Group
     from rich.text import Text
+
+    from smartest_tv.api import start_api_server
+    from smartest_tv.server import mcp
+    from smartest_tv.ui.common import boxed, kv_table
+    from smartest_tv.ui.theme import ICONS
 
     api_port = port + 1
     start_api_server(host, api_port)
@@ -450,7 +459,7 @@ def mute(ctx):
 @click.pass_context
 def launch(ctx, app, content_id):
     """Launch an app, optionally with deep link content ID."""
-    from smartest_tv.ui.theme import ICONS, app_icon
+    from smartest_tv.ui.theme import app_icon
     d = _get_driver(ctx.obj["tv_name"])
 
     async def _do():
@@ -671,8 +680,9 @@ def search(ctx, platform, query):
         stv search youtube "baby shark"
     """
     from smartest_tv.resolve import (
-        _search_netflix_title_id, _scrape_netflix_all_seasons,
-        _search_spotify, _slugify,
+        _scrape_netflix_all_seasons,
+        _search_netflix_title_id,
+        _search_spotify,
     )
 
     query_str = " ".join(query)
@@ -711,7 +721,8 @@ def search(ctx, platform, query):
             _print(_ui.render_spotify_search(query_str, uri))
 
     elif p == "youtube":
-        import shutil, subprocess as sp
+        import shutil
+        import subprocess as sp
         if not shutil.which("yt-dlp"):
             _fail("yt-dlp not found")
             return
@@ -962,8 +973,8 @@ def recommend(ctx, mood, limit):
         stv recommend --mood chill
         stv recommend --mood action -n 3
     """
-    from smartest_tv.resolve import get_recommendations
     from smartest_tv import cache as _cache
+    from smartest_tv.resolve import get_recommendations
 
     history_data = _cache.analyze_history()
     recent = history_data["recent_shows"]
@@ -1285,7 +1296,7 @@ def scene_list_cmd(ctx):
     Example:
         stv scene list
     """
-    from smartest_tv.scenes import list_scenes, BUILTIN_SCENES
+    from smartest_tv.scenes import BUILTIN_SCENES, list_scenes
 
     scenes = list_scenes()
     if ctx.obj["fmt"] == "json":
@@ -1625,7 +1636,7 @@ def display_message(ctx, text, bg, color):
         stv display message "Dinner's ready!"
         stv display message "Welcome home" --bg "#1a1a2e" --color "#e94560"
     """
-    from smartest_tv.display import generate_html, serve
+    from smartest_tv.display import generate_html
 
     html = generate_html("message", {"text": text, "bg": bg, "color": color})
     _cast_html(ctx, html)
@@ -1642,7 +1653,7 @@ def display_clock(ctx, fmt):
         stv display clock
         stv display clock --format 12h
     """
-    from smartest_tv.display import generate_html, serve
+    from smartest_tv.display import generate_html
 
     html = generate_html("clock", {"format": fmt})
     _cast_html(ctx, html)
@@ -1658,7 +1669,7 @@ def display_dashboard(ctx, cards, title):
     Example:
         stv display dashboard "Time:21:30" "Weather:18°C" "WiFi:Connected"
     """
-    from smartest_tv.display import generate_html, serve
+    from smartest_tv.display import generate_html
 
     parsed = []
     for card in cards:
@@ -1680,7 +1691,7 @@ def display_url(ctx, url):
     Example:
         stv display url https://grafana.local/d/my-dashboard
     """
-    from smartest_tv.display import generate_html, serve
+    from smartest_tv.display import generate_html
 
     html = generate_html("iframe", {"url": url, "fullscreen": True})
     _cast_html(ctx, html)
@@ -1819,6 +1830,7 @@ def license_status():
         stv license status
     """
     import os
+
     from smartest_tv.config import CONFIG_DIR
 
     # Check env var first, then file

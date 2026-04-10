@@ -15,7 +15,6 @@ import re
 from smartest_tv import cache
 from smartest_tv.http import curl_json
 
-
 # ---------------------------------------------------------------------------
 # Check if the engine is available (PyPI install vs GitHub clone)
 # ---------------------------------------------------------------------------
@@ -116,8 +115,9 @@ def resolve_appletv(
     if cached:
         return cached
 
-    from smartest_tv.http import curl as _curl
     import json as _json
+
+    from smartest_tv.http import curl as _curl
 
     # Step 1: search for the show to get its showId
     search_result = _curl(f"https://tv.apple.com/search?term={_url_encode(query)}")
@@ -263,10 +263,10 @@ def resolve(
 def _api_resolve(platform: str, query: str, season: int | None = None,
                  episode: int | None = None, title_id: int | None = None) -> str:
     """Resolve via the hosted API fallback."""
-    import os
+    import json
+
     from smartest_tv.cache import CACHE_API_URL
     from smartest_tv.http import curl
-    import json
 
     body: dict = {"platform": platform, "query": query}
     if season is not None:

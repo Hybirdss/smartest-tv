@@ -248,7 +248,7 @@ def remove_tv(name: str) -> None:
     tv_section = config.get("tv", {})
 
     if _is_legacy(tv_section):
-        raise KeyError(f"No multi-TV config. Only single TV configured.")
+        raise KeyError("No multi-TV config. Only single TV configured.")
 
     tvs = {k: v for k, v in tv_section.items() if isinstance(v, dict)}
     if name not in tvs:
@@ -264,7 +264,7 @@ def set_default_tv(name: str) -> None:
     tv_section = config.get("tv", {})
 
     if _is_legacy(tv_section):
-        raise KeyError(f"No multi-TV config. Only single TV configured.")
+        raise KeyError("No multi-TV config. Only single TV configured.")
 
     tvs = {k: v for k, v in tv_section.items() if isinstance(v, dict)}
     if name not in tvs:
