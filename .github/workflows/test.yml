@@ -27,7 +27,14 @@ jobs:
             > src/smartest_tv/_engine/__init__.py
 
       - name: Install package with dev dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" pytest-cov
 
-      - name: Run unit tests
-        run: python -m pytest tests/ -v
+      - name: Run unit tests with coverage
+        run: python -m pytest tests/ -v --cov=smartest_tv --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'pull_request'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
