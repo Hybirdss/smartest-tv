@@ -1,7 +1,7 @@
 ---
 name: smartest-tv
 description: "Control a smart TV with natural language. Play Netflix episodes/movies, YouTube videos, Spotify music. Also handles volume, power, notifications, history, 'continue watching', scenes, recommendations, cast URLs, queue, and multi-TV management. Triggers on: 'play', 'watch', 'TV', 'Netflix', 'YouTube', 'Spotify', 'volume', 'mute', 'good night', 'movie night', 'continue', 'next episode', 'scene', 'recommend', 'trending', 'cast', 'queue'."
-version: 0.8.0
+version: 1.0.0
 metadata:
   openclaw:
     requires:
@@ -61,13 +61,16 @@ The user rarely says "netflix" or "youtube". Infer it:
 |-----------|----------|-----|
 | "Play Stranger Things S4E7" | netflix | Series with season/episode |
 | "Play Glass Onion" | netflix | Movie title |
+| "Play Percy Jackson" | disney or auto | Could be Disney+, let auto-detect decide |
+| "Play The Boys" | prime or auto | Prime Video original |
+| "Play Frieren" | auto | Let stv figure out the platform |
 | "Play that cooking video" | youtube | General video content |
 | "Play baby shark" | youtube | Kids content, music video |
 | "Play Ye White Lines" | spotify | Song/artist name |
 | "Play my chill playlist" | spotify | Playlist / music genre |
 | "Play lofi hip hop radio" | youtube | Live stream / radio |
 
-When ambiguous: Netflix (series/movies) > YouTube (videos) > Spotify (music).
+When ambiguous or unsure, omit the platform — `stv play "title"` auto-detects which streaming service has it in your region.
 
 ## Core Commands
 
@@ -76,9 +79,14 @@ When ambiguous: Netflix (series/movies) > YouTube (videos) > Spotify (music).
 ```bash
 stv play netflix "Stranger Things" s4e7   # series episode
 stv play netflix "Glass Onion"            # movie (auto title ID)
+stv play disney "Percy Jackson" s1e1      # Disney+
+stv play prime "The Boys" s1e1            # Prime Video
+stv play "Frieren"                        # auto-detects platform
 stv play youtube "baby shark"             # YouTube video
 stv play spotify "Ye White Lines"         # Spotify track
 ```
+
+30+ streaming platforms supported: Netflix, Disney+, Prime Video, Max, Hulu, Paramount+, Peacock, Crunchyroll, Apple TV+, and more. Skip the platform name and stv auto-detects where it's streaming.
 
 ### Cast a URL
 
@@ -260,10 +268,26 @@ stv doctor                        # diagnose issues
 | `tv_display` | TV as display: dashboards, clocks, messages | `content_type`, `data?`, `tv_name?` |
 | `tv_audio` | Multi-room audio, screens off | `action`, `query?`, `platform?`, `rooms?` |
 
+## Troubleshooting
+
+### Wrong content plays or resolve fails
+Cache might be stale. Clear it and retry:
+```bash
+rm ~/.config/smartest-tv/cache.json
+stv play netflix "Dark" s1e1          # re-resolves fresh
+```
+
+### Platform auto-detect picks wrong service
+Specify the platform explicitly:
+```bash
+stv play disney "Percy Jackson" s1e1  # force Disney+
+```
+
 ## Notes
 
 - All CLI commands support `--format json` for structured output
-- First Netflix resolve: ~2-3s (web fetch). Cached after: ~0.1s
+- 30+ platforms: Netflix, Disney+, Prime, Max, Hulu, Paramount+, Peacock, Crunchyroll, Apple TV+, YouTube, Spotify, and more
+- First resolve: ~2-3s (web fetch). Cached after: ~0.1s
 - Netflix profile selection happens on-screen (can't skip)
 - If auto-search fails: `stv play netflix "X" --title-id XXXXX`
 - `tv_name` is optional on every MCP tool. Omit it to use the default TV

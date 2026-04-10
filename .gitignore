@@ -12,4 +12,10 @@ build/
 request.token
 .mcpregistry_*
 launch-posts.md
+launch-posts.html
+post-reddit.py
+demo-script.sh
+demo.tape
+.architecture.json
+ARCHITECTURE.md
 

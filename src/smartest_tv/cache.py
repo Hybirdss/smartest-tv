@@ -159,11 +159,11 @@ def put(platform: str, key: str, value: Any) -> None:
     data.setdefault("_timestamps", {})[f"{platform}:{key}"] = int(time.time())
     _save(data)
 
-    # Contribute YouTube/Spotify resolutions to API
-    if platform == "youtube":
-        _contribute(platform, key, {"video_id": value})
-    elif platform == "spotify":
-        _contribute(platform, key, {"uri": value})
+    # Contribute resolutions to community cache (YouTube/Spotify: local only)
+    if platform == "netflix":
+        pass  # Netflix contributes via put_netflix_show()
+    elif platform not in ("youtube", "spotify"):
+        _contribute(platform, key, {"url": value} if isinstance(value, str) else value)
 
 
 def get_netflix_episode(title_slug: str, season: int, episode: int) -> str | None:
