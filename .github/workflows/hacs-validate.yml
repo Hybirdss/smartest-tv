@@ -15,6 +15,6 @@ jobs:
     steps:
       - uses: "actions/checkout@v4"
       - name: HACS validation
-        uses: "hacs/action@main"
+        uses: "hacs/action@dcb30e72781db3f207d5236b861172774ab0b485" # pin to known SHA
         with:
           category: "integration"
