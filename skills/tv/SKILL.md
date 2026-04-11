@@ -23,8 +23,20 @@ metadata:
 
 # smartest-tv
 
-Control a smart TV via the `stv` CLI — or open content in the browser if no TV is set up.
-No TV required: when no TV is configured, stv opens content in the default web browser.
+Control a smart TV via the `stv` CLI — or open content in the browser.
+
+## TV vs Browser
+
+Before running any command, determine if the user has a TV configured:
+
+```bash
+stv doctor   # if this fails → no TV, use --tv browser
+```
+
+- **TV configured**: run commands normally (`stv play netflix "Dark" s1e1`)
+- **No TV configured**: stv auto-opens in browser (no flag needed)
+- **TV configured but user wants browser**: add `--tv browser` to any play command
+- **User doesn't specify**: if uncertain, ask "TV에서 볼까요, 브라우저에서 열까요?"
 
 ## Decision Tree
 
@@ -32,7 +44,7 @@ Use this to pick the right action:
 
 ```
 User wants to...
-├── Watch something specific → stv play
+├── Watch something specific → stv play (or stv --tv browser play for browser)
 ├── Watch a URL someone shared → stv cast <URL>
 ├── Continue what they were watching → stv next
 ├── Know what's popular → stv whats-on
@@ -44,7 +56,7 @@ User wants to...
 ├── Use a different TV → add --tv <name> to any command
 ├── Play on ALL TVs → add --all to play/off/volume/mute/notify
 ├── Play on a GROUP of TVs → add --group <name> to play/off/volume/mute/notify
-├── Open in browser instead of TV → stv play --on browser (or just don't configure a TV)
+├── Open in browser instead of TV → add --tv browser
 ├── Watch with friends (remote) → tv_sync (MCP) or --group with remote TVs
 ├── Show something on TV screen → stv display (message, clock, dashboard, URL)
 ├── Play music everywhere → stv audio play (screens off, multi-room)
