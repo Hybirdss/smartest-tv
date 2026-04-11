@@ -32,7 +32,7 @@
 
 <br>
 
-<p align="center"><code>pip install stv && stv play youtube "lofi beats"</code></p>
+<p align="center"><code>pip install stv && stv play "Frieren"</code></p>
 
 <p align="center"><sub>No TV? Opens in your browser. Got a TV? <code>stv setup</code> to connect it.</sub></p>
 
@@ -122,7 +122,7 @@ based on your watch history — not a 30-command help dump.
 
 ```bash
 $ stv "play dark on netflix"     # natural language works
-$ stv youtube lofi beats         # platform shorthand
+$ stv play "Frieren"             # auto-detects platform
 $ stv next                       # continue last show
 $ stv stats                      # → insights
 ```
