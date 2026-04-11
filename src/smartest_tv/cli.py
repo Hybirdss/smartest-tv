@@ -357,9 +357,10 @@ def doctor(ctx):
     try:
         answer = click.prompt(msg, default="n", show_default=False)
         if answer.lower() in ("y", "yes"):
+            import importlib.metadata
+
             from smartest_tv.cache import CACHE_API_URL
             from smartest_tv.http import curl_json
-            import importlib.metadata
             try:
                 version = importlib.metadata.version("stv")
             except Exception:
