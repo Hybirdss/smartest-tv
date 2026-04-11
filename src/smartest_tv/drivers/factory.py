@@ -31,7 +31,8 @@ def create_driver(tv_name: str | None = None) -> TVDriver:
     platform = tv.get("platform", "")
 
     if not platform:
-        raise ValueError("No TV configured. Run: stv setup")
+        from smartest_tv.drivers.browser import BrowserDriver
+        return BrowserDriver()
 
     ip = tv.get("ip", "")
     mac = tv.get("mac", "")
@@ -90,6 +91,10 @@ def create_driver(tv_name: str | None = None) -> TVDriver:
                 "  pip install 'stv[roku]'"
             )
         return RokuDriver(ip=ip)
+
+    elif platform == "browser":
+        from smartest_tv.drivers.browser import BrowserDriver
+        return BrowserDriver()
 
     else:
         raise ValueError(f"Unknown platform: {platform}. Run: stv setup")

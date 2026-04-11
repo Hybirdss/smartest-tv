@@ -27,10 +27,10 @@ def resolve_app(name: str, platform: str) -> tuple[str, str]:
 def _fallback_resolve(name: str, platform: str) -> tuple[str, str]:
     """Minimal app resolution without the engine."""
     _BASIC = {
-        "netflix": {"lg": "netflix", "samsung": "11101200001", "roku": "12", "android": "com.netflix.ninja"},
-        "youtube": {"lg": "youtube.leanback.v4", "samsung": "111299001912", "roku": "837", "android": "com.google.android.youtube.tv"},
-        "spotify": {"lg": "spotify-beehive", "samsung": "3201606009684", "roku": "22297", "android": "com.spotify.tv.android"},
-        "appletv": {"lg": "com.apple.appletv", "samsung": "3201807016598", "roku": "2", "android": "com.apple.atve.androidtv.appletv"},
+        "netflix": {"lg": "netflix", "samsung": "11101200001", "roku": "12", "android": "com.netflix.ninja", "browser": "netflix"},
+        "youtube": {"lg": "youtube.leanback.v4", "samsung": "111299001912", "roku": "837", "android": "com.google.android.youtube.tv", "browser": "youtube"},
+        "spotify": {"lg": "spotify-beehive", "samsung": "3201606009684", "roku": "22297", "android": "com.spotify.tv.android", "browser": "spotify"},
+        "appletv": {"lg": "com.apple.appletv", "samsung": "3201807016598", "roku": "2", "android": "com.apple.atve.androidtv.appletv", "browser": "appletv"},
     }
     _NAMES = {"netflix": "Netflix", "youtube": "YouTube", "spotify": "Spotify", "appletv": "Apple TV+"}
 
