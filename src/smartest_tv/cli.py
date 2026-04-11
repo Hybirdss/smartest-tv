@@ -703,7 +703,7 @@ def whats_on(ctx, platform, limit):
 
 @main.command()
 @click.argument("platform")
-@click.argument("query", nargs=-1, required=True)
+@click.argument("query", nargs=-1)
 @click.pass_context
 def search(ctx, platform, query):
     """Search for content and show what stv found.
@@ -848,7 +848,7 @@ def _parse_season_episode(text: str) -> tuple[int | None, int | None]:
 
 @main.command()
 @click.argument("platform")
-@click.argument("query", nargs=-1, required=True)
+@click.argument("query", nargs=-1)
 @click.option("--season", "-s", type=int, help="Season number")
 @click.option("--episode", "-e", type=int, help="Episode number")
 @click.option("--title-id", type=int, help="Netflix title ID (skips search)")
@@ -902,7 +902,7 @@ def resolve(ctx, platform, query, season, episode, title_id):
 
 @main.command()
 @click.argument("platform")
-@click.argument("query", nargs=-1, required=True)
+@click.argument("query", nargs=-1)
 @click.option("--season", "-s", type=int, help="Season number")
 @click.option("--episode", "-e", type=int, help="Episode number")
 @click.option("--title-id", type=int, help="Netflix title ID (skips search)")
