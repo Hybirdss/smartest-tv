@@ -5,15 +5,13 @@ version: 1.0.0
 metadata:
   openclaw:
     requires:
-      env:
-        - TV_PLATFORM
-        - TV_IP
+      env: []
       bins:
         - python3
         - stv
       anyBins: []
       config: []
-    primaryEnv: TV_IP
+    primaryEnv: ""
     emoji: "📺"
     homepage: https://github.com/Hybirdss/smartest-tv
     os: [macos, linux]
@@ -25,7 +23,8 @@ metadata:
 
 # smartest-tv
 
-Control a smart TV via the `stv` CLI. Pick the right command based on what the user wants.
+Control a smart TV via the `stv` CLI — or open content in the browser if no TV is set up.
+No TV required: when no TV is configured, stv opens content in the default web browser.
 
 ## Decision Tree
 
@@ -45,6 +44,7 @@ User wants to...
 ├── Use a different TV → add --tv <name> to any command
 ├── Play on ALL TVs → add --all to play/off/volume/mute/notify
 ├── Play on a GROUP of TVs → add --group <name> to play/off/volume/mute/notify
+├── Open in browser instead of TV → stv play --on browser (or just don't configure a TV)
 ├── Watch with friends (remote) → tv_sync (MCP) or --group with remote TVs
 ├── Show something on TV screen → stv display (message, clock, dashboard, URL)
 ├── Play music everywhere → stv audio play (screens off, multi-room)
