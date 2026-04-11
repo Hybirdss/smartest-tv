@@ -347,6 +347,36 @@ def doctor(ctx):
 
     _print(_ui.render_doctor(checks, tv_label=tv_label))
 
+    # Ask to send anonymous report
+    has_issues = any(c["status"] != "ok" for c in checks)
+    if has_issues:
+        msg = "\n  Found some issues. Send this report to help improve stv? (y/N) "
+    else:
+        msg = "\n  Everything looks good! Send this report to help improve stv? (y/N) "
+
+    try:
+        answer = click.prompt(msg, default="n", show_default=False)
+        if answer.lower() in ("y", "yes"):
+            from smartest_tv.cache import CACHE_API_URL
+            from smartest_tv.http import curl_json
+            import importlib.metadata
+            try:
+                version = importlib.metadata.version("stv")
+            except Exception:
+                version = "unknown"
+            curl_json(
+                f"{CACHE_API_URL.rsplit('/v1', 1)[0]}/v1/doctor-report",
+                data={
+                    "platform": tv.get("platform", "unknown"),
+                    "checks": checks,
+                    "stv_version": version,
+                },
+                timeout=5,
+            )
+            _info("Report sent. Thanks!")
+    except (EOFError, KeyboardInterrupt):
+        pass
+
 
 # -- Power -------------------------------------------------------------------
 
