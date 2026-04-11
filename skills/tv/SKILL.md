@@ -27,16 +27,21 @@ Control a smart TV via the `stv` CLI — or open content in the browser.
 
 ## TV vs Browser
 
-Before running any command, determine if the user has a TV configured:
+- **TV configured**: `stv play netflix "Dark" s1e1`
+- **No TV configured**: same command — auto-opens in browser
+- **TV configured but user wants browser**: `stv --tv browser play netflix "Dark" s1e1`
+- **User doesn't specify**: ask whether they want TV or browser
 
+**IMPORTANT**: `--tv browser` goes BEFORE the subcommand. `browser` is NOT a platform.
 ```bash
-stv doctor   # if this fails → no TV, use --tv browser
-```
+# CORRECT:
+stv --tv browser play netflix Frieren -s 2 -e 8
+stv --tv browser play youtube "lofi beats"
 
-- **TV configured**: run commands normally (`stv play netflix "Dark" s1e1`)
-- **No TV configured**: stv auto-opens in browser (no flag needed)
-- **TV configured but user wants browser**: add `--tv browser` to any play command
-- **User doesn't specify**: if uncertain, ask "TV에서 볼까요, 브라우저에서 열까요?"
+# WRONG — these will fail:
+stv play browser Frieren          # "browser" is not a platform
+stv play --tv browser Frieren     # --tv must come before play
+```
 
 ## Decision Tree
 
