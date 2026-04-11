@@ -16,7 +16,7 @@
   <a href="https://pypi.org/project/stv/"><img src="https://img.shields.io/pypi/v/stv?style=flat-square&color=blue" alt="PyPI: stv"></a>
   <a href="https://pepy.tech/project/stv"><img src="https://static.pepy.tech/badge/stv" alt="Total Downloads"></a>
   <a href="https://pepy.tech/project/stv"><img src="https://static.pepy.tech/badge/stv/month" alt="Downloads/month"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-252%20passed-brightgreen?style=flat-square" alt="Tests"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-282%20passed-brightgreen?style=flat-square" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.11+-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-21%20tools-8A2BE2?style=flat-square" alt="MCP Tools"></a>
@@ -32,9 +32,9 @@
 
 <br>
 
-<p align="center"><code>pip install stv && stv setup</code></p>
+<p align="center"><code>pip install stv && stv play youtube "lofi beats"</code></p>
 
-<p align="center"><sub>Runs on your local network. No cloud. No API keys. No subscriptions.</sub></p>
+<p align="center"><sub>No TV? Opens in your browser. Got a TV? <code>stv setup</code> to connect it.</sub></p>
 
 <p align="center">
   <img src="docs/assets/hero.png" alt="The Evolution of TV Control" width="720">
@@ -75,6 +75,9 @@ stv play netflix "Dark" s1e1
 </table>
 
 <br>
+
+> **No TV? No problem.** Without a TV configured, stv opens content directly in your browser.
+> Netflix, YouTube, Spotify, Disney+ — just `pip install stv` and go.
 
 ---
 
