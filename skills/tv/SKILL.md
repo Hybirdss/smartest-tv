@@ -1,6 +1,6 @@
 ---
 name: smartest-tv
-description: "Control a smart TV with natural language. Play Netflix episodes/movies, YouTube videos, Spotify music. Also handles volume, power, notifications, history, 'continue watching', scenes, recommendations, cast URLs, queue, and multi-TV management. Triggers on: 'play', 'watch', 'TV', 'Netflix', 'YouTube', 'Spotify', 'volume', 'mute', 'good night', 'movie night', 'continue', 'next episode', 'scene', 'recommend', 'trending', 'cast', 'queue'."
+description: "Control a smart TV or open streaming content in the browser. Play Netflix episodes/movies, YouTube videos, Spotify music — on TV or in browser (--tv browser). Also handles volume, power, notifications, history, 'continue watching', scenes, recommendations, cast URLs, queue, and multi-TV management. Triggers on: 'play', 'watch', 'TV', 'Netflix', 'YouTube', 'Spotify', 'volume', 'mute', 'good night', 'movie night', 'continue', 'next episode', 'scene', 'recommend', 'trending', 'cast', 'queue', 'play on browser', 'open in browser', 'stv'."
 version: 1.0.0
 metadata:
   openclaw:
