@@ -23,6 +23,11 @@ def create_driver(tv_name: str | None = None) -> TVDriver:
         ValueError: TV not found, not configured, or unknown platform.
         ImportError: Required driver package is not installed.
     """
+    # --tv browser: skip config lookup, go straight to browser
+    if tv_name == "browser":
+        from smartest_tv.drivers.browser import BrowserDriver
+        return BrowserDriver()
+
     try:
         tv = get_tv_config(tv_name)
     except KeyError as e:

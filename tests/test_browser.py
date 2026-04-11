@@ -102,3 +102,10 @@ def test_factory_browser_platform():
         from smartest_tv.drivers.factory import create_driver
         d = create_driver()
         assert isinstance(d, BrowserDriver)
+
+
+def test_factory_tv_name_browser():
+    """--tv browser bypasses config lookup entirely."""
+    from smartest_tv.drivers.factory import create_driver
+    d = create_driver(tv_name="browser")
+    assert isinstance(d, BrowserDriver)
