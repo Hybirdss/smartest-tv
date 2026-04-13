@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, PLATFORMS
@@ -39,6 +40,10 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Smartest TV."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(config_entry) -> SmarTestTVOptionsFlow:
+        return SmarTestTVOptionsFlow(config_entry)
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -146,6 +151,43 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
         from smartest_tv.discovery import discover
 
         return await asyncio.wait_for(discover(timeout=5.0), timeout=10.0)
+
+
+class SmarTestTVOptionsFlow(OptionsFlow):
+    """Options flow for configuring interruption sensors."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage interrupt_sensors option."""
+        if user_input is not None:
+            raw = user_input.get("interrupt_sensors", "[]").strip()
+            try:
+                sensors = json.loads(raw) if raw else []
+                if not isinstance(sensors, list):
+                    raise ValueError
+            except (ValueError, json.JSONDecodeError):
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=self._schema(raw),
+                    errors={"interrupt_sensors": "invalid_json"},
+                )
+            return self.async_create_entry(
+                title="",
+                data={"interrupt_sensors": sensors},
+            )
+
+        current = self.config_entry.options.get("interrupt_sensors", [])
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self._schema(json.dumps(current, indent=2) if current else "[]"),
+        )
+
+    @staticmethod
+    def _schema(default: str) -> vol.Schema:
+        return vol.Schema(
+            {vol.Optional("interrupt_sensors", default=default): str}
+        )
 
 
 def _register_tv(name: str, platform: str, ip: str, mac: str) -> None:

@@ -39,6 +39,10 @@ _MEDIA_ID_RE = re.compile(
 )
 
 
+_ACTIVATE_STATES = {"on", "ringing", "active"}
+_DEACTIVATE_STATES = {"off", "idle"}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -46,10 +50,48 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smartest TV media player from a config entry."""
     driver = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        [StvMediaPlayer(entry, driver)],
-        update_before_add=True,
-    )
+    entity = StvMediaPlayer(entry, driver)
+    async_add_entities([entity], update_before_add=True)
+
+    interrupt_sensors: list[dict] = entry.options.get("interrupt_sensors", [])
+    for cfg in interrupt_sensors:
+        entity_id = cfg.get("entity_id")
+        action = cfg.get("action", "pause")
+        duck_volume = cfg.get("duck_volume", 0.1)
+        if not entity_id:
+            continue
+
+        def _make_handler(eid: str, act: str, dvol: float):
+            async def _handler(event):
+                if event.data.get("entity_id") != eid:
+                    return
+                new_state = event.data.get("new_state")
+                if new_state is None:
+                    return
+                state_val = new_state.state if hasattr(new_state, "state") else str(new_state)
+
+                if state_val in _ACTIVATE_STATES:
+                    if act == "pause":
+                        if entity._attr_state == MediaPlayerState.PLAYING:
+                            entity._interrupt_was_playing = True
+                        await entity.async_media_pause()
+                    elif act == "duck":
+                        entity._interrupt_prior_volume = entity._attr_volume_level
+                        await entity.async_set_volume_level(dvol)
+                elif state_val in _DEACTIVATE_STATES:
+                    if act == "pause" and getattr(entity, "_interrupt_was_playing", False):
+                        entity._interrupt_was_playing = False
+                        await entity.async_media_play()
+                    elif act == "duck":
+                        prior = getattr(entity, "_interrupt_prior_volume", None)
+                        if prior is not None:
+                            entity._interrupt_prior_volume = None
+                            await entity.async_set_volume_level(prior)
+
+            return _handler
+
+        unsub = hass.bus.async_listen("state_changed", _make_handler(entity_id, action, duck_volume))
+        entity._interrupt_unsubs.append(unsub)
 
 
 class StvMediaPlayer(MediaPlayerEntity):
@@ -72,6 +114,11 @@ class StvMediaPlayer(MediaPlayerEntity):
         self._attr_volume_level: float | None = None
         self._attr_is_volume_muted: bool | None = None
         self._attr_app_name: str | None = None
+
+        # Interruption listener state
+        self._interrupt_unsubs: list = []
+        self._interrupt_was_playing: bool = False
+        self._interrupt_prior_volume: float | None = None
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -176,7 +223,10 @@ class StvMediaPlayer(MediaPlayerEntity):
             _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Disconnect driver when entity is removed."""
+        """Disconnect driver and cancel interruption listeners when entity is removed."""
+        for unsub in self._interrupt_unsubs:
+            unsub()
+        self._interrupt_unsubs.clear()
         if self._connected:
             try:
                 await self._driver.disconnect()
