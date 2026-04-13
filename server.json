@@ -19,14 +19,14 @@
       "environmentVariables": [
         {
           "description": "TV platform: lg, samsung, roku, or android",
-          "isRequired": true,
+          "isRequired": false,
           "format": "string",
           "isSecret": false,
           "name": "TV_PLATFORM"
         },
         {
           "description": "TV IP address on your local network",
-          "isRequired": true,
+          "isRequired": false,
           "format": "string",
           "isSecret": false,
           "name": "TV_IP"
