@@ -1,210 +1,271 @@
-"""Android TV / Fire TV driver via ADB TCP.
+"""Android TV / Google TV / Fire TV driver via Android TV Remote Protocol v2.
 
-Deep link intents:
-  Netflix  : am start -d 'netflix://title/{id}'
-  YouTube  : am start -d 'vnd.youtube:{id}'
-  Spotify  : am start -d 'spotify:{type}:{id}'
-  Disney+  : am start -d 'disneyplus://content/{id}'
+Uses the same protocol as the Google TV mobile app — no ADB, no developer
+mode, no 'Build number 7 taps'. Works out of the box on any Android TV
+since the Android TV Remote Service is pre-installed.
 
-Requires ADB debugging enabled on the TV (Developer Options → ADB debugging).
+Migrated from adb-shell which required Developer Options → ADB debugging.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
-import re
+from pathlib import Path
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
 try:
-    from adb_shell.adb_device_async import AdbDeviceTcpAsync
-    from adb_shell.auth.keygen import keygen
-    from adb_shell.auth.sign_pythonrsa import PythonRSASigner
+    from androidtvremote2 import AndroidTVRemote, CannotConnect, InvalidAuth
 except ImportError:
     raise ImportError("Install Android driver: pip install 'smartest-tv[android]'")
 
 
-# Deep link intent templates per app package
-_DEEP_LINK_INTENTS: dict[str, str] = {
-    "com.netflix.ninja": "am start -a android.intent.action.VIEW -d 'netflix://title/{id}'",
-    "com.google.android.youtube.tv": "am start -a android.intent.action.VIEW -d 'vnd.youtube:{id}'",
-    "com.google.android.youtube": "am start -a android.intent.action.VIEW -d 'vnd.youtube:{id}'",
-    "com.spotify.tv.android": "am start -a android.intent.action.VIEW -d '{id}'",
-    "com.spotify.music": "am start -a android.intent.action.VIEW -d '{id}'",
-    "com.disney.disneyplus": "am start -a android.intent.action.VIEW -d 'https://www.disneyplus.com/video/{id}'",
-    "com.amazon.amazonvideo.livingroom": "am start -a android.intent.action.VIEW -n com.amazon.amazonvideo.livingroom/com.amazon.ignition.IgnitionActivity --es 'contentId' '{id}'",
-    "com.apple.atve.androidtv.appletv": "am start -a android.intent.action.VIEW -d 'https://tv.apple.com/us/show/{id}'",
-    "com.hulu.livingroomplus": "am start -n com.hulu.livingroomplus/.WKWelcomeActivity --es 'deepLink' 'https://www.hulu.com/watch/{id}'",
-    "net.cj.cjhv.gs.tving": "am start -a android.intent.action.VIEW -d 'tving://detail/{id}'",
-    "com.coupang.play": "am start -a android.intent.action.VIEW -d 'coupangplay://watch/{id}'",
+# Android TV key codes (KEYCODE_* from KeyEvent)
+# Using numeric values for consistency with androidtvremote2
+KEY_POWER = 26
+KEY_WAKEUP = 224
+KEY_SLEEP = 223
+KEY_VOLUME_UP = 24
+KEY_VOLUME_DOWN = 25
+KEY_VOLUME_MUTE = 164
+KEY_MEDIA_PLAY = 126
+KEY_MEDIA_PAUSE = 127
+KEY_MEDIA_PLAY_PAUSE = 85
+KEY_MEDIA_STOP = 86
+KEY_CHANNEL_UP = 166
+KEY_CHANNEL_DOWN = 167
+KEY_HOME = 3
+KEY_BACK = 4
+
+
+# Deep link templates — Android TV Remote uses URLs, not shell intents
+_DEEP_LINKS: dict[str, str] = {
+    "com.netflix.ninja": "https://www.netflix.com/title/{id}",
+    "com.google.android.youtube.tv": "https://www.youtube.com/watch?v={id}",
+    "com.google.android.youtube": "https://www.youtube.com/watch?v={id}",
+    "com.spotify.tv.android": "spotify:{id}",
+    "com.spotify.music": "spotify:{id}",
+    "com.disney.disneyplus": "https://www.disneyplus.com/video/{id}",
+    "com.amazon.amazonvideo.livingroom": "https://www.primevideo.com/detail/{id}",
+    "com.apple.atve.androidtv.appletv": "https://tv.apple.com/us/show/{id}",
+    "com.hulu.livingroomplus": "https://www.hulu.com/watch/{id}",
 }
 
 
 class AndroidDriver(TVDriver):
-    """Android TV / Fire TV driver via ADB over TCP."""
+    """Android TV / Google TV / Fire TV driver via Remote Protocol v2."""
 
     platform = "android"
 
-    def __init__(self, ip: str, port: int = 5555, adb_key_path: str = ""):
+    def __init__(self, ip: str, port: int = 6466, cert_dir: str = ""):
         self.ip = ip
         self.port = port
-        self.adb_key_path = adb_key_path or os.path.expanduser(
-            "~/.config/smartest-tv/adbkey"
+        self.cert_dir = cert_dir or os.path.expanduser(
+            "~/.config/smartest-tv/android-cert"
         )
-        self._device: AdbDeviceTcpAsync | None = None
+        self.certfile = str(Path(self.cert_dir) / "cert.pem")
+        self.keyfile = str(Path(self.cert_dir) / "key.pem")
+        self._remote: AndroidTVRemote | None = None
+
+    async def _build_remote(self) -> AndroidTVRemote:
+        Path(self.cert_dir).mkdir(parents=True, exist_ok=True)
+        remote = AndroidTVRemote(
+            client_name="smartest-tv",
+            certfile=self.certfile,
+            keyfile=self.keyfile,
+            host=self.ip,
+            api_port=self.port,
+        )
+        await remote.async_generate_cert_if_missing()
+        return remote
 
     async def connect(self) -> None:
-        os.makedirs(os.path.dirname(self.adb_key_path), exist_ok=True)
-        if not os.path.exists(self.adb_key_path):
-            keygen(self.adb_key_path)
-
-        signer = PythonRSASigner.FromRSAKeyPath(self.adb_key_path)
-        self._device = AdbDeviceTcpAsync(self.ip, self.port, default_transport_timeout_s=9.0)
-        await self._device.connect(rsa_keys=[signer], auth_timeout_s=10.0)
+        if self._remote is not None:
+            return
+        self._remote = await self._build_remote()
+        try:
+            await self._remote.async_connect()
+        except InvalidAuth:
+            self._remote = None
+            raise RuntimeError(
+                "Not paired with this TV. Run: stv setup"
+            )
+        except CannotConnect as e:
+            self._remote = None
+            raise RuntimeError(f"Cannot connect to TV at {self.ip}: {e}")
 
     async def disconnect(self) -> None:
-        if self._device:
-            await self._device.close()
-            self._device = None
+        if self._remote:
+            self._remote.disconnect()
+            self._remote = None
 
-    async def _shell(self, cmd: str) -> str:
-        if self._device is None:
+    async def _ensure(self) -> AndroidTVRemote:
+        if self._remote is None:
             await self.connect()
-        result = await self._device.shell(cmd)  # type: ignore
-        return result or ""
+        return self._remote  # type: ignore
 
-    async def _keyevent(self, code: int) -> None:
-        await self._shell(f"input keyevent {code}")
+    async def _key(self, code: int) -> None:
+        r = await self._ensure()
+        r.send_key_command(code)
+
+    # -- Pairing (called from stv setup) --------------------------------------
+
+    async def start_pairing(self) -> AndroidTVRemote:
+        """Start pairing: TV displays a 6-digit PIN. Caller must call
+        finish_pairing(pin) with the code shown on the TV."""
+        remote = await self._build_remote()
+        try:
+            await remote.async_connect()
+            # Already paired
+            return remote
+        except InvalidAuth:
+            pass  # expected on first pair
+        await remote.async_start_pairing()
+        return remote
+
+    async def finish_pairing(self, remote: AndroidTVRemote, pin: str) -> None:
+        """Complete pairing with PIN shown on TV."""
+        await remote.async_finish_pairing(pin)
+        # Reconnect with new cert
+        remote.disconnect()
+        await remote.async_connect()
+        self._remote = remote
 
     # -- Power ----------------------------------------------------------------
 
     async def power_on(self) -> None:
-        await self._keyevent(224)  # KEYCODE_WAKEUP
+        await self._key(KEY_WAKEUP)
 
     async def power_off(self) -> None:
-        await self._keyevent(223)  # KEYCODE_SLEEP
+        await self._key(KEY_SLEEP)
 
     # -- Volume ---------------------------------------------------------------
 
     async def get_volume(self) -> int:
-        output = await self._shell("dumpsys audio | grep -m1 'STREAM_MUSIC'")
-        match = re.search(r"index[=:](\d+)", output)
-        return int(match.group(1)) if match else 0
+        r = await self._ensure()
+        info = r.volume_info or {}
+        return int(info.get("level", 0))
 
     async def set_volume(self, level: int) -> None:
-        await self._shell(f"media volume --stream 3 --set {max(0, min(100, level))}")
+        # Android TV Remote can't set absolute volume — step toward target
+        r = await self._ensure()
+        current = await self.get_volume()
+        target = max(0, min(100, level))
+        diff = target - current
+        if diff == 0:
+            return
+        code = KEY_VOLUME_UP if diff > 0 else KEY_VOLUME_DOWN
+        for _ in range(abs(diff)):
+            r.send_key_command(code)
 
     async def volume_up(self) -> None:
-        await self._keyevent(24)
+        await self._key(KEY_VOLUME_UP)
 
     async def volume_down(self) -> None:
-        await self._keyevent(25)
+        await self._key(KEY_VOLUME_DOWN)
 
     async def set_mute(self, mute: bool) -> None:
-        await self._keyevent(164)  # KEYCODE_VOLUME_MUTE (toggle)
+        await self._key(KEY_VOLUME_MUTE)
 
     async def get_muted(self) -> bool:
-        output = await self._shell("dumpsys audio | grep -m1 muted")
-        return "true" in output.lower()
+        r = await self._ensure()
+        info = r.volume_info or {}
+        return bool(info.get("muted", False))
 
     # -- Apps & Deep Linking --------------------------------------------------
 
     async def launch_app(self, app_id: str) -> None:
-        await self._shell(
-            f"monkey -p {app_id} -c android.intent.category.LAUNCHER 1"
-        )
+        r = await self._ensure()
+        r.send_launch_app_command(app_id)
 
     async def launch_app_deep(self, app_id: str, content_id: str) -> None:
-        # Normalize content IDs (strip URLs to bare IDs)
+        r = await self._ensure()
         content_id = self._normalize_content_id(app_id, content_id)
 
-        if app_id in _DEEP_LINK_INTENTS:
-            cmd = _DEEP_LINK_INTENTS[app_id].replace("{id}", content_id)
-            await self._shell(cmd)
+        if app_id in _DEEP_LINKS:
+            url = _DEEP_LINKS[app_id].replace("{id}", content_id)
+            r.send_launch_app_command(url)
         else:
-            await self._shell(
-                f"am start -a android.intent.action.VIEW -d '{content_id}'"
-            )
+            # Fallback: treat content_id as a URL
+            if content_id.startswith(("http://", "https://", "spotify:")):
+                r.send_launch_app_command(content_id)
+            else:
+                r.send_launch_app_command(app_id)
 
     @staticmethod
     def _normalize_content_id(app_id: str, content_id: str) -> str:
         """Strip URLs to bare IDs for known apps."""
+        import re
+
         if "netflix" in app_id and "netflix.com" in content_id:
             m = re.search(r"/(?:watch|title)/(\d+)", content_id)
             if m:
                 return m.group(1)
-        if "youtube" in app_id and ("youtube.com" in content_id or "youtu.be" in content_id):
-            m = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", content_id)
+        if "youtube" in app_id and (
+            "youtube.com" in content_id or "youtu.be" in content_id
+        ):
+            m = re.search(
+                r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", content_id
+            )
             if m:
                 return m.group(1)
         if "spotify" in app_id and "open.spotify.com" in content_id:
-            m = re.search(r"open\.spotify\.com/(track|album|artist|playlist)/([A-Za-z0-9]+)", content_id)
+            m = re.search(
+                r"open\.spotify\.com/(track|album|artist|playlist)/([A-Za-z0-9]+)",
+                content_id,
+            )
             if m:
                 return f"spotify:{m.group(1)}:{m.group(2)}"
         return content_id
 
     async def close_app(self, app_id: str) -> None:
-        await self._shell(f"am force-stop {app_id}")
+        # Android TV Remote Protocol doesn't support force-stop.
+        # Use HOME as a close-equivalent.
+        await self._key(KEY_HOME)
 
     async def list_apps(self) -> list[App]:
-        output = await self._shell("pm list packages -3")
-        apps = []
-        for line in output.strip().split("\n"):
-            if line.startswith("package:"):
-                pkg = line[8:].strip()
-                apps.append(App(id=pkg, name=pkg))
-        return apps
+        # Android TV Remote Protocol doesn't expose installed app list.
+        # Return an empty list — callers should use known app IDs.
+        return []
 
     # -- Media ----------------------------------------------------------------
 
     async def play(self) -> None:
-        await self._keyevent(126)  # KEYCODE_MEDIA_PLAY
+        await self._key(KEY_MEDIA_PLAY)
 
     async def pause(self) -> None:
-        await self._keyevent(127)  # KEYCODE_MEDIA_PAUSE
+        await self._key(KEY_MEDIA_PAUSE)
 
     async def stop(self) -> None:
-        await self._keyevent(86)  # KEYCODE_MEDIA_STOP
+        await self._key(KEY_MEDIA_STOP)
 
     # -- Status & Info --------------------------------------------------------
 
     async def status(self) -> TVStatus:
-        # Run queries in parallel
-        app_raw, vol_raw, muted_raw = await asyncio.gather(
-            self._shell("dumpsys window windows | grep -m1 mCurrentFocus"),
-            self.get_volume(),
-            self.get_muted(),
-        )
-        current_app = None
-        match = re.search(r"([a-zA-Z][a-zA-Z0-9_.]+\.[a-zA-Z0-9_.]+)", app_raw)
-        if match:
-            current_app = match.group(1)
-
+        r = await self._ensure()
+        vol_info = r.volume_info or {}
         return TVStatus(
-            current_app=current_app,
-            volume=vol_raw,
-            muted=muted_raw,
-            powered=True,
+            current_app=r.current_app,
+            volume=int(vol_info.get("level", 0)),
+            muted=bool(vol_info.get("muted", False)),
+            powered=r.is_on,
         )
 
     async def info(self) -> TVInfo:
-        model = (await self._shell("getprop ro.product.model")).strip()
-        firmware = (await self._shell("getprop ro.build.version.release")).strip()
-        name = (await self._shell("getprop ro.product.name")).strip()
-
+        r = await self._ensure()
+        dev = r.device_info or {}
         return TVInfo(
             platform="android",
-            model=model,
-            firmware=firmware,
+            model=dev.get("model", ""),
+            firmware=dev.get("build_type", ""),
             ip=self.ip,
-            name=name or "Android TV",
+            name=dev.get("manufacturer", "Android TV"),
         )
 
     # -- Channels -------------------------------------------------------------
 
     async def channel_up(self) -> None:
-        await self._keyevent(166)  # KEYCODE_CHANNEL_UP
+        await self._key(KEY_CHANNEL_UP)
 
     async def channel_down(self) -> None:
-        await self._keyevent(167)  # KEYCODE_CHANNEL_DOWN
+        await self._key(KEY_CHANNEL_DOWN)

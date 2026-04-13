@@ -170,10 +170,9 @@ def _pairing_hint(platform: str) -> str:
         return "No pairing needed — Roku is open by default."
     if platform in ("android", "firetv"):
         return (
-            "Quick one-time TV setup:\n"
-            "       Settings → About → tap 'Build number' 7 times\n"
-            "       → Developer Options → enable 'ADB debugging'\n"
-            "   (No remote? Use the Google TV / Fire TV app on your phone.)"
+            "Your TV will show a 6-digit PIN — enter it below when prompted.\n"
+            "   No developer mode needed. Uses the same protocol as the\n"
+            "   Google TV mobile app."
         )
     if platform == "lg":
         return "A popup just appeared on your TV. Press OK.\n   (No remote? Use the LG ThinQ app on your phone.)"
@@ -257,7 +256,23 @@ async def _pair_tv(tv: dict) -> str:
     elif platform in ("android", "firetv"):
         from smartest_tv.drivers.android import AndroidDriver
         driver = AndroidDriver(ip=ip)
-        await driver.connect()
+        try:
+            # Try existing pairing first
+            await driver.connect()
+            await driver.disconnect()
+            return ""
+        except RuntimeError:
+            pass  # Not paired — run pairing flow
+
+        # Start pairing: TV will show a 6-digit PIN
+        remote = await driver.start_pairing()
+        import click
+        pin = click.prompt(
+            "\n  A 6-digit PIN is shown on your TV. Enter it here",
+            type=str,
+            show_default=False,
+        ).strip()
+        await driver.finish_pairing(remote, pin)
         await driver.disconnect()
         return ""
 
