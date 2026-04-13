@@ -84,13 +84,69 @@ def resolve_netflix(
     )
 
 
+from dataclasses import dataclass
+
+
+@dataclass
+class Candidate:
+    title: str
+    year: int | None
+    type: str  # 'series' | 'movie' | 'unknown'
+    content_id: str
+
+
+def _search_netflix_candidates(query: str) -> list[Candidate]:
+    """Return up to 3 Netflix candidates via Brave/DDG search."""
+    from urllib.parse import quote
+
+    candidates: list[Candidate] = []
+    seen: set[str] = set()
+
+    for search_url in [
+        f"https://search.brave.com/search?q={quote(query + ' site:netflix.com/title')}",
+        f"https://html.duckduckgo.com/html/?q={quote(query + ' site:netflix.com/title')}",
+    ]:
+        r = curl(search_url)
+        if not r.body:
+            continue
+        for m in re.finditer(r"netflix\.com/(title|watch)/(\d+)", r.body):
+            content_id = m.group(2)
+            if content_id in seen:
+                continue
+            seen.add(content_id)
+
+            # Extract year from nearby text (e.g. "2017" or "(2019)")
+            snippet_start = max(0, m.start() - 200)
+            snippet = r.body[snippet_start: m.end() + 200]
+            year_m = re.search(r"\b(19|20)\d{2}\b", snippet)
+            year = int(year_m.group()) if year_m else None
+
+            # Infer type from URL or snippet
+            if "/tv-" in snippet or "series" in snippet.lower() or "season" in snippet.lower():
+                content_type = "series"
+            elif "film" in snippet.lower() or "movie" in snippet.lower():
+                content_type = "movie"
+            else:
+                content_type = "unknown"
+
+            candidates.append(Candidate(
+                title=query,
+                year=year,
+                type=content_type,
+                content_id=content_id,
+            ))
+            if len(candidates) >= 3:
+                break
+        if len(candidates) >= 3:
+            break
+
+    return candidates
+
+
 def _search_netflix_title_id(query: str) -> int | None:
     """Search for a Netflix title ID via Brave Search."""
-    return _web_search_first_match(
-        f"{query} site:netflix.com/title",
-        r"netflix\.com/title/(\d+)",
-        cast=int,
-    )
+    candidates = _search_netflix_candidates(query)
+    return int(candidates[0].content_id) if candidates else None
 
 
 def _web_search_first_match(query: str, pattern: str, cast=str):
