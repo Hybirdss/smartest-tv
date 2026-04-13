@@ -1,16 +1,23 @@
-"""LG webOS TV driver via bscpylgtv (WebSocket SSAP protocol)."""
+"""LG webOS TV driver via aiowebostv (WebSocket SSAP protocol).
+
+Migrated from bscpylgtv to aiowebostv (Home Assistant's official library)
+to support webOS 24/25 which added new permission requirements that
+bscpylgtv hasn't caught up with.
+"""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import socket
+from pathlib import Path
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
 try:
-    from bscpylgtv import WebOsClient
-    from bscpylgtv import endpoints as ep
+    from aiowebostv import WebOsClient
+    from aiowebostv import endpoints as ep
 except ImportError:
     raise ImportError("Install LG driver: pip install 'smartest-tv[lg]'")
 
@@ -41,20 +48,56 @@ class LGDriver(TVDriver):
     def __init__(self, ip: str, mac: str = "", key_file: str = ""):
         self.ip = ip
         self.mac = mac
+        # aiowebostv stores raw client_key string — use .json
         self.key_file = key_file or os.path.expanduser(
-            "~/.config/smartest-tv/lg_key.db"
+            "~/.config/smartest-tv/lg_key.json"
         )
         self._client: WebOsClient | None = None
 
+    def _load_client_key(self) -> str | None:
+        """Load persisted client_key from JSON file.
+
+        Handles migration from bscpylgtv (.db binary format) — if only
+        the legacy file exists, remove it so aiowebostv can re-pair.
+        The user will see a one-time TV prompt after upgrading.
+        """
+        p = Path(self.key_file)
+        if p.exists():
+            try:
+                return json.loads(p.read_text()).get("client_key")
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                return None
+
+        # Migrate: legacy bscpylgtv .db file exists but our .json doesn't
+        # → wipe the legacy binary (can't read it) and force fresh pairing
+        legacy = p.parent / "lg_key.db"
+        if legacy.exists():
+            try:
+                backup = p.parent / "lg_key.db.bscpylgtv.bak"
+                legacy.rename(backup)
+            except OSError:
+                try:
+                    legacy.unlink()
+                except OSError:
+                    pass
+        return None
+
+    def _save_client_key(self, client_key: str) -> None:
+        p = Path(self.key_file)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"client_key": client_key}))
+
     async def connect(self) -> None:
-        os.makedirs(os.path.dirname(self.key_file), exist_ok=True)
-        self._client = await WebOsClient.create(
-            self.ip,
-            key_file_path=self.key_file,
-            ping_interval=None,
-            states=[],
-        )
+        if self._client is not None and self._client.is_connected():
+            return
+
+        client_key = self._load_client_key()
+        self._client = WebOsClient(self.ip, client_key=client_key)
         await self._client.connect()
+
+        # Persist the key if it was freshly obtained via pairing
+        if self._client.client_key and self._client.client_key != client_key:
+            self._save_client_key(self._client.client_key)
 
     async def disconnect(self) -> None:
         if self._client:
@@ -62,7 +105,7 @@ class LGDriver(TVDriver):
             self._client = None
 
     async def _ensure(self) -> WebOsClient:
-        if self._client is None:
+        if self._client is None or not self._client.is_connected():
             await self.connect()
         return self._client  # type: ignore
 
@@ -86,7 +129,8 @@ class LGDriver(TVDriver):
 
     async def get_volume(self) -> int:
         c = await self._ensure()
-        return await c.get_volume()
+        status = await c.get_audio_status()
+        return status.get("volume", 0)
 
     async def set_volume(self, level: int) -> None:
         c = await self._ensure()
@@ -106,7 +150,8 @@ class LGDriver(TVDriver):
 
     async def get_muted(self) -> bool:
         c = await self._ensure()
-        return await c.get_muted()
+        status = await c.get_audio_status()
+        return status.get("mute", False)
 
     # -- Apps & Deep Linking --------------------------------------------------
 
@@ -181,10 +226,11 @@ class LGDriver(TVDriver):
 
     async def status(self) -> TVStatus:
         c = await self._ensure()
+        audio = await c.get_audio_status()
         return TVStatus(
             current_app=await c.get_current_app(),
-            volume=await c.get_volume(),
-            muted=await c.get_muted(),
+            volume=audio.get("volume", 0),
+            muted=audio.get("mute", False),
             sound_output=await c.get_sound_output(),
         )
 
@@ -234,8 +280,8 @@ class LGDriver(TVDriver):
 
     async def screen_off(self) -> None:
         c = await self._ensure()
-        await c.turn_screen_off()
+        await c.request(ep.TURN_OFF_SCREEN)
 
     async def screen_on(self) -> None:
         c = await self._ensure()
-        await c.turn_screen_on()
+        await c.request(ep.TURN_ON_SCREEN)
