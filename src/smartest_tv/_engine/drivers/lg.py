@@ -18,8 +18,28 @@ from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 try:
     from aiowebostv import WebOsClient
     from aiowebostv import endpoints as ep
+    from aiowebostv.exceptions import WebOsTvCommandError
 except ImportError:
     raise ImportError("Install LG driver: pip install 'smartest-tv[lg]'")
+
+
+class _SmarTestWebOsClient(WebOsClient):
+    # webOS 24/25 tightened com.webos.media/* permissions, and aiowebostv's
+    # REGISTRATION_PAYLOAD manifest doesn't request them. As of aiowebostv
+    # 0.7.5 (latest on PyPI), _get_states_and_subscribe_state_updates fires
+    # subscribe_media_foreground_app unconditionally during connect(), the TV
+    # answers 401 insufficient permissions, and the resulting
+    # WebOsTvCommandError propagates up and kills connect entirely. aiowebostv
+    # already uses suppress(WebOsTvCommandError) around subscribe_channels and
+    # subscribe_current_channel for the same class of failure
+    # (webos_client.py:503, 509) — this subclass extends that pattern to the
+    # media subscription. Our driver queries media state on-demand in status()
+    # with its own try/except, so losing the push subscription is harmless.
+    async def subscribe_media_foreground_app(self, callback):
+        try:
+            return await super().subscribe_media_foreground_app(callback)
+        except WebOsTvCommandError:
+            return {}
 
 
 # App aliases → (webOS app ID, display name)
@@ -92,7 +112,7 @@ class LGDriver(TVDriver):
             return
 
         client_key = self._load_client_key()
-        self._client = WebOsClient(self.ip, client_key=client_key)
+        self._client = _SmarTestWebOsClient(self.ip, client_key=client_key)
         await self._client.connect()
 
         # Persist the key if it was freshly obtained via pairing
