@@ -147,6 +147,25 @@ async def discover(timeout: float = 5.0) -> list[dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _parse_hms(text: str | None) -> int | None:
+    """Parse Roku media-player time string 'H:MM:SS.mmm' → integer seconds."""
+    if not text:
+        return None
+    try:
+        parts = text.split(".")[0].split(":")
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        if len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+        return int(parts[0])
+    except (ValueError, IndexError):
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Roku Driver
 # ---------------------------------------------------------------------------
 
@@ -379,6 +398,10 @@ class RokuDriver(TVDriver):
         """
         current_app: str | None = None
         powered: bool | None = None
+        title: str | None = None
+        position_s: int | None = None
+        duration_s: int | None = None
+        play_state: str | None = None
 
         try:
             root = await self._get_xml("/query/active-app")
@@ -392,11 +415,28 @@ class RokuDriver(TVDriver):
         except Exception:
             powered = False
 
+        try:
+            mp = await self._get_xml("/query/media-player")
+            state_el = mp.find("state")
+            if state_el is not None:
+                play_state = state_el.text
+            title_el = mp.find("title")
+            if title_el is not None:
+                title = title_el.text or None
+            position_s = _parse_hms(mp.findtext("position"))
+            duration_s = _parse_hms(mp.findtext("duration"))
+        except Exception:
+            pass
+
         return TVStatus(
             current_app=current_app,
             volume=None,   # not available via ECP
             muted=None,    # not available via ECP
             powered=powered,
+            title=title,
+            position_s=position_s,
+            duration_s=duration_s,
+            play_state=play_state,
         )
 
     async def info(self) -> TVInfo:

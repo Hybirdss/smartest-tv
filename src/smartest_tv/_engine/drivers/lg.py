@@ -227,11 +227,22 @@ class LGDriver(TVDriver):
     async def status(self) -> TVStatus:
         c = await self._ensure()
         audio = await c.get_audio_status()
+        title: str | None = None
+        play_state: str | None = None
+        try:
+            media_info = await c.get_media_foreground_app()
+            if media_info:
+                title = media_info.get("mediaId") or None
+                play_state = media_info.get("playState") or None
+        except Exception:
+            pass
         return TVStatus(
             current_app=await c.get_current_app(),
             volume=audio.get("volume", 0),
             muted=audio.get("mute", False),
             sound_output=await c.get_sound_output(),
+            title=title,
+            play_state=play_state,
         )
 
     async def info(self) -> TVInfo:

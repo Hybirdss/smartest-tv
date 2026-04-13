@@ -20,6 +20,10 @@ class TVStatus:
     muted: bool | None = None
     powered: bool | None = None
     sound_output: str | None = None
+    title: str | None = None
+    position_s: int | None = None
+    duration_s: int | None = None
+    play_state: str | None = None
 
 
 @dataclass
