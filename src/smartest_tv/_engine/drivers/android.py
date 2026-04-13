@@ -66,6 +66,18 @@ class AndroidDriver(TVDriver):
         self.certfile = str(Path(self.cert_dir) / "cert.pem")
         self.keyfile = str(Path(self.cert_dir) / "key.pem")
         self._remote: AndroidTVRemote | None = None
+        self._last_app: str | None = None
+        self._last_volume: dict = {}
+        self._last_power: bool | None = None
+
+    def _on_app(self, current_app: str) -> None:
+        self._last_app = current_app
+
+    def _on_volume(self, volume_info: dict) -> None:
+        self._last_volume = volume_info or {}
+
+    def _on_power(self, is_on: bool) -> None:
+        self._last_power = is_on
 
     async def _build_remote(self) -> AndroidTVRemote:
         Path(self.cert_dir).mkdir(parents=True, exist_ok=True)
@@ -93,6 +105,9 @@ class AndroidDriver(TVDriver):
         except CannotConnect as e:
             self._remote = None
             raise RuntimeError(f"Cannot connect to TV at {self.ip}: {e}")
+        self._remote.add_current_app_updated_callback(self._on_app)
+        self._remote.add_volume_info_updated_callback(self._on_volume)
+        self._remote.add_is_on_updated_callback(self._on_power)
 
     async def disconnect(self) -> None:
         if self._remote:
@@ -242,13 +257,13 @@ class AndroidDriver(TVDriver):
     # -- Status & Info --------------------------------------------------------
 
     async def status(self) -> TVStatus:
-        r = await self._ensure()
-        vol_info = r.volume_info or {}
+        await self._ensure()
+        vol_info = self._last_volume
         return TVStatus(
-            current_app=r.current_app,
-            volume=int(vol_info.get("level", 0)),
-            muted=bool(vol_info.get("muted", False)),
-            powered=r.is_on,
+            current_app=self._last_app,
+            volume=int(vol_info.get("level", 0)) if vol_info else None,
+            muted=bool(vol_info.get("muted", False)) if vol_info else None,
+            powered=self._last_power,
         )
 
     async def info(self) -> TVInfo:
