@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 import sys
+from pathlib import Path
 
 import click
 from rich.text import Text
@@ -159,6 +160,15 @@ def run_setup(ip: str | None = None) -> None:
     ))
 
     _print(boxed(Group(*success_lines), title=f"{ICONS['tv']} You're all set"))
+
+    # --- Install Claude Code skill ---
+    if (Path.home() / ".claude").exists():
+        try:
+            from smartest_tv.install_skill import main as _install_skill
+            _install_skill()
+            click.echo("✓ Claude Code skill installed — try: 'play Frieren on living room TV'")
+        except Exception:
+            pass
 
     # --- Detect AI clients ---
     _detect_ai_clients()

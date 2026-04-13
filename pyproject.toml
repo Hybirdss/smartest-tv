@@ -40,6 +40,7 @@ Repository = "https://github.com/Hybirdss/smartest-tv"
 
 [project.scripts]
 stv = "smartest_tv.cli:main"
+stv-install-skill = "smartest_tv.install_skill:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -66,3 +67,6 @@ ignore = ["E501"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/smartest_tv"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/stv-concierge" = "skills/stv-concierge"
