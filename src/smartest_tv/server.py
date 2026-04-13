@@ -6,8 +6,9 @@ Optimized for AI agents: fewer tools, each does more.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 
 from smartest_tv.apps import resolve_app
 from smartest_tv.drivers.base import TVDriver
@@ -345,6 +346,76 @@ async def tv_status(tv_name: str | None = None) -> dict:
         "volume": s.volume,
         "muted": s.muted,
     }
+
+
+# -- Live State (unified snapshot helper) ------------------------------------
+
+
+async def _snapshot(tv_name: str | None) -> dict:
+    """Return a unified live-state dict for one TV.
+
+    Fields the target driver cannot supply are returned as None.
+    app_id and hdmi_input are not wired by any driver yet (library limit).
+    """
+    d = await _get_driver(tv_name)
+    st = await d.status()
+    return {
+        "app": st.current_app,
+        "app_id": None,
+        "title": st.title,
+        "subtitle": None,
+        "position_seconds": st.position_s,
+        "duration_seconds": st.duration_s,
+        "play_state": st.play_state,
+        "volume": st.volume,
+        "mute": st.muted,
+        "hdmi_input": None,
+        "power_state": "on" if st.powered else "unknown",
+        "driver": d.platform,
+        "target_tv": tv_name,
+        "fetched_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
+@mcp.tool()
+async def tv_state(tv_name: str | None = None) -> dict:
+    """Get unified live TV state: playback, volume, input, power.
+
+    Returns a single snapshot for agent branching. Fields the target
+    driver cannot supply are returned as None.
+
+    Args:
+        tv_name: Target TV name. Omit for default TV.
+    """
+    return await _snapshot(tv_name)
+
+
+@mcp.tool()
+async def tv_state_watch(
+    tv_name: str | None = None,
+    interval: int = 5,
+    count: int = 12,
+    ctx: Context | None = None,
+) -> dict:
+    """Stream tv_state snapshots via progress notifications.
+
+    Emits `count` progress updates spaced `interval` seconds apart,
+    then returns the final snapshot. Default is 1 minute of watching.
+
+    Args:
+        tv_name: Target TV name. Omit for default TV.
+        interval: Seconds between snapshots (default 5).
+        count: Number of snapshots to emit (default 12).
+        ctx: MCP context for progress reporting (injected by FastMCP).
+    """
+    last: dict = {}
+    for i in range(count):
+        last = await _snapshot(tv_name)
+        if ctx is not None:
+            await ctx.report_progress(i + 1, count, last)
+        if i < count - 1:
+            await asyncio.sleep(interval)
+    return last
 
 
 # -- Screen ------------------------------------------------------------------
