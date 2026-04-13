@@ -946,6 +946,39 @@ def play(ctx, platform, query, season, episode, title_id):
 
     from smartest_tv.ui.theme import ICONS, app_icon
 
+    # Disambiguation: when platform is auto (or netflix without --title-id),
+    # surface multiple candidates so the user picks the right one.
+    if platform in ("auto", "netflix") and not title_id:
+        from smartest_tv._engine.resolve import _search_netflix_candidates
+        candidates = _search_netflix_candidates(query_str)
+        if len(candidates) > 1:
+            if sys.stdin.isatty():
+                lines = []
+                for i, c in enumerate(candidates, 1):
+                    year_str = f" ({c.year})" if c.year else ""
+                    lines.append(f"  {i}) {c.title}{year_str} [{c.type}]  id={c.content_id}")
+                click.echo("Multiple matches found:")
+                click.echo("\n".join(lines))
+                choice = click.prompt(
+                    "Pick a number",
+                    default="1",
+                    show_default=True,
+                )
+                try:
+                    idx = int(choice) - 1
+                    if not 0 <= idx < len(candidates):
+                        raise ValueError
+                except ValueError:
+                    idx = 0
+                title_id = int(candidates[idx].content_id)
+            else:
+                # Non-interactive (MCP / script): pick first, log alternatives to stderr
+                title_id = int(candidates[0].content_id)
+                alts = ", ".join(
+                    f"{c.title} id={c.content_id}" for c in candidates[1:]
+                )
+                click.echo(f"[stv] auto-selected id={candidates[0].content_id}; alternatives: {alts}", err=True)
+
     # Step 1: Resolve content ID (once — works for all TVs)
     try:
         content_id = do_resolve(platform, query_str, season, episode, title_id)
@@ -958,6 +991,24 @@ def play(ctx, platform, query, season, episode, title_id):
         desc += f" S{season}E{episode}"
 
     icon = app_icon(platform)
+
+    # Already-watched warning (< 7 days ago)
+    from datetime import datetime, timezone
+    from smartest_tv import cache as _cache
+    _replay = False
+    _last = _cache.get_last_played_exact(platform, query_str, season, episode)
+    if _last:
+        age_days = (datetime.now(tz=timezone.utc) - _last).days
+        if age_days < 7:
+            if sys.stdin.isatty():
+                if not click.confirm(
+                    f"Already watched {query_str} on {_last.date()}. Play anyway?",
+                    default=True,
+                ):
+                    click.echo("OK, not playing.")
+                    return
+            else:
+                _replay = True
 
     # Step 2: Launch on TV(s)
     if _is_multi(ctx):
@@ -984,7 +1035,8 @@ def play(ctx, platform, query, season, episode, title_id):
             await launch_content(d, platform, app_id, content_id)
 
         _run(_do())
-        _success(f"{icon} Playing {desc} on {name}  ({content_id})")
+        replay_suffix = "  (replay)" if _replay else ""
+        _success(f"{icon} Playing {desc} on {name}  ({content_id}){replay_suffix}")
 
     # Record to history
     from smartest_tv import cache as _cache

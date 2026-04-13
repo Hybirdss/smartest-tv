@@ -394,6 +394,27 @@ def get_last_played(query: str | None = None, platform: str | None = None) -> di
     return None
 
 
+def get_last_played_exact(
+    platform: str, query: str,
+    season: int | None = None, episode: int | None = None,
+) -> "datetime | None":
+    """Return timestamp of last identical play, or None if no recent match."""
+    from datetime import datetime, timezone
+    for entry in get_history(50):
+        if entry.get("platform") != platform:
+            continue
+        if entry.get("query", "").lower() != query.lower():
+            continue
+        if season is not None and entry.get("season") != season:
+            continue
+        if episode is not None and entry.get("episode") != episode:
+            continue
+        ts = entry.get("time")
+        if ts:
+            return datetime.fromtimestamp(ts, tz=timezone.utc)
+    return None
+
+
 def get_next_episode(query: str) -> tuple[str, int, int] | None:
     """Get the next episode to watch for a Netflix show.
 
