@@ -1,6 +1,6 @@
 [project]
 name = "stv"
-version = "1.0.3"
+version = "1.1.0"
 description = "Talk to your TV. Play Netflix, Disney+, and 20+ streaming platforms by name on any smart TV."
 readme = "README.md"
 license = "MIT"
@@ -32,7 +32,18 @@ android = ["androidtvremote2>=0.2.0"]
 roku = ["aiohttp>=3.9.0"]
 mcp = ["fastmcp>=2.0.0"]
 all = ["stv[lg,samsung,android,roku,mcp]"]
-dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    # Driver / MCP runtime deps so test suites gated on `importorskip`
+    # (e.g. tests/test_lg_driver.py) actually run under `pip install .[dev]`
+    # in CI instead of silently skipping.
+    "aiowebostv>=0.7.0",
+    "samsungtvws[encrypted]>=3.0.0",
+    "androidtvremote2>=0.2.0",
+    "aiohttp>=3.9.0",
+    "fastmcp>=2.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/Hybirdss/smartest-tv"
