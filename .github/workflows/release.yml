@@ -30,10 +30,12 @@ jobs:
         run: python -m build
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.8.14
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          skip-existing: true
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          pip install twine
+          twine upload --skip-existing dist/*
 
       - name: Create GitHub Release
         env:
