@@ -1,6 +1,6 @@
 [project]
 name = "stv"
-version = "1.1.0"
+version = "1.1.1"
 description = "Talk to your TV. Play Netflix, Disney+, and 20+ streaming platforms by name on any smart TV."
 readme = "README.md"
 license = "MIT"
