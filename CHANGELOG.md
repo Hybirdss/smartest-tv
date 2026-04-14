@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-04-15
+
+### Fixed
+
+- **LG connect() survives webOS 24/25 permission rejections on any
+  subscription (issue #4).** v1.1.0 narrowed the 401 tolerance to
+  `subscribe_media_foreground_app`, but aiowebostv fires 8 subscriptions
+  in parallel and the rejecting one is non-deterministic — on a 2024 LG
+  the failing message id landed on a different sub and killed connect
+  again. `_SmarTestWebOsClient` now overrides
+  `_get_states_and_subscribe_state_updates` to suppress
+  `WebOsTvCommandError` on every subscription's result, matching how
+  aiowebostv itself already wraps `subscribe_channels` /
+  `subscribe_current_channel` upstream. Real network failures still
+  propagate — only TV-side permission rejections degrade gracefully.
+
 ## [1.1.0] - 2026-04-14
 
 ### Added
