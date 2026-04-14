@@ -7,10 +7,12 @@ bscpylgtv hasn't caught up with.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 import socket
+from contextlib import suppress
 from pathlib import Path
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
@@ -18,28 +20,93 @@ from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 try:
     from aiowebostv import WebOsClient
     from aiowebostv import endpoints as ep
-    from aiowebostv.exceptions import WebOsTvCommandError
+    from aiowebostv.exceptions import (
+        WebOsTvCommandError,
+        WebOsTvResponseTypeError,
+    )
 except ImportError:
     raise ImportError("Install LG driver: pip install 'smartest-tv[lg]'")
 
 
 class _SmarTestWebOsClient(WebOsClient):
-    # webOS 24/25 tightened com.webos.media/* permissions, and aiowebostv's
-    # REGISTRATION_PAYLOAD manifest doesn't request them. As of aiowebostv
-    # 0.7.5 (latest on PyPI), _get_states_and_subscribe_state_updates fires
-    # subscribe_media_foreground_app unconditionally during connect(), the TV
-    # answers 401 insufficient permissions, and the resulting
-    # WebOsTvCommandError propagates up and kills connect entirely. aiowebostv
-    # already uses suppress(WebOsTvCommandError) around subscribe_channels and
-    # subscribe_current_channel for the same class of failure
-    # (webos_client.py:503, 509) — this subclass extends that pattern to the
-    # media subscription. Our driver queries media state on-demand in status()
-    # with its own try/except, so losing the push subscription is harmless.
-    async def subscribe_media_foreground_app(self, callback):
-        try:
-            return await super().subscribe_media_foreground_app(callback)
-        except WebOsTvCommandError:
-            return {}
+    """Hardened WebOsClient for webOS 24/25 permission rollout.
+
+    Why this exists
+    ---------------
+    aiowebostv 0.7.5's ``_get_states_and_subscribe_state_updates`` launches
+    eight ``subscribe_*`` coroutines in parallel during ``connect()`` and
+    only suppresses ``WebOsTvServiceNotFoundError`` when collecting the
+    results (webos_client.py:287-289). A plain ``WebOsTvCommandError`` —
+    the shape of "401 insufficient permissions" raised by newer webOS
+    firmware — propagates out of ``task.result()`` and kills the entire
+    connect flow.
+
+    webOS 24/25 tightened permissions on several ``com.webos.*`` services
+    beyond what aiowebostv's ``REGISTRATION_PAYLOAD`` manifest requests.
+    The eight subscriptions are launched from a ``set`` in aiowebostv, so
+    their message IDs vary per connection — patching any single
+    ``subscribe_*`` method is whack-a-mole. Issue #4
+    (https://github.com/Hybirdss/smartest-tv/issues/4) proved this: after
+    the v1.1.0 patch narrowed to ``subscribe_media_foreground_app``, the
+    user still hit ``{'id': 13, 'error': '401 insufficient permissions'}``
+    because the rejecting subscription wasn't the media one.
+
+    Fix
+    ---
+    Override ``_get_states_and_subscribe_state_updates`` — a verbatim
+    copy of the upstream method with the result-collection ``suppress``
+    widened from ``WebOsTvServiceNotFoundError`` to
+    ``WebOsTvCommandError``. That way every TV-side rejection (401, 403,
+    service-not-found, response-type errors) degrades to a missing push
+    subscription instead of killing ``connect()``. Network-level failures
+    (``WebOsTvCommandTimeoutError`` — raised before ``asyncio.wait``
+    returns) still propagate through this method's prologue, so a real
+    broken connection surfaces loudly.
+
+    Every on-demand getter in this driver has its own try/except, so
+    losing a push subscription is cosmetic — ``status()`` re-queries the
+    media state explicitly and the other getters run fresh SSAP calls.
+
+    When aiowebostv upgrades
+    ------------------------
+    The override is a copy-paste of upstream. ``tests/test_lg_driver.py
+    ::test_override_mirrors_upstream_subscribe_flow`` pins the upstream
+    structure so library drift breaks the build loudly. If that test
+    fails after an aiowebostv bump, resync this method body against the
+    new ``WebOsClient._get_states_and_subscribe_state_updates``.
+    """
+
+    async def _get_states_and_subscribe_state_updates(self) -> None:
+        self.do_state_update = False
+
+        if not self.tv_info.system:
+            with suppress(WebOsTvResponseTypeError):
+                self.tv_info.system = await self.get_system_info()
+
+        self.tv_info.software = await self.get_software_info()
+
+        subscribe_state_updates = {
+            self.subscribe_power_state(self.set_power_state),
+            self.subscribe_current_app(self.set_current_app_state),
+            self.subscribe_muted(self.set_muted_state),
+            self.subscribe_volume(self.set_volume_state),
+            self.subscribe_apps(self.set_apps_state),
+            self.subscribe_inputs(self.set_inputs_state),
+            self.subscribe_sound_output(self.set_sound_output_state),
+            self.subscribe_media_foreground_app(self.set_media_state),
+        }
+        subscribe_tasks = set()
+        for state_update in subscribe_state_updates:
+            subscribe_tasks.add(asyncio.create_task(state_update))
+        await asyncio.wait(subscribe_tasks)
+        for task in subscribe_tasks:
+            # Upstream uses suppress(WebOsTvServiceNotFoundError). Widened
+            # to WebOsTvCommandError so webOS 24/25 permission rejections
+            # (401, 403, WebOsTvResponseTypeError) do not kill connect.
+            with suppress(WebOsTvCommandError):
+                task.result()
+        self.do_state_update = True
+        await self.do_state_update_callbacks()
 
 
 # App aliases → (webOS app ID, display name)
@@ -69,9 +136,7 @@ class LGDriver(TVDriver):
         self.ip = ip
         self.mac = mac
         # aiowebostv stores raw client_key string — use .json
-        self.key_file = key_file or os.path.expanduser(
-            "~/.config/smartest-tv/lg_key.json"
-        )
+        self.key_file = key_file or os.path.expanduser("~/.config/smartest-tv/lg_key.json")
         self._client: WebOsClient | None = None
 
     def _load_client_key(self) -> str | None:
@@ -186,9 +251,7 @@ class LGDriver(TVDriver):
         if app_id == "youtube.leanback.v4":
             video_id = content_id
             if "youtube.com" in content_id or "youtu.be" in content_id:
-                match = re.search(
-                    r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", content_id
-                )
+                match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", content_id)
                 if match:
                     video_id = match.group(1)
             await c.launch_app_with_params(
@@ -205,9 +268,7 @@ class LGDriver(TVDriver):
                     match = re.search(r"/(?:watch|title)/(\d+)", content_id)
                     if match:
                         numeric_id = match.group(1)
-                content_id = (
-                    f"m=https://www.netflix.com/watch/{numeric_id}&source_type=4"
-                )
+                content_id = f"m=https://www.netflix.com/watch/{numeric_id}&source_type=4"
             await c.launch_app_with_content_id(app_id, content_id)
             return
 
@@ -286,10 +347,7 @@ class LGDriver(TVDriver):
     async def list_inputs(self) -> list[dict]:
         c = await self._ensure()
         inputs = await c.get_inputs()
-        return [
-            {"id": i.get("id"), "label": i.get("label"), "connected": i.get("connected")}
-            for i in inputs
-        ]
+        return [{"id": i.get("id"), "label": i.get("label"), "connected": i.get("connected")} for i in inputs]
 
     # -- Channels -------------------------------------------------------------
 
