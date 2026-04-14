@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-14
+
+### Added
+
+- **`tv_state()` MCP tool.** Returns a single structured snapshot of the
+  target TV: current app, title, playback position, duration, volume,
+  mute, HDMI input, power state, driver, and fetched-at timestamp. Fields
+  the driver cannot supply are returned as `None`. Previously 17 of 21
+  MCP tools returned only "ok" strings, leaving an agent unable to chain
+  "play X" with "verify X actually started."
+- **`tv_state_watch(tv_name, interval=5, count=12)` MCP tool.** Streams
+  `tv_state` snapshots via FastMCP `Context.report_progress` — default
+  one minute of watching (12 × 5 s). Callers chain repeated invocations
+  for indefinite watching.
+- **Now-playing driver state.** Roku pulls title, position, duration, and
+  play state from `/query/media-player` (zero-auth ECP). LG pulls
+  `mediaId` and `playState` from `aiowebostv.get_media_foreground_app()`.
+  Android switches from polling to push callbacks
+  (`add_current_app_updated_callback`,
+  `add_volume_info_updated_callback`, `add_is_on_updated_callback`).
+  Samsung stays status-only due to library limits.
+- **`stv-concierge` Claude Code skill.** `stv setup` now installs a
+  natural-language TV control skill into `~/.claude/skills/stv-concierge/`
+  when Claude Code is detected. Trigger phrases in English and Korean:
+  "play Dark on Netflix", "뭐 보여줘", "볼륨 낮춰", "TV 꺼", "몰아보기".
+  Maps directly to `stv play`, `stv whats-on`, `stv volume`, `stv off`.
+  No extra config — the skill's `description` field drives Claude Code's
+  auto-discovery. Manual install available via `stv-install-skill`.
+- **Top-3 disambiguation on `stv play`.** When the auto-resolver finds
+  multiple matches (e.g. the 2017 series "Dark" vs the 2019 movie
+  "Dark"), tty users get a numbered `click.prompt`; non-tty callers pick
+  the first match and the alternatives are logged to stderr so an MCP
+  host can still see them.
+- **Already-watched warning.** `stv play` consults
+  `cache.get_last_played_exact` and asks before replaying an episode
+  watched in the last 7 days. Non-tty callers skip the prompt and the
+  output line is tagged `(replay)`.
+- **Interruption-aware Home Assistant integration.** The HACS
+  `media_player` entity listens to configured HA sensors (doorbell,
+  phone call, kitchen timer) and fires `pause` or `duck` (volume drops
+  to a configurable level), auto-resuming on deactivation. Configure via
+  the integration's options flow with a JSON list of
+  `{entity_id, action, duck_volume?}` objects.
+
+### Fixed
+
+- **webOS 24/25 connect failure — `401 insufficient permissions`.**
+  aiowebostv 0.7.5's `_get_states_and_subscribe_state_updates()` fires
+  `subscribe_media_foreground_app` during `connect()`, which hits
+  `com.webos.media/getForegroundAppInfo`. That endpoint needs a
+  permission aiowebostv's registration manifest does not request, so
+  webOS 24/25 TVs reject it and the resulting `WebOsTvCommandError`
+  propagates through the task-result drain (which only suppresses
+  `WebOsTvServiceNotFoundError`) and kills the entire connect.
+  `_SmarTestWebOsClient` in `src/smartest_tv/_engine/drivers/lg.py`
+  absorbs that one error class on that one subscription, matching
+  aiowebostv's own handling of `subscribe_channels` and
+  `subscribe_current_channel`. The driver still queries media state
+  on-demand in `status()` with a try/except fallback, so no
+  functionality is lost. Existing LG pairings keep working — no
+  re-pair needed.
+- **Multi-TV broadcast error visibility.** `--all` and `--group` now
+  render per-TV results with a red ✗ and the error message for failures
+  instead of silently reporting a partial success count.
+
+### Changed
+
+- **MCP manifest (`server.json`) — `TV_PLATFORM` and `TV_IP` no longer
+  required.** The CLI already falls back to the browser driver when no
+  TV is configured; forcing these env vars as required blocked Glama and
+  Claude Code clients from loading the tool catalog until pairing was
+  complete. Users with a configured TV see no change; users on a fresh
+  install can call MCP tools immediately and open content in the browser
+  until they pair.
+
 ## [0.10.0] - 2026-04-09
 
 ### Added
