@@ -994,6 +994,7 @@ def play(ctx, platform, query, season, episode, title_id):
 
     # Already-watched warning (< 7 days ago)
     from datetime import datetime, timezone
+
     from smartest_tv import cache as _cache
     _replay = False
     _last = _cache.get_last_played_exact(platform, query_str, season, episode)

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import shutil
+from dataclasses import dataclass
 
 from smartest_tv import cache
 from smartest_tv.http import curl, curl_json, ytdlp
@@ -82,9 +83,6 @@ def resolve_netflix(
         f"  stv search netflix \"{query}\"   (check season/episode count)\n"
         f"  stv cache set netflix \"{query}\" -s {season} --first-ep-id ID --count N"
     )
-
-
-from dataclasses import dataclass
 
 
 @dataclass

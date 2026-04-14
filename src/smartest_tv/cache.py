@@ -16,6 +16,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from smartest_tv.config import CONFIG_DIR
@@ -397,9 +398,8 @@ def get_last_played(query: str | None = None, platform: str | None = None) -> di
 def get_last_played_exact(
     platform: str, query: str,
     season: int | None = None, episode: int | None = None,
-) -> "datetime | None":
+) -> datetime | None:
     """Return timestamp of last identical play, or None if no recent match."""
-    from datetime import datetime, timezone
     for entry in get_history(50):
         if entry.get("platform") != platform:
             continue
