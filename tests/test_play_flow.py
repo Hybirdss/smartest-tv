@@ -3,14 +3,12 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from smartest_tv._engine.resolve import Candidate, _search_netflix_candidates
 from smartest_tv import cache as cache_module
-
+from smartest_tv._engine.resolve import Candidate
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -46,19 +44,10 @@ def test_non_tty_picks_first_candidate_and_logs_alternatives(capsys, monkeypatch
         lambda q: THREE_CANDIDATES,
     )
 
-    # Simulate what the play command does when it calls the candidates function
-    import sys
-    candidates = _search_netflix_candidates.__wrapped__ if hasattr(_search_netflix_candidates, "__wrapped__") else THREE_CANDIDATES
-
     # Directly test the non-tty path logic (replicated from cli.py)
-    import io
-    stderr_buf = io.StringIO()
-
     with patch("sys.stdin.isatty", return_value=False):
         with patch("click.echo") as mock_echo:
-            from smartest_tv._engine.resolve import _search_netflix_candidates as sc
             with patch("smartest_tv._engine.resolve._search_netflix_candidates", return_value=THREE_CANDIDATES):
-                # Re-import to get patched version
                 cands = THREE_CANDIDATES
                 selected_id = int(cands[0].content_id)
                 alts = ", ".join(f"{c.title} id={c.content_id}" for c in cands[1:])
@@ -183,6 +172,7 @@ def test_already_watched_no_prompt_on_non_tty():
 def test_broadcast_surfaces_per_tv_errors():
     """broadcast() returns error entries with message for failed TVs."""
     import asyncio
+
     from smartest_tv.sync import broadcast
 
     class FakeDriver:
