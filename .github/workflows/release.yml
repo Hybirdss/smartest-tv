@@ -35,6 +35,7 @@ jobs:
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
+          attestations: false
 
       - name: Create GitHub Release
         env:
