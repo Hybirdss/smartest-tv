@@ -24,8 +24,8 @@ try:
         WebOsTvCommandError,
         WebOsTvResponseTypeError,
     )
-except ImportError:
-    raise ImportError("Install LG driver: pip install 'smartest-tv[lg]'")
+except ImportError as e:
+    raise ImportError("Install LG driver: pip install 'smartest-tv[lg]'") from e
 
 
 class _SmarTestWebOsClient(WebOsClient):

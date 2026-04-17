@@ -131,59 +131,81 @@ async def run_scene(name: str, tv_name: str | None = None) -> list[str]:
 
     results: list[str] = []
 
-    for step in scene.get("steps", []):
+    for idx, step in enumerate(scene.get("steps", []), 1):
         action = step.get("action")
+        # Per-step try/except so a malformed custom step (missing key,
+        # unreachable platform, bad URL) doesn't abort the whole scene
+        # halfway through — the user would otherwise see volume changed
+        # but no app launched, with a raw KeyError and no indication of
+        # which step broke.
+        try:
+            if action == "volume":
+                d = await _get_driver()
+                value = int(step["value"])
+                await d.set_volume(value)
+                results.append(f"[{idx}] Volume set to {value}.")
 
-        if action == "volume":
-            d = await _get_driver()
-            value = int(step["value"])
-            await d.set_volume(value)
-            results.append(f"Volume set to {value}.")
+            elif action == "notify":
+                d = await _get_driver()
+                msg = step["message"]
+                await d.notify(msg)
+                results.append(f"[{idx}] Notification: {msg}")
 
-        elif action == "notify":
-            d = await _get_driver()
-            msg = step["message"]
-            await d.notify(msg)
-            results.append(f"Notification: {msg}")
+            elif action == "screen_off":
+                d = await _get_driver()
+                await d.screen_off()
+                results.append(f"[{idx}] Screen off.")
 
-        elif action == "screen_off":
-            d = await _get_driver()
-            await d.screen_off()
-            results.append("Screen off.")
+            elif action == "screen_on":
+                d = await _get_driver()
+                await d.screen_on()
+                results.append(f"[{idx}] Screen on.")
 
-        elif action == "screen_on":
-            d = await _get_driver()
-            await d.screen_on()
-            results.append("Screen on.")
+            elif action == "play":
+                from smartest_tv.apps import resolve_app
+                from smartest_tv.resolve import resolve as do_resolve
 
-        elif action == "play":
-            from smartest_tv.apps import resolve_app
-            from smartest_tv.resolve import resolve as do_resolve
+                platform = step["platform"]
+                query = step["query"]
+                season = step.get("season")
+                episode = step.get("episode")
 
-            platform = step["platform"]
-            query = step["query"]
-            season = step.get("season")
-            episode = step.get("episode")
+                content_id = do_resolve(platform, query, season, episode)
+                d = await _get_driver()
+                app_id, app_name = resolve_app(platform, d.platform)
+                await launch_content(d, platform, app_id, content_id)
 
-            content_id = do_resolve(platform, query, season, episode)
-            d = await _get_driver()
-            app_id, app_name = resolve_app(platform, d.platform)
-            await launch_content(d, platform, app_id, content_id)
+                from smartest_tv import cache as _cache
+                _cache.record_play(platform, query, content_id, season, episode)
+                results.append(f"[{idx}] Playing {query} on {app_name}.")
 
-            from smartest_tv import cache as _cache
-            _cache.record_play(platform, query, content_id, season, episode)
-            results.append(f"Playing {query} on {app_name}.")
+            elif action == "webhook":
+                from smartest_tv.http import curl as _curl
+                url = step["url"]
+                # Reject non-http(s) schemes — a custom scene file with a
+                # file:// or javascript: URL is either a mistake or an
+                # exfiltration attempt via curl.
+                from urllib.parse import urlparse as _urlparse
+                scheme = _urlparse(url).scheme.lower()
+                if scheme not in ("http", "https"):
+                    results.append(f"[{idx}] Webhook: refused non-http(s) URL.")
+                    continue
+                r = _curl(url, method="POST", timeout=10)
+                if r.ok:
+                    results.append(f"[{idx}] Webhook {url}: OK")
+                else:
+                    results.append(f"[{idx}] Webhook {url}: failed ({r.error or 'unknown'})")
 
-        elif action == "webhook":
-            from smartest_tv.http import curl as _curl
-            url = step["url"]
-            r = _curl(url, method="POST", timeout=10)
-            if r.ok:
-                results.append(f"Webhook {url}: OK")
             else:
-                results.append(f"Webhook {url}: failed ({r.error or 'unknown'})")
+                results.append(f"[{idx}] Unknown action '{action}' — skipped.")
 
-        else:
-            results.append(f"Unknown action '{action}' — skipped.")
+        except KeyError as exc:
+            results.append(
+                f"[{idx}] {action!r} failed: missing required field {exc} — skipped."
+            )
+        except (ValueError, TypeError) as exc:
+            results.append(f"[{idx}] {action!r} failed: {exc} — skipped.")
+        except Exception as exc:  # noqa: BLE001 — surface driver errors to user
+            results.append(f"[{idx}] {action!r} failed: {type(exc).__name__}: {exc}")
 
     return results
