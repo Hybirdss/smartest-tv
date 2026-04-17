@@ -7,12 +7,12 @@
     "url": "https://github.com/Hybirdss/smartest-tv",
     "source": "github"
   },
-  "version": "0.8.0",
+  "version": "1.1.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "stv",
-      "version": "0.8.0",
+      "version": "1.1.2",
       "transport": {
         "type": "stdio"
       },
