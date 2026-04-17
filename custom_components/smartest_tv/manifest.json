@@ -8,6 +8,6 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Hybirdss/smartest-tv/issues",
-  "requirements": ["stv[all]>=1.0.0"],
-  "version": "1.0.1"
+  "requirements": ["stv[all]>=1.1.1"],
+  "version": "1.1.1"
 }

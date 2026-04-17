@@ -6,6 +6,85 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cast URL parsing — strict host match.** `parse_cast_url` used
+  `.lstrip("www.")` (strips the char set `{w, .}`, not the prefix) plus
+  substring `"netflix.com" in host`, so `wnetflix.com/watch/123` was
+  classified as Netflix. Now uses `parsed.hostname` +
+  `removeprefix("www.")` + exact-or-suffix domain match; explicit ports
+  and uppercase hosts still work.
+- **Cache — concurrent-write data loss.** `cache.json` and `queue.json`
+  writes went through bare `write_text()`. A multi-TV broadcast spawned
+  background revalidate/contribute threads while the foreground wrote
+  history; the later write overwrote the earlier and a reader could
+  catch a torn file that reset the whole cache to `{}`. All public
+  mutators now hold an `RLock` across load → mutate → save and the
+  write itself goes through a tempfile + `os.replace()`.
+- **Display — HTML/CSS injection via `tv_display` MCP tool.** Message
+  text, dashboard titles/cards, and photo URLs were pasted verbatim
+  into the served page, letting an AI agent inject `<script>` or
+  break out of `url('{raw}')` via `'); }</style><script>…`. Every
+  user-controlled field is now HTML-escaped; iframe URLs are gated to
+  http/https only and attribute-escaped; photo URLs additionally reject
+  the quote/paren/CRLF set that would break the CSS string. The HTTP
+  handler is now built per `serve()` call (was a class-level singleton
+  that let two concurrent calls overwrite each other's HTML) and the
+  returned URL matches the actual bind host.
+- **API server — CORS preflight bypass.** `_respond` dropped the
+  wildcard CORS default in 1.1.0 but `do_OPTIONS` still defaulted to
+  `*`, so preflight passed and any website the user visited while
+  `stv serve` was running could POST to the no-auth localhost API.
+  Both paths now return no CORS headers unless `STV_CORS_ORIGIN` is
+  set explicitly.
+- **Scenes — crash mid-scene on malformed step.** A custom scene
+  missing a required key raised `KeyError` and aborted the rest of
+  the steps, leaving volume changed but app unlaunched. Every step
+  now runs inside its own try/except and reports
+  `[N] 'action' failed: missing required field 'message' — skipped`.
+  Webhook steps also refuse non-http(s) URLs to block SSRF through a
+  poisoned `scenes.json`.
+- **Roku `set_volume` — up to 200 sequential HTTP round-trips per
+  call.** Reworked to track `_known_volume` and issue only the delta
+  on subsequent calls (first call still does the 100-down reset).
+  State is updated after each successful keypress so a network error
+  mid-loop can't leave the tracked value stale.
+- **LG webOS — `close_app` on firmware that returns 403.** Falls back
+  to the home-screen launch path.
+- **Setup — out-of-range int crashed with `IndexError`.** TV selection
+  uses `click.IntRange(1, len(tvs))`; invalid input re-prompts.
+- **SSDP discovery — malicious device name could inject Rich markup
+  or split headers.** `friendlyName` / `DLNADeviceName` / `SERVER`
+  values pass through a char allow-list + CRLF guard before being
+  stored in `config.toml`.
+- **Region cache stuck in long-lived processes.** Added
+  `config.clear_region_cache()` so `stv serve` can pick up
+  `STV_REGION` changes without restart.
+
+### Home Assistant (HACS integration)
+
+- **Docs — `docs/integrations/home-assistant.md` was still marked
+  "Planned / not yet available"** while the integration has been
+  shipping for weeks and is under HACS review
+  ([hacs/default#6907](https://github.com/hacs/default/pull/6907)).
+  Rewritten with install instructions, entity list, and automation
+  examples.
+- **Manifest version synced to stv package (1.0.1 → 1.1.1)** so HACS
+  users see the upgrade; `requirements` pinned to `stv[all]>=1.1.1`.
+- **Polling resilience.** A single transient poll failure no longer
+  flips the entity to OFF and triggers a full LG 8-subscription
+  reconnect. After one or two failures the entity is marked
+  unavailable with last-known state; only after three consecutive
+  failures do we conclude the TV is really off.
+- **Scan interval** bumped from HA's default 10 s to 30 s; webOS SSAP
+  state polling doesn't need sub-minute granularity and the old
+  cadence was noticeably warming the TV.
+- **`async_turn_on` with no MAC** now logs a clear warning instead of
+  surfacing a raw `ValueError` through the HA UI.
+- **`PLATFORMS` naming collision** in `const.py` renamed to
+  `TV_PLATFORMS` so it doesn't shadow HA's `Platform` enum in
+  `__init__.py`.
+
 ## [1.1.1] - 2026-04-15
 
 ### Fixed

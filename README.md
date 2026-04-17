@@ -460,7 +460,7 @@ stv setup                          # auto-discover + pair your TV
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
 
-Add as a custom repository (HACS default listing pending):
+Add as a custom repository (default listing in review: [hacs/default#6907](https://github.com/hacs/default/pull/6907)):
 
 ```
 HACS → ⋮ (top right) → Custom repositories

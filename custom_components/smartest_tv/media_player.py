@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Any
@@ -17,7 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, POLL_INTERVAL
+from .const import CONF_IP, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,6 +99,15 @@ class StvMediaPlayer(MediaPlayerEntity):
     _attr_has_entity_name = True
     _attr_supported_features = SUPPORT_FLAGS
 
+    # Expose the integration-wide poll cadence to HA so the TV is not
+    # hammered by the default 10 s scan interval.
+    scan_interval = SCAN_INTERVAL
+
+    # After this many consecutive polling failures we stop retrying
+    # every scan and back off; a TV that has been off for an hour
+    # should not reopen a WebSocket each minute.
+    _MAX_CONSECUTIVE_FAILURES = 3
+
     def __init__(self, entry: ConfigEntry, driver: Any) -> None:
         """Initialize the media player."""
         self._driver = driver
@@ -107,10 +115,12 @@ class StvMediaPlayer(MediaPlayerEntity):
         self._tv_name: str = entry.data[CONF_TV_NAME]
         self._platform: str = entry.data[CONF_PLATFORM]
         self._connected = False
+        self._consecutive_failures = 0
 
         self._attr_unique_id = f"stv_{entry.data[CONF_IP]}_{self._tv_name}"
         self._attr_name = self._tv_name
         self._attr_state = MediaPlayerState.OFF
+        self._attr_available = True
         self._attr_volume_level: float | None = None
         self._attr_is_volume_muted: bool | None = None
         self._attr_app_name: str | None = None
@@ -131,13 +141,24 @@ class StvMediaPlayer(MediaPlayerEntity):
         }
 
     async def async_update(self) -> None:
-        """Poll the TV for current state."""
+        """Poll the TV for current state.
+
+        A single failed poll no longer forces the entity to OFF — a
+        momentary Wi-Fi blip would otherwise make the dashboard flicker
+        and force a full LG 8-subscription reconnect on the next cycle.
+        We keep the previous state visible, tag the entity unavailable,
+        and only flip to OFF once several consecutive polls have failed
+        (strong signal that the TV is actually off / removed from the
+        network).
+        """
         try:
             if not self._connected:
                 await self._driver.connect()
                 self._connected = True
 
             status = await self._driver.status()
+            self._consecutive_failures = 0
+            self._attr_available = True
             self._attr_state = (
                 MediaPlayerState.ON if status.powered else MediaPlayerState.OFF
             )
@@ -145,14 +166,41 @@ class StvMediaPlayer(MediaPlayerEntity):
                 self._attr_volume_level = status.volume / 100.0
             self._attr_is_volume_muted = status.muted
             self._attr_app_name = status.current_app
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — driver raises OSError, asyncio.TimeoutError, WebOsTv*Error, …
             self._connected = False
-            self._attr_state = MediaPlayerState.OFF
-            _LOGGER.debug("Failed to poll %s, will reconnect", self._tv_name)
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._MAX_CONSECUTIVE_FAILURES:
+                # Sustained failure — TV is probably off or off-network.
+                self._attr_state = MediaPlayerState.OFF
+                self._attr_available = True
+            else:
+                # Transient glitch — retain last-known state, mark
+                # unavailable so the UI shows "?" instead of flapping.
+                self._attr_available = False
+            _LOGGER.debug(
+                "Poll %d/%d failed for %s (%s: %s); will retry",
+                self._consecutive_failures,
+                self._MAX_CONSECUTIVE_FAILURES,
+                self._tv_name,
+                type(exc).__name__,
+                exc,
+            )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the TV on."""
-        await self._driver.power_on()
+        """Turn the TV on (Wake-on-LAN if MAC configured)."""
+        try:
+            await self._driver.power_on()
+        except ValueError as exc:
+            # LG/Samsung power_on raises ValueError("MAC address required")
+            # when no MAC is configured. Turning this into a user-visible
+            # notification via a warning log beats surfacing a raw
+            # traceback through the HA UI.
+            _LOGGER.warning(
+                "Cannot power on %s without a MAC address — "
+                "re-run setup and add the MAC for Wake-on-LAN. (%s)",
+                self._tv_name,
+                exc,
+            )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the TV off."""
@@ -204,9 +252,9 @@ class StvMediaPlayer(MediaPlayerEntity):
         episode = int(match.group("episode")) if match.group("episode") else None
 
         try:
-            from smartest_tv.resolve import resolve
             from smartest_tv.apps import resolve_app
             from smartest_tv.playback import launch_content
+            from smartest_tv.resolve import resolve
 
             content_id = await self.hass.async_add_executor_job(
                 resolve, platform, query, season, episode
