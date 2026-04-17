@@ -47,19 +47,55 @@ CACHE_API_KEY = os.environ.get(
 
 _community_cache: dict | None = None  # in-memory cache for session
 
+# Guards cache.json + queue.json against concurrent writes from
+# multi-TV broadcast, background revalidate/contribute threads, and
+# foreground record_play(). Without this, two threads doing
+# _load → mutate → _save races silently drop the earlier write; worse,
+# write_text() isn't atomic, so a concurrent reader can see an empty
+# file and the whole cache resets to {}.
+_file_lock = threading.RLock()
+
+
+def _atomic_write_text(path, text: str) -> None:
+    """Write *text* to *path* atomically.
+
+    Writes to a sibling tempfile, fsyncs, then os.replace() onto the
+    target. POSIX guarantees replace is atomic, so concurrent readers
+    either see the old file or the new one — never a torn/empty file.
+    """
+    import os as _os
+    import tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(
+        prefix=path.name + ".",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    try:
+        with _os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            _os.fsync(f.fileno())
+        _os.replace(tmp, path)
+    except Exception:
+        with __import__("contextlib").suppress(OSError):
+            _os.unlink(tmp)
+        raise
+
 
 def _load() -> dict[str, Any]:
-    if CACHE_FILE.exists():
-        try:
-            return json.loads(CACHE_FILE.read_text())
-        except (json.JSONDecodeError, OSError):
-            return {}
-    return {}
+    with _file_lock:
+        if CACHE_FILE.exists():
+            try:
+                return json.loads(CACHE_FILE.read_text())
+            except (json.JSONDecodeError, OSError):
+                return {}
+        return {}
 
 
 def _save(data: dict[str, Any]) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    with _file_lock:
+        _atomic_write_text(CACHE_FILE, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def get(platform: str, key: str) -> Any | None:
@@ -152,13 +188,14 @@ def _load_community() -> dict:
 
 def put(platform: str, key: str, value: Any) -> None:
     """Store a value in local cache + contribute to API."""
-    data = _load()
-    if platform not in data:
-        data[platform] = {}
-    data[platform][key] = value
-    # Track when this entry was cached for TTL-based revalidation
-    data.setdefault("_timestamps", {})[f"{platform}:{key}"] = int(time.time())
-    _save(data)
+    with _file_lock:
+        data = _load()
+        if platform not in data:
+            data[platform] = {}
+        data[platform][key] = value
+        # Track when this entry was cached for TTL-based revalidation
+        data.setdefault("_timestamps", {})[f"{platform}:{key}"] = int(time.time())
+        _save(data)
 
     # Contribute resolutions to community cache
     if platform == "netflix":
@@ -323,24 +360,25 @@ def _contribute(platform: str, slug: str, entry_data: Any) -> None:
 def record_play(platform: str, query: str, content_id: str,
                 season: int | None = None, episode: int | None = None) -> None:
     """Record a play event to history."""
-    data = _load()
-    if "_history" not in data:
-        data["_history"] = []
+    with _file_lock:
+        data = _load()
+        if "_history" not in data:
+            data["_history"] = []
 
-    entry = {
-        "platform": platform,
-        "query": query,
-        "content_id": content_id,
-        "time": int(time.time()),
-    }
-    if season is not None:
-        entry["season"] = season
-    if episode is not None:
-        entry["episode"] = episode
+        entry = {
+            "platform": platform,
+            "query": query,
+            "content_id": content_id,
+            "time": int(time.time()),
+        }
+        if season is not None:
+            entry["season"] = season
+        if episode is not None:
+            entry["episode"] = episode
 
-    # Keep last 50 entries
-    data["_history"] = [entry] + data["_history"][:49]
-    _save(data)
+        # Keep last 50 entries
+        data["_history"] = [entry] + data["_history"][:49]
+        _save(data)
 
 
 def get_history(limit: int = 10) -> list[dict]:
@@ -465,17 +503,18 @@ QUEUE_FILE = CONFIG_DIR / "queue.json"
 
 
 def _load_queue() -> list[dict]:
-    if QUEUE_FILE.exists():
-        try:
-            return json.loads(QUEUE_FILE.read_text())
-        except (json.JSONDecodeError, OSError):
-            return []
-    return []
+    with _file_lock:
+        if QUEUE_FILE.exists():
+            try:
+                return json.loads(QUEUE_FILE.read_text())
+            except (json.JSONDecodeError, OSError):
+                return []
+        return []
 
 
 def _save_queue(data: list[dict]) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    QUEUE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    with _file_lock:
+        _atomic_write_text(QUEUE_FILE, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def queue_add(platform: str, query: str, season: int | None = None, episode: int | None = None) -> dict:
@@ -490,9 +529,10 @@ def queue_add(platform: str, query: str, season: int | None = None, episode: int
         item["season"] = season
     if episode is not None:
         item["episode"] = episode
-    data = _load_queue()
-    data.append(item)
-    _save_queue(data)
+    with _file_lock:
+        data = _load_queue()
+        data.append(item)
+        _save_queue(data)
     return item
 
 
@@ -503,20 +543,22 @@ def queue_show() -> list[dict]:
 
 def queue_pop() -> dict | None:
     """Remove and return the first item in the queue."""
-    data = _load_queue()
-    if not data:
-        return None
-    item = data.pop(0)
-    _save_queue(data)
+    with _file_lock:
+        data = _load_queue()
+        if not data:
+            return None
+        item = data.pop(0)
+        _save_queue(data)
     return item
 
 
 def queue_skip() -> None:
     """Remove the first item in the queue without returning it."""
-    data = _load_queue()
-    if data:
-        data.pop(0)
-        _save_queue(data)
+    with _file_lock:
+        data = _load_queue()
+        if data:
+            data.pop(0)
+            _save_queue(data)
 
 
 def queue_clear() -> None:

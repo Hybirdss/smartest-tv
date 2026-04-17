@@ -102,8 +102,13 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        origin = os.environ.get("STV_CORS_ORIGIN", "*")
-        self.send_header("Access-Control-Allow-Origin", origin)
+        # CORS: default to "no cross-origin". A wildcard `*` plus no-auth
+        # on localhost meant any website the user visited while stv serve
+        # was running could control the TV. Opt-in via STV_CORS_ORIGIN.
+        origin = os.environ.get("STV_CORS_ORIGIN", "")
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(body)
 

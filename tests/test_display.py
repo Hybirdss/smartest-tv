@@ -161,3 +161,62 @@ def test_get_local_ip_format():
     assert len(parts) == 4, f"Expected 4 octets, got: {ip!r}"
     assert all(p.isdigit() for p in parts), f"Non-numeric octet in: {ip!r}"
     assert all(0 <= int(p) <= 255 for p in parts), f"Octet out of range in: {ip!r}"
+
+
+# ---------------------------------------------------------------------------
+# Security — HTML escaping & URL scheme gating (regressions)
+# ---------------------------------------------------------------------------
+
+
+def test_message_escapes_html_injection():
+    """User-supplied text must be HTML-escaped, not pasted verbatim."""
+    html = generate_html("message", {"text": "<script>alert(1)</script>"})
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_message_rejects_bad_color_breakout():
+    """Non-whitelisted color values fall back to the default, blocking style break-out."""
+    html = generate_html(
+        "message",
+        {"text": "hi", "color": "red; } body { background: url('http://evil/')"},
+    )
+    assert "evil" not in html
+
+
+def test_iframe_rejects_javascript_scheme():
+    """iframe URL must be http/https; javascript: falls back to about:blank."""
+    html = generate_html("iframe", {"url": "javascript:alert(1)"})
+    assert "javascript:" not in html
+    assert "about:blank" in html
+
+
+def test_iframe_rejects_file_scheme():
+    html = generate_html("iframe", {"url": "file:///etc/passwd"})
+    assert "file://" not in html
+    assert "about:blank" in html
+
+
+def test_iframe_accepts_https():
+    html = generate_html("iframe", {"url": "https://example.com/"})
+    assert "https://example.com/" in html
+
+
+def test_iframe_escapes_attribute_breakout():
+    """Even an https URL with stray quotes is escaped for attribute context."""
+    html = generate_html("iframe", {"url": 'https://a.com/"><script>x</script>'})
+    assert "<script>x</script>" not in html
+
+
+def test_serve_returns_per_instance_handler():
+    """Two concurrent serve() calls must not clobber each other's HTML."""
+    url1, stop1 = serve("<p>first</p>", port=18701)
+    url2, stop2 = serve("<p>second</p>", port=18702)
+    try:
+        r1 = urllib.request.urlopen(url1, timeout=2).read()
+        r2 = urllib.request.urlopen(url2, timeout=2).read()
+        assert b"first" in r1 and b"second" not in r1
+        assert b"second" in r2 and b"first" not in r2
+    finally:
+        stop1()
+        stop2()

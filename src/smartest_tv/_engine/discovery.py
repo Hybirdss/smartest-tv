@@ -132,22 +132,45 @@ async def _adb_scan(timeout: float = 3.0) -> list[dict]:
     return found
 
 
+def _sanitize_name(raw: str, max_len: int = 64) -> str:
+    """Scrub an SSDP-supplied name before it lands in config / UI.
+
+    SSDP responses come from any device on the LAN; a malicious neighbour
+    can craft a friendlyName with Rich-markup control chars ("[red]...[/]")
+    or shell-escapes that later break the terminal. Keep letters, digits,
+    spaces, and the common punctuation one expects in a TV name; drop the
+    rest.
+    """
+    # Strip CR/LF first (SSDP headers are delimited by CRLF — a second
+    # header leaked into group(1) would otherwise be stored).
+    cleaned = raw.split("\r")[0].split("\n")[0]
+    cleaned = re.sub(r"[^\w .()\-']", "", cleaned, flags=re.UNICODE)
+    cleaned = cleaned.strip()
+    return cleaned[:max_len]
+
+
 def _extract_name(text: str, ip: str, platform: str) -> str:
     """Extract a human-readable TV name from SSDP response text."""
     # LG-specific header
     m = re.search(r"DLNADeviceName\.lge\.com:\s*(.+)", text, re.IGNORECASE)
     if m:
-        return m.group(1).strip()
+        name = _sanitize_name(m.group(1))
+        if name:
+            return name
 
     # Generic friendly name
     m = re.search(r"friendlyName:\s*(.+)", text, re.IGNORECASE)
     if m:
-        return m.group(1).strip()
+        name = _sanitize_name(m.group(1))
+        if name:
+            return name
 
     # Server header fallback
     m = re.search(r"SERVER:\s*(.+)", text, re.IGNORECASE)
     if m:
-        return m.group(1).strip()[:40]
+        name = _sanitize_name(m.group(1), max_len=40)
+        if name:
+            return name
 
     brand = {"lg": "LG", "samsung": "Samsung", "roku": "Roku"}.get(platform, "Smart")
     return f"{brand} TV ({ip})"

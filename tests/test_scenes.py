@@ -171,3 +171,53 @@ async def test_run_scene_unknown_action_skipped():
         results = await run_scene("unk-test")
 
     assert any("teleport" in r and "skipped" in r for r in results)
+
+
+@pytest.mark.asyncio
+async def test_run_scene_keyerror_surfaces_not_crashes():
+    """Missing required key in a custom step is reported per-step, not raised."""
+    from smartest_tv.scenes import run_scene
+
+    mock_driver = AsyncMock()
+    mock_driver.connect = AsyncMock()
+    mock_driver.set_volume = AsyncMock()
+    mock_driver.notify = AsyncMock()
+
+    with patch("smartest_tv.drivers.factory.create_driver", return_value=mock_driver):
+        save_custom_scene(
+            "partial",
+            "broken custom scene",
+            [
+                {"action": "volume", "value": 15},
+                {"action": "notify"},  # missing "message" — used to raise KeyError
+                {"action": "screen_off"},
+            ],
+        )
+        results = await run_scene("partial")
+
+    # First step should still have run, second step should report missing field,
+    # third step should still execute (not short-circuited).
+    assert any("Volume set to 15" in r for r in results)
+    assert any("notify" in r and "missing" in r for r in results)
+    assert any("Screen off" in r for r in results)
+    mock_driver.set_volume.assert_awaited_once_with(15)
+    mock_driver.screen_off.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_scene_webhook_rejects_non_http_scheme():
+    """Webhook with file:// or javascript: scheme is refused per-step."""
+    from smartest_tv.scenes import run_scene
+
+    mock_driver = AsyncMock()
+    mock_driver.connect = AsyncMock()
+
+    with patch("smartest_tv.drivers.factory.create_driver", return_value=mock_driver):
+        save_custom_scene(
+            "ssrf",
+            "attempted ssrf",
+            [{"action": "webhook", "url": "file:///etc/passwd"}],
+        )
+        results = await run_scene("ssrf")
+
+    assert any("refused" in r.lower() and "non-http" in r.lower() for r in results)

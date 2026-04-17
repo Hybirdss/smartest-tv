@@ -392,6 +392,17 @@ def _write_config_lines(lines: list[str]) -> None:
 _cached_region: str | None = None
 
 
+def clear_region_cache() -> None:
+    """Reset the region cache.
+
+    Needed for long-lived processes (``stv serve``) when the user changes
+    ``STV_REGION`` or the config file at runtime, and for test suites that
+    set env-var fixtures after the module has been imported.
+    """
+    global _cached_region
+    _cached_region = None
+
+
 def get_region() -> str:
     """Get the user's country code (e.g. 'US', 'KR', 'JP').
 

@@ -67,7 +67,14 @@ def run_setup(ip: str | None = None) -> None:
                 f"[muted]{t['platform'].upper()} · {t['ip']}[/muted]"
             )
         _ui_console.print()
-        choice = click.prompt(click.style("Which one?", fg="magenta"), type=int, default=1)
+        # click.prompt(type=int) validates the type only — an out-of-range
+        # int would raise IndexError on `tvs[choice - 1]` below. Re-prompt
+        # until we get a value inside [1, len(tvs)].
+        choice = click.prompt(
+            click.style("Which one?", fg="magenta"),
+            type=click.IntRange(1, len(tvs)),
+            default=1,
+        )
         tv = tvs[choice - 1]
 
     _print(render_found_tv(tv['name'], tv['platform'], tv['ip']))

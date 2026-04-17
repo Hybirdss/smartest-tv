@@ -195,6 +195,10 @@ class RokuDriver(TVDriver):
         self.mac = mac  # used for Wake-on-LAN if available
         self._base = f"http://{ip}:{port}"
         self._session: aiohttp.ClientSession | None = None
+        # Roku ECP has no volume query, so we track the value we last
+        # *set* and issue delta keypresses on subsequent set_volume calls.
+        # None = unknown (next call still has to drive to zero first).
+        self._known_volume: int | None = None
 
     # -- Session management ---------------------------------------------------
 
@@ -265,30 +269,50 @@ class RokuDriver(TVDriver):
         )
 
     async def set_volume(self, level: int) -> None:
-        """Approximate volume set via repeated keypresses.
+        """Approximate volume set via delta keypresses.
 
-        Because Roku has no volume query, this works by:
-        1. Pressing VolumeDown 100 times to reach 0.
-        2. Pressing VolumeUp ``level`` times.
+        Roku ECP exposes no volume query, so we track what we last set
+        and issue only the delta on subsequent calls:
 
-        This is reliable only if the caller manages starting state.
-        Clamps ``level`` to [0, 100].
+        * First call (state unknown): drive down 100 times to pin to 0,
+          then step up ``level`` times.
+        * Subsequent calls: send ``|target - _known_volume|`` keypresses
+          in the right direction.
+
+        Each keypress is a sequential HTTP round-trip (the TV serialises
+        them), so the first call can take several seconds on a slow LAN
+        — but subsequent calls are fast.
+
+        Clamps ``level`` to [0, 100]. If the user touches the remote
+        between calls, state drifts; call this method again (or
+        reinstantiate the driver) to resync.
         """
         level = max(0, min(100, level))
-        # Drive to zero first
-        for _ in range(100):
-            await self._keypress("VolumeDown")
-        # Then step up to target
-        for _ in range(level):
-            await self._keypress("VolumeUp")
+        if self._known_volume is None:
+            # Cold start: force state to 0 with 100 VolumeDown presses,
+            # then climb to target.
+            for _ in range(100):
+                await self._keypress("VolumeDown")
+            for _ in range(level):
+                await self._keypress("VolumeUp")
+        else:
+            delta = level - self._known_volume
+            key = "VolumeUp" if delta > 0 else "VolumeDown"
+            for _ in range(abs(delta)):
+                await self._keypress(key)
+        self._known_volume = level
 
     async def volume_up(self) -> None:
         """Increase volume by one step."""
         await self._keypress("VolumeUp")
+        if self._known_volume is not None:
+            self._known_volume = min(100, self._known_volume + 1)
 
     async def volume_down(self) -> None:
         """Decrease volume by one step."""
         await self._keypress("VolumeDown")
+        if self._known_volume is not None:
+            self._known_volume = max(0, self._known_volume - 1)
 
     async def set_mute(self, mute: bool) -> None:
         """Toggle mute via VolumeMute keypress.

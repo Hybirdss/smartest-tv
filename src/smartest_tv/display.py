@@ -22,10 +22,50 @@ TV's built-in browser without internet access.
 
 from __future__ import annotations
 
+import html as _html
+import re
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Callable
+from urllib.parse import urlparse
+
+# ---------------------------------------------------------------------------
+# Input sanitisation — these fields are attacker-controllable via MCP
+# ---------------------------------------------------------------------------
+
+_CSS_COLOR_RE = re.compile(r"^[#a-zA-Z0-9(),.\s%-]{1,32}$")
+_SAFE_IFRAME_SCHEMES = {"http", "https"}
+
+
+def _safe_color(raw: str, default: str) -> str:
+    """Validate a caller-supplied CSS colour value.
+
+    We only need to block the `value;}` style-attribute break-out — a
+    strict character allow-list catches that without having to enumerate
+    every legal CSS colour form.
+    """
+    if isinstance(raw, str) and _CSS_COLOR_RE.match(raw):
+        return raw
+    return default
+
+
+def _safe_iframe_url(raw: str) -> str:
+    """Gate iframe URLs to http/https only.
+
+    `file://`, `javascript:`, `data:`, and schemeless inputs that
+    `urlparse` may misread all fall through to `about:blank`. This
+    prevents an MCP agent from pointing the TV browser at internal
+    admin panels (`http://router.local/admin`) or local files.
+    """
+    if not isinstance(raw, str):
+        return "about:blank"
+    parsed = urlparse(raw)
+    if parsed.scheme.lower() not in _SAFE_IFRAME_SCHEMES or not parsed.netloc:
+        return "about:blank"
+    # Re-quote the URL for attribute context — urlparse accepts
+    # anything before reassembly, so belt-and-braces escape here.
+    return _html.escape(raw, quote=True)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -101,9 +141,9 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
     # message — large centered text, ideal for notifications
     # ------------------------------------------------------------------
     if content_type == "message":
-        text = data.get("text", "")
-        bg = data.get("bg", "#111111")
-        color = data.get("color", "#ffffff")
+        text = _html.escape(str(data.get("text", "")))
+        bg = _safe_color(data.get("bg", ""), "#111111")
+        color = _safe_color(data.get("color", ""), "#ffffff")
 
         extra_css = ""
         body = f"""\
@@ -355,7 +395,9 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
     # iframe — embed any URL full-screen
     # ------------------------------------------------------------------
     elif content_type == "iframe":
-        url = data.get("url", "about:blank")
+        # Scheme-gate: http/https only. Rejects javascript:, file:,
+        # data:, and unparsable inputs — see _safe_iframe_url.
+        url = _safe_iframe_url(data.get("url", ""))
         # fullscreen=True is the only sensible option on a TV; kept as param
         # for API completeness.
 
@@ -419,24 +461,34 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
 # HTTP server
 # ---------------------------------------------------------------------------
 
-class _Handler(BaseHTTPRequestHandler):
-    """Minimal single-page HTTP handler."""
+def _make_handler(html: str) -> type[BaseHTTPRequestHandler]:
+    """Build a handler class bound to *html*.
 
-    html_content: str = ""
+    A previous version stored the HTML on the class (``_Handler.html_content``);
+    two concurrent ``serve()`` calls overwrote each other, so TV1 ended up
+    showing TV2's page. Per-invocation class closes over the string directly.
+    """
 
-    def do_GET(self) -> None:  # noqa: N802
-        body = self.html_content.encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+    class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-        pass  # suppress access logs
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+            pass  # suppress access logs
+
+    return _Handler
 
 
-def serve(html: str, port: int = 8765) -> tuple[str, Callable[[], None]]:
+def serve(
+    html: str,
+    port: int = 8765,
+    host: str = "",
+) -> tuple[str, Callable[[], None]]:
     """Start a non-blocking HTTP server that serves *html* at ``/``.
 
     Parameters
@@ -445,6 +497,11 @@ def serve(html: str, port: int = 8765) -> tuple[str, Callable[[], None]]:
         The HTML string to serve (typically from :func:`generate_html`).
     port:
         Local port to listen on (default ``8765``).
+    host:
+        Bind address. ``""`` (default) auto-selects: the LAN IP that the
+        TV can actually reach, so a phone on the same Wi-Fi can fetch it.
+        Pass ``"127.0.0.1"`` to restrict to the local machine (useful for
+        development or when piping through stv's cast URL on the same box).
 
     Returns
     -------
@@ -459,10 +516,11 @@ def serve(html: str, port: int = 8765) -> tuple[str, Callable[[], None]]:
         # open url on TV via: stv cast <url>
         stop()   # when done
     """
-    _Handler.html_content = html
-    server = HTTPServer(("0.0.0.0", port), _Handler)
+    ip = _get_local_ip()
+    bind = host if host else ip
+    handler_cls = _make_handler(html)
+    server = HTTPServer((bind, port), handler_cls)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    ip = _get_local_ip()
     url = f"http://{ip}:{port}"
     return url, server.shutdown
