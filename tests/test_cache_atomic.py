@@ -28,9 +28,30 @@ def isolated_cache(tmp_path, monkeypatch):
     yield
 
 
-def test_put_many_concurrent_writers_preserve_all_entries():
-    """Each thread writes a distinct key; all must survive the race."""
-    N = 40
+def test_put_many_concurrent_writers_preserve_all_entries(monkeypatch):
+    """Each thread writes a distinct key; all must survive the race.
+
+    Injects a sleep inside ``_save`` to stretch the critical section so
+    the lock is genuinely contended. On a broken (unlocked) impl, two
+    threads both ``_load`` pre-save, each adds its own key, and the
+    second ``_save`` overwrites the first — keys go missing. This test
+    was tautological in its first form (threads may serialise fast
+    enough on a warm path that the race never fires), so the sleep
+    forces an interleave every time.
+    """
+    import time as _time
+
+    real_save = cache_module._save
+
+    def slow_save(data):
+        # 5 ms is well over the time another thread needs to enter the
+        # critical section; without the RLock this guarantees overlap.
+        _time.sleep(0.005)
+        real_save(data)
+
+    monkeypatch.setattr(cache_module, "_save", slow_save)
+
+    N = 30
 
     def writer(i):
         cache_module.put("netflix", f"show-{i}", f"id-{i}")

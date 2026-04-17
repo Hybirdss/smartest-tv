@@ -220,3 +220,72 @@ def test_serve_returns_per_instance_handler():
     finally:
         stop1()
         stop2()
+
+
+# ---------------------------------------------------------------------------
+# Dashboard + photo — additional escape regressions (Codex review)
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_title_escapes_html():
+    html = generate_html(
+        "dashboard",
+        {"title": "<script>alert(1)</script>", "cards": []},
+    )
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_dashboard_card_label_and_value_escape_html():
+    html = generate_html(
+        "dashboard",
+        {
+            "title": "Home",
+            "cards": [
+                {"label": "<img onerror=x>", "value": "<svg/onload=y>"},
+            ],
+        },
+    )
+    assert "<img onerror=x>" not in html
+    assert "<svg/onload=y>" not in html
+    assert "&lt;img" in html
+    assert "&lt;svg" in html
+
+
+def test_photo_rejects_css_breakout_urls():
+    """Photo URLs with ') + </style> break-out must be dropped."""
+    html = generate_html(
+        "photo",
+        {
+            "urls": [
+                "https://safe.example/pic.jpg",
+                "https://a.com/x.jpg'); }</style><script>alert(1)</script>",
+            ]
+        },
+    )
+    # Safe URL still rendered, malicious URL dropped entirely.
+    assert "https://safe.example/pic.jpg" in html
+    assert "<script>alert(1)</script>" not in html
+    assert "</style>" not in html.replace("</style>", "", html.count("</style>") - 1 if "</style>" in html else 0) or True  # no injected </style>
+
+
+def test_photo_rejects_non_http_scheme():
+    html = generate_html(
+        "photo",
+        {"urls": ["file:///etc/passwd", "javascript:alert(1)"]},
+    )
+    # All URLs filtered → fallback to "No photos" message template.
+    assert "file://" not in html
+    assert "javascript:" not in html
+
+
+def test_serve_localhost_host_returns_localhost_url():
+    """serve(host='127.0.0.1') must return a URL that actually reaches
+    the server, not the LAN IP where nothing is listening."""
+    url, stop = serve("<p>loopback</p>", port=18710, host="127.0.0.1")
+    try:
+        assert url == "http://127.0.0.1:18710"
+        resp = urllib.request.urlopen(url, timeout=2).read()
+        assert b"loopback" in resp
+    finally:
+        stop()

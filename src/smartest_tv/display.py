@@ -67,6 +67,25 @@ def _safe_iframe_url(raw: str) -> str:
     # anything before reassembly, so belt-and-braces escape here.
     return _html.escape(raw, quote=True)
 
+
+def _safe_css_url(raw: str) -> str:
+    """Return a CSS ``url(...)`` operand that cannot break out of its
+    string literal.
+
+    ``background-image: url('{raw}')`` is a stored-XSS vector if ``raw``
+    contains ``')`` followed by ``</style><script>``. Restrict to the
+    same http/https scheme gate as iframes and additionally strip any
+    quote or paren characters that would break the CSS string.
+    """
+    if not isinstance(raw, str):
+        return ""
+    parsed = urlparse(raw)
+    if parsed.scheme.lower() not in _SAFE_IFRAME_SCHEMES or not parsed.netloc:
+        return ""
+    if any(c in raw for c in "'\"()<>\\\r\n"):
+        return ""
+    return raw
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -249,13 +268,16 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
     # dashboard — info cards grid, readable from sofa distance
     # ------------------------------------------------------------------
     elif content_type == "dashboard":
-        title = data.get("title", "Dashboard")
+        # Every caller-supplied string is attacker-controllable via MCP;
+        # HTML-escape each field for its destination context.
+        raw_title = str(data.get("title", "Dashboard"))
+        title_html = _html.escape(raw_title)
         cards: list[dict] = data.get("cards", [])
 
         cards_html = ""
         for card in cards:
-            label = card.get("label", "")
-            value = card.get("value", "")
+            label = _html.escape(str(card.get("label", "")))
+            value = _html.escape(str(card.get("value", "")))
             cards_html += f"""\
 <div style="
   background: #1e1e1e;
@@ -301,7 +323,7 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
     font-weight: 700;
     letter-spacing: -0.02em;
     flex-shrink: 0;
-  ">{title}</h1>
+  ">{title_html}</h1>
   <div style="
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(28vw, 1fr));
@@ -315,7 +337,7 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
         script = ""
 
         return _BASE_HTML.format(
-            title=title,
+            title=title_html,
             bg="#111111",
             extra_css=extra_css,
             body=body,
@@ -326,8 +348,13 @@ def generate_html(content_type: str, data: dict | None = None) -> str:  # noqa: 
     # photo — CSS-only crossfade slideshow
     # ------------------------------------------------------------------
     elif content_type == "photo":
-        urls: list[str] = data.get("urls", [])
+        raw_urls: list[str] = data.get("urls", [])
         interval: int = int(data.get("interval", 5))
+
+        # Drop any URL that fails the CSS-url safety gate — the template
+        # below puts the URL inside url('{...}'), where ') + <tag>" would
+        # otherwise escape the <style> block.
+        urls = [u for u in (_safe_css_url(u) for u in raw_urls) if u]
 
         if not urls:
             # Fallback: blank dark screen with a message
@@ -522,5 +549,10 @@ def serve(
     server = HTTPServer((bind, port), handler_cls)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    url = f"http://{ip}:{port}"
+    # When the caller restricts the bind (e.g. 127.0.0.1), the returned
+    # URL must match — otherwise ``stv cast <url>`` resolves to the LAN
+    # IP, the TV dials in on a socket that is not listening, and the
+    # cast silently fails.
+    reachable = ip if bind in ("", "0.0.0.0") else bind
+    url = f"http://{reachable}:{port}"
     return url, server.shutdown

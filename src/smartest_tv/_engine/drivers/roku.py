@@ -288,19 +288,29 @@ class RokuDriver(TVDriver):
         reinstantiate the driver) to resync.
         """
         level = max(0, min(100, level))
+        # We update _known_volume after every keypress instead of only on
+        # the success path. A network blip mid-loop used to leave
+        # _known_volume stale — the next set_volume() then over- or
+        # under-shot by the number of presses already sent before the
+        # exception. Keeping the running estimate accurate matters more
+        # than rolling back the partial change (which we can't do
+        # anyway: the TV already processed the presses we did send).
         if self._known_volume is None:
-            # Cold start: force state to 0 with 100 VolumeDown presses,
-            # then climb to target.
             for _ in range(100):
                 await self._keypress("VolumeDown")
+            # At this point we've hit the floor (or tried to); pin the
+            # estimate here so any mid-loop exception leaves a sane state.
+            self._known_volume = 0
             for _ in range(level):
                 await self._keypress("VolumeUp")
+                self._known_volume += 1
         else:
             delta = level - self._known_volume
             key = "VolumeUp" if delta > 0 else "VolumeDown"
+            step = 1 if delta > 0 else -1
             for _ in range(abs(delta)):
                 await self._keypress(key)
-        self._known_volume = level
+                self._known_volume += step
 
     async def volume_up(self) -> None:
         """Increase volume by one step."""

@@ -317,12 +317,21 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._error(500, str(e))
 
     def do_OPTIONS(self):
-        """Handle CORS preflight."""
-        origin = os.environ.get("STV_CORS_ORIGIN", "*")
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", origin)
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        """Handle CORS preflight.
+
+        Tracks the same policy as ``_respond``: no origin header by
+        default, opt-in via ``STV_CORS_ORIGIN``. Without this, a
+        malicious page the user visited while ``stv serve`` was running
+        could pass preflight (the old default was ``*``) and then issue
+        a state-changing POST to the no-auth localhost API.
+        """
+        origin = os.environ.get("STV_CORS_ORIGIN", "")
+        self.send_response(204)
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
 
@@ -334,7 +343,8 @@ def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> HTTPServer:
     Security:
         - Default bind is 127.0.0.1 (localhost only).
         - Set STV_API_KEY to require Bearer token auth.
-        - Set STV_CORS_ORIGIN to restrict CORS (default: *).
+        - Set STV_CORS_ORIGIN to opt into cross-origin (default: no
+          CORS header — same-origin only).
         - For remote access, use 0.0.0.0 + STV_API_KEY + firewall/VPN.
     """
     if host == "0.0.0.0" and not _api_key:
