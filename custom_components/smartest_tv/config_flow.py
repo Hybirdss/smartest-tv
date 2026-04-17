@@ -8,11 +8,10 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, PLATFORMS
+from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, TV_PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,8 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 async def _try_connect(hass: HomeAssistant, platform: str, ip: str) -> bool:
     """Test if we can connect to the TV."""
     try:
-        from smartest_tv.drivers.factory import create_driver
         from smartest_tv.config import add_tv
+        from smartest_tv.drivers.factory import create_driver
 
         # Register temporarily so create_driver can find it
         await hass.async_add_executor_job(
@@ -95,7 +94,7 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_TV_NAME): str,
-                    vol.Required(CONF_PLATFORM): vol.In(PLATFORMS),
+                    vol.Required(CONF_PLATFORM): vol.In(TV_PLATFORMS),
                     vol.Required(CONF_IP): str,
                     vol.Optional(CONF_MAC, default=""): str,
                 }
