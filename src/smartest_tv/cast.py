@@ -21,10 +21,14 @@ def parse_cast_url(url: str) -> tuple[str, str]:
     Raises ValueError for unrecognised URLs.
     """
     parsed = urlparse(url)
-    host = parsed.netloc.lower().lstrip("www.")
+    # hostname strips userinfo + port and is already lowercased; netloc is not.
+    host = (parsed.hostname or "").removeprefix("www.")
     path = parsed.path
 
-    if "netflix.com" in host:
+    def _host_is(domain: str) -> bool:
+        return host == domain or host.endswith("." + domain)
+
+    if _host_is("netflix.com"):
         m = re.match(r"/watch/(\d+)", path)
         if m:
             return "netflix", m.group(1)
@@ -33,7 +37,7 @@ def parse_cast_url(url: str) -> tuple[str, str]:
             return "netflix", f"title:{m.group(1)}"
         raise ValueError(f"Unrecognised Netflix URL: {url}")
 
-    if "youtube.com" in host:
+    if _host_is("youtube.com"):
         qs = parse_qs(parsed.query)
         vid = qs.get("v", [None])[0]
         if vid:
@@ -46,7 +50,7 @@ def parse_cast_url(url: str) -> tuple[str, str]:
             return "youtube", vid
         raise ValueError(f"Unrecognised youtu.be URL: {url}")
 
-    if "spotify.com" in host:
+    if _host_is("spotify.com"):
         m = re.match(r"/(track|album|playlist|artist)/([A-Za-z0-9]+)", path)
         if m:
             return "spotify", f"spotify:{m.group(1)}:{m.group(2)}"

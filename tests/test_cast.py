@@ -105,3 +105,28 @@ def test_unsupported_disney():
 def test_plain_string_no_scheme():
     with pytest.raises(ValueError):
         _parse_cast_url("netflix.com/watch/12345")
+
+
+# ---------------------------------------------------------------------------
+# Host prefix stripping — regression guard for the lstrip("www.") footgun.
+# lstrip treats its argument as a set of chars, so "wnetflix.com".lstrip("www.")
+# yields "netflix.com" and falsely matched as Netflix. removeprefix is strict.
+# ---------------------------------------------------------------------------
+
+def test_typo_host_not_misclassified_as_netflix():
+    with pytest.raises(ValueError, match="Unsupported"):
+        _parse_cast_url("https://wnetflix.com/watch/12345")
+
+
+def test_leading_w_host_not_chopped():
+    with pytest.raises(ValueError, match="Unsupported"):
+        _parse_cast_url("https://wonderwall.example/watch/99")
+
+
+def test_explicit_port_still_matches():
+    # parsed.netloc includes the port; parsed.hostname does not.
+    assert _parse_cast_url("https://netflix.com:443/watch/42") == ("netflix", "42")
+
+
+def test_uppercase_host_normalised():
+    assert _parse_cast_url("https://NETFLIX.COM/watch/7") == ("netflix", "7")
