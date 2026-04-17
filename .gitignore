@@ -14,8 +14,14 @@ request.token
 launch-posts.md
 launch-posts.html
 post-reddit.py
+post-claudecode.py
+post-vibecoding.py
+test-post.py
 demo-script.sh
 demo.tape
+demo-vhs.gif
+demo.cast
 .architecture.json
 ARCHITECTURE.md
+.wrangler/
 
