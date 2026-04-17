@@ -166,16 +166,33 @@ class TestApiEndpoints:
             handler.do_POST()
         assert resp["code"] == 404
 
-    def test_options_cors(self):
+    def test_options_no_cors_by_default(self, monkeypatch):
+        """Preflight returns 204 with no CORS headers unless STV_CORS_ORIGIN
+        is set — the old default of ``*`` let any website the user visited
+        send credentialed state-changing POSTs to the localhost API."""
+        monkeypatch.delenv("STV_CORS_ORIGIN", raising=False)
         handler, resp = _make_handler("OPTIONS", "/api/ping")
         handler.send_response = MagicMock()
         handler.send_header = MagicMock()
         handler.end_headers = MagicMock()
         handler.do_OPTIONS()
-        handler.send_response.assert_called_with(200)
+        handler.send_response.assert_called_with(204)
         cors_headers = {call[0][0]: call[0][1] for call in handler.send_header.call_args_list}
-        assert "Access-Control-Allow-Origin" in cors_headers
+        assert "Access-Control-Allow-Origin" not in cors_headers
+        assert "Access-Control-Allow-Methods" not in cors_headers
+
+    def test_options_cors_when_explicit_origin(self, monkeypatch):
+        """Opt-in: setting STV_CORS_ORIGIN echoes it back with methods."""
+        monkeypatch.setenv("STV_CORS_ORIGIN", "https://app.example.com")
+        handler, resp = _make_handler("OPTIONS", "/api/ping")
+        handler.send_response = MagicMock()
+        handler.send_header = MagicMock()
+        handler.end_headers = MagicMock()
+        handler.do_OPTIONS()
+        cors_headers = {call[0][0]: call[0][1] for call in handler.send_header.call_args_list}
+        assert cors_headers.get("Access-Control-Allow-Origin") == "https://app.example.com"
         assert "Access-Control-Allow-Methods" in cors_headers
+        assert cors_headers.get("Vary") == "Origin"
 
 
 class TestApiServerStart:

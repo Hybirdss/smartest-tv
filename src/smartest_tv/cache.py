@@ -222,12 +222,14 @@ def get_netflix_episode(title_slug: str, season: int, episode: int) -> str | Non
     if show_data and isinstance(show_data, dict):
         result = _lookup_netflix_episode({"netflix": {title_slug: show_data}}, title_slug, season, episode)
         if result:
-            # Promote to local cache
-            data = _load()
-            if "netflix" not in data:
-                data["netflix"] = {}
-            data["netflix"][title_slug] = show_data
-            _save(data)
+            # Promote to local cache (hold the lock across read + write
+            # so a racing put()/record_play() cannot drop our entry).
+            with _file_lock:
+                data = _load()
+                if "netflix" not in data:
+                    data["netflix"] = {}
+                data["netflix"][title_slug] = show_data
+                _save(data)
             return result
 
     # Try full community cache (fallback)
@@ -236,11 +238,12 @@ def get_netflix_episode(title_slug: str, season: int, episode: int) -> str | Non
     if result:
         show = cc.get("netflix", {}).get(title_slug)
         if show:
-            data = _load()
-            if "netflix" not in data:
-                data["netflix"] = {}
-            data["netflix"][title_slug] = show
-            _save(data)
+            with _file_lock:
+                data = _load()
+                if "netflix" not in data:
+                    data["netflix"] = {}
+                data["netflix"][title_slug] = show
+                _save(data)
     return result
 
 
@@ -267,20 +270,24 @@ def put_netflix_show(
     episode_count: int,
 ) -> None:
     """Cache a Netflix show's season data locally + contribute to API."""
-    data = _load()
-    if "netflix" not in data:
-        data["netflix"] = {}
-    if title_slug not in data["netflix"]:
-        data["netflix"][title_slug] = {"title_id": title_id, "seasons": {}}
-    data["netflix"][title_slug]["seasons"][str(season)] = {
-        "first_episode_id": first_episode_id,
-        "episode_count": episode_count,
-    }
-    data.setdefault("_timestamps", {})[f"netflix:{title_slug}"] = int(time.time())
-    _save(data)
+    with _file_lock:
+        data = _load()
+        if "netflix" not in data:
+            data["netflix"] = {}
+        if title_slug not in data["netflix"]:
+            data["netflix"][title_slug] = {"title_id": title_id, "seasons": {}}
+        data["netflix"][title_slug]["seasons"][str(season)] = {
+            "first_episode_id": first_episode_id,
+            "episode_count": episode_count,
+        }
+        data.setdefault("_timestamps", {})[f"netflix:{title_slug}"] = int(time.time())
+        _save(data)
+        # Snapshot the final show entry inside the lock so the contribute
+        # thread can't race with a concurrent writer mutating the dict.
+        snapshot = data["netflix"][title_slug]
 
     # Contribute to API (fire-and-forget, never blocks)
-    _contribute("netflix", title_slug, data["netflix"][title_slug])
+    _contribute("netflix", title_slug, snapshot)
 
 
 # ---------------------------------------------------------------------------
