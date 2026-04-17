@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-04-17
+
 ### Fixed
 
 - **Cast URL parsing — strict host match.** `parse_cast_url` used
@@ -69,8 +71,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   ([hacs/default#6907](https://github.com/hacs/default/pull/6907)).
   Rewritten with install instructions, entity list, and automation
   examples.
-- **Manifest version synced to stv package (1.0.1 → 1.1.1)** so HACS
-  users see the upgrade; `requirements` pinned to `stv[all]>=1.1.1`.
+- **Manifest version synced to stv package (1.0.1 → 1.1.2)** so HACS
+  users see the upgrade; `requirements` pinned to `stv[all]>=1.1.2`.
 - **Polling resilience.** A single transient poll failure no longer
   flips the entity to OFF and triggers a full LG 8-subscription
   reconnect. After one or two failures the entity is marked
