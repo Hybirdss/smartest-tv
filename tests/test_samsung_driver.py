@@ -44,8 +44,11 @@ def driver() -> SamsungDriver:
 
 @pytest.mark.asyncio
 async def test_launch_app_deep_emits_deep_link_payload(driver):
-    """Disney+ / Netflix deep link goes out as ed.apps.launch DEEP_LINK."""
-    await driver.launch_app_deep("3201901017640", "81002370")  # Netflix Disney+ -> Stranger Things
+    """Non-DIAL apps (Disney+ etc.) go out as ed.apps.launch DEEP_LINK."""
+    # Disney+ is not in _DIAL_*_IDS so it should not attempt DIAL — it falls
+    # straight through to the WebSocket DEEP_LINK path.
+    driver._dial_app_url = ""  # force "no DIAL" so we don't M-SEARCH in tests
+    await driver.launch_app_deep("3201901017640", "81002370")
     driver._remote.send_command.assert_awaited_once()
     payload = _payload(driver._remote.send_command.await_args)
     assert payload["method"] == "ms.channel.emit"
@@ -143,3 +146,124 @@ async def test_set_volume_clamps_negative(driver):
     """Negative level is clamped to 0 — no ups batch is sent."""
     await driver.set_volume(-5)
     assert driver._remote.send_commands.await_count == 1
+
+
+# -- DIAL routing (issue #8) ----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_netflix_routes_through_dial_when_available(driver, monkeypatch):
+    """Netflix app IDs prefer DIAL over Tizen DEEP_LINK on Tizen 9."""
+    discovered: list[str] = []
+
+    async def _fake_discover(host_ip, timeout):
+        discovered.append(host_ip)
+        return "http://192.0.2.10:8080/ws/app"
+
+    captured: dict = {}
+
+    async def _fake_launch(application_url, app_name, body, *, session, timeout=10.0):
+        captured["url"] = application_url
+        captured["app_name"] = app_name
+        captured["body"] = body
+        return True
+
+    monkeypatch.setattr(
+        "smartest_tv._engine.dial.discover_application_url", _fake_discover
+    )
+    monkeypatch.setattr("smartest_tv._engine.dial.launch", _fake_launch)
+
+    await driver.launch_app_deep("11101200001", "80100172")
+
+    # DIAL fired with the Netflix-formatted body
+    assert captured["app_name"] == "Netflix"
+    assert captured["body"] == "m=https://www.netflix.com/watch/80100172&source_type=4"
+    assert discovered == ["192.0.2.10"]
+    # WebSocket DEEP_LINK must NOT have been sent — DIAL took the launch
+    driver._remote.send_command.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_netflix_falls_back_to_websocket_when_dial_fails(driver, monkeypatch):
+    """If DIAL POST fails, the driver still launches via Tizen DEEP_LINK."""
+
+    async def _fake_discover(host_ip, timeout):
+        return "http://192.0.2.10:8080/ws/app"
+
+    async def _fake_launch(*args, **kwargs):
+        return False  # DIAL didn't accept
+
+    monkeypatch.setattr(
+        "smartest_tv._engine.dial.discover_application_url", _fake_discover
+    )
+    monkeypatch.setattr("smartest_tv._engine.dial.launch", _fake_launch)
+
+    await driver.launch_app_deep("11101200001", "80100172")
+
+    # WebSocket fallback fired
+    payload = _payload(driver._remote.send_command.await_args)
+    assert payload["params"]["data"]["action_type"] == "DEEP_LINK"
+    assert payload["params"]["data"]["appId"] == "11101200001"
+
+
+@pytest.mark.asyncio
+async def test_youtube_routes_through_dial(driver, monkeypatch):
+    """YouTube app ID also prefers DIAL with v=<videoId> body."""
+
+    async def _fake_discover(host_ip, timeout):
+        return "http://192.0.2.10:8080/ws/app"
+
+    captured: dict = {}
+
+    async def _fake_launch(application_url, app_name, body, *, session, timeout=10.0):
+        captured["app_name"] = app_name
+        captured["body"] = body
+        return True
+
+    monkeypatch.setattr(
+        "smartest_tv._engine.dial.discover_application_url", _fake_discover
+    )
+    monkeypatch.setattr("smartest_tv._engine.dial.launch", _fake_launch)
+
+    await driver.launch_app_deep("111299001912", "dQw4w9WgXcQ")
+
+    assert captured["app_name"] == "YouTube"
+    assert captured["body"] == "v=dQw4w9WgXcQ"
+
+
+@pytest.mark.asyncio
+async def test_dial_discovery_failure_is_cached(driver, monkeypatch):
+    """If the TV doesn't speak DIAL, we don't M-SEARCH on every launch."""
+    discovery_calls: list[str] = []
+
+    async def _fake_discover(host_ip, timeout):
+        discovery_calls.append(host_ip)
+        return None  # nothing answered
+
+    monkeypatch.setattr(
+        "smartest_tv._engine.dial.discover_application_url", _fake_discover
+    )
+
+    # Three launches in a row should only trigger one M-SEARCH
+    for _ in range(3):
+        await driver.launch_app_deep("11101200001", "80100172")
+
+    assert discovery_calls == ["192.0.2.10"]
+    # All three fell back to WebSocket DEEP_LINK
+    assert driver._remote.send_command.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_non_dial_app_skips_discovery(driver, monkeypatch):
+    """Disney+ / Spotify / unknown apps must not even try DIAL."""
+
+    async def _fake_discover(host_ip, timeout):
+        raise AssertionError("DIAL discovery must not run for non-DIAL apps")
+
+    monkeypatch.setattr(
+        "smartest_tv._engine.dial.discover_application_url", _fake_discover
+    )
+
+    await driver.launch_app_deep("3201901017640", "lobs-disneyplus")  # Disney+
+    payload = _payload(driver._remote.send_command.await_args)
+    assert payload["params"]["data"]["appId"] == "3201901017640"
