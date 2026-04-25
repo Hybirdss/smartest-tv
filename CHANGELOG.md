@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-26
+
 ### Fixed
 
 - **Samsung driver — `AttributeError: SamsungTVWSAsyncRemote` has no
@@ -33,7 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   existing Tizen `DEEP_LINK` path on any DIAL failure, so Tizen 7/8
   behavior is unchanged. Disney+, Hulu, Apple TV+ etc. stay on the
   Tizen path because they're not DIAL receivers — Tier 2 (SmartThings +
-  Bixby voice) tracked in #8. (Refs #8, PR #9.)
+  Bixby voice) tracked in #8. (Refs #8, PR #10.)
 
 ## [1.1.2] - 2026-04-17
 
