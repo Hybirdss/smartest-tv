@@ -8,19 +8,26 @@ not `send_key`/`run_app` (those live on the sync class). We dispatch via the
 `SendRemoteKey` and `ChannelEmitCommand` payload builders from
 `samsungtvws.remote`.
 
-Deep link payload (event=ed.apps.launch):
-  Netflix  : meta_tag = "{numeric_id}"
-  YouTube  : meta_tag = "{video_id}"
-  Spotify  : meta_tag = "spotify:{type}:{id}"
+Deep link path:
+  Netflix / YouTube: try DIAL (issue #8) first, then fall back to
+    ed.apps.launch DEEP_LINK. Tizen 9 firmware has been observed
+    silently ignoring metaTag for Netflix and Disney+ apps; routing
+    through DIAL bypasses Tizen entirely because the launch parameters
+    are interpreted by the app, not the OS.
+  Other apps: ed.apps.launch DEEP_LINK with meta_tag (Spotify
+    "spotify:{type}:{id}", etc.). DIAL is opt-in per-app — most Samsung
+    apps are not DIAL receivers.
 """
 
 from __future__ import annotations
 
 import os
 import socket
-from typing import Any
+from typing import Any, Final
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
+
+from .. import dial
 
 try:
     import aiohttp
@@ -29,6 +36,16 @@ try:
     from samsungtvws.remote import ChannelEmitCommand, SendRemoteKey
 except ImportError:
     raise ImportError("Install Samsung driver: pip install 'smartest-tv[samsung]'")
+
+
+# DIAL canonical app names + Samsung app IDs that should route through DIAL.
+# IDs sourced from xchwarze/samsung-tv-ws-api APPLICATIONS.md — apps that ship
+# multiple IDs across Tizen versions are listed exhaustively.
+_DIAL_NETFLIX_IDS: Final[frozenset[str]] = frozenset(
+    {"11101200001", "3201907018807"}
+)
+_DIAL_YOUTUBE_IDS: Final[frozenset[str]] = frozenset({"111299001912"})
+_DIAL_DISCOVERY_TIMEOUT: Final[float] = 3.0
 
 
 class SamsungDriver(TVDriver):
@@ -45,6 +62,9 @@ class SamsungDriver(TVDriver):
         )
         self._remote: SamsungTVWSAsyncRemote | None = None
         self._session: aiohttp.ClientSession | None = None
+        # DIAL Application-URL cache. None = not yet looked up; "" = looked up
+        # and not present (so we don't M-SEARCH on every launch).
+        self._dial_app_url: str | None = None
 
     async def connect(self) -> None:
         os.makedirs(os.path.dirname(self.token_file), exist_ok=True)
@@ -124,9 +144,42 @@ class SamsungDriver(TVDriver):
         await r.send_command(ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH", ""))
 
     async def launch_app_deep(self, app_id: str, content_id: str) -> None:
+        if app_id in _DIAL_NETFLIX_IDS:
+            if await self._try_dial("Netflix", dial.netflix_body(content_id)):
+                return
+        elif app_id in _DIAL_YOUTUBE_IDS:
+            if await self._try_dial("YouTube", dial.youtube_body(content_id)):
+                return
+        # DIAL didn't apply or didn't reach the TV. Fall back to the Tizen
+        # WebSocket DEEP_LINK path — the same payload PR #7 fixed. On Tizen
+        # 9 firmware that ignores metaTag this still launches the app so
+        # the user can pick manually; that's strictly better than nothing.
         r = await self._ensure()
         await r.send_command(
             ChannelEmitCommand.launch_app(app_id, "DEEP_LINK", content_id)
+        )
+
+    async def _try_dial(self, app_name: str, body: str) -> bool:
+        """Attempt a DIAL launch for one of the DIAL-aware apps.
+
+        Discovers the TV's Application-URL on first call (cached for the
+        lifetime of the driver) and POSTs the launch body. Returns
+        ``True`` if the TV accepted the launch with a 2xx status, so the
+        caller knows to skip the WebSocket fallback.
+        """
+        if self._dial_app_url is None:
+            url = await dial.discover_application_url(
+                self.ip, timeout=_DIAL_DISCOVERY_TIMEOUT
+            )
+            # Empty string sentinels "we tried, the TV doesn't speak DIAL"
+            # so subsequent launches skip the multicast round-trip.
+            self._dial_app_url = url or ""
+        if not self._dial_app_url:
+            return False
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return await dial.launch(
+            self._dial_app_url, app_name, body, session=self._session
         )
 
     async def close_app(self, app_id: str) -> None:

@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Samsung driver — `AttributeError: SamsungTVWSAsyncRemote` has no
+  attribute `run_app`/`send_key`.** `samsungtvws>=3.0` dropped both
+  methods from the async class; only `send_command`/`send_commands`
+  remain. Every Samsung control path (power, volume, mute, play/pause/
+  stop, channel, app launch, deep link) was raising in production —
+  first surfaced as Disney+/Netflix deep-link failure on Tizen 9 via
+  HACS. All 13 callsites now dispatch via `SendRemoteKey.click(...)`
+  and `ChannelEmitCommand.launch_app(...)` payload builders. `set_volume`
+  batches via `send_commands(plural)` so 100 sequential awaits collapse
+  to two batched sends. (Closes #6, PR #7.)
+
+### Added
+
+- **Samsung driver — DIAL deep-link path for Netflix and YouTube.**
+  Tizen 9 firmware silently ignores `metaTag` on `ed.apps.launch
+  DEEP_LINK`. DIAL is the protocol Chromecast uses; Netflix and YouTube
+  co-developed it, so launch parameters are interpreted by the app, not
+  Tizen, and survive the firmware regression. The driver now SSDP-
+  discovers the TV's `Application-URL`, POSTs an
+  `m=https://www.netflix.com/watch/{id}&source_type=4` body to
+  `{Application-URL}/Netflix` (or `v=<videoId>` to `/YouTube`), and
+  caches the discovered URL on the driver instance. Falls back to the
+  existing Tizen `DEEP_LINK` path on any DIAL failure, so Tizen 7/8
+  behavior is unchanged. Disney+, Hulu, Apple TV+ etc. stay on the
+  Tizen path because they're not DIAL receivers — Tier 2 (SmartThings +
+  Bixby voice) tracked in #8. (Refs #8, PR #9.)
+
 ## [1.1.2] - 2026-04-17
 
 ### Fixed
