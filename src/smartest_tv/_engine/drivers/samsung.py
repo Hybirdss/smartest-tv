@@ -3,7 +3,12 @@
 Samsung has NO read-volume or read-mute API. Those methods raise NotImplementedError.
 Volume can only be adjusted via KEY_VOLUP/KEY_VOLDOWN one step at a time.
 
-Deep link format: run_app(app_id, "DEEP_LINK", meta_tag)
+The async `SamsungTVWSAsyncRemote` exposes only `send_command`/`send_commands` —
+not `send_key`/`run_app` (those live on the sync class). We dispatch via the
+`SendRemoteKey` and `ChannelEmitCommand` payload builders from
+`samsungtvws.remote`.
+
+Deep link payload (event=ed.apps.launch):
   Netflix  : meta_tag = "{numeric_id}"
   YouTube  : meta_tag = "{video_id}"
   Spotify  : meta_tag = "spotify:{type}:{id}"
@@ -21,6 +26,7 @@ try:
     import aiohttp
     from samsungtvws.async_remote import SamsungTVWSAsyncRemote
     from samsungtvws.async_rest import SamsungTVAsyncRest
+    from samsungtvws.remote import ChannelEmitCommand, SendRemoteKey
 except ImportError:
     raise ImportError("Install Samsung driver: pip install 'smartest-tv[samsung]'")
 
@@ -78,7 +84,7 @@ class SamsungDriver(TVDriver):
 
     async def power_off(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_POWER")
+        await r.send_command(SendRemoteKey.click("KEY_POWER"))
 
     # -- Volume ---------------------------------------------------------------
 
@@ -86,24 +92,27 @@ class SamsungDriver(TVDriver):
         raise NotImplementedError("Samsung has no read-volume API")
 
     async def set_volume(self, level: int) -> None:
-        # Naive: bottom-out then count up
+        # Naive: bottom-out then count up. Batched via send_commands so the
+        # async connection only takes the per-key delay between sends, not
+        # round-trips between awaits.
         r = await self._ensure()
-        for _ in range(50):
-            await r.send_key("KEY_VOLDOWN", key_press_delay=0.05)
-        for _ in range(max(0, min(100, level))):
-            await r.send_key("KEY_VOLUP", key_press_delay=0.05)
+        bottom = [SendRemoteKey.click("KEY_VOLDOWN")] * 50
+        await r.send_commands(bottom, key_press_delay=0.05)
+        ups = [SendRemoteKey.click("KEY_VOLUP")] * max(0, min(100, level))
+        if ups:
+            await r.send_commands(ups, key_press_delay=0.05)
 
     async def volume_up(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_VOLUP")
+        await r.send_command(SendRemoteKey.click("KEY_VOLUP"))
 
     async def volume_down(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_VOLDOWN")
+        await r.send_command(SendRemoteKey.click("KEY_VOLDOWN"))
 
     async def set_mute(self, mute: bool) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_MUTE")  # Toggle only
+        await r.send_command(SendRemoteKey.click("KEY_MUTE"))  # Toggle only
 
     async def get_muted(self) -> bool:
         raise NotImplementedError("Samsung has no read-mute API")
@@ -112,11 +121,13 @@ class SamsungDriver(TVDriver):
 
     async def launch_app(self, app_id: str) -> None:
         r = await self._ensure()
-        await r.run_app(app_id, app_type="NATIVE_LAUNCH", meta_tag="")
+        await r.send_command(ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH", ""))
 
     async def launch_app_deep(self, app_id: str, content_id: str) -> None:
         r = await self._ensure()
-        await r.run_app(app_id, app_type="DEEP_LINK", meta_tag=content_id)
+        await r.send_command(
+            ChannelEmitCommand.launch_app(app_id, "DEEP_LINK", content_id)
+        )
 
     async def close_app(self, app_id: str) -> None:
         if not self._session:
@@ -137,15 +148,15 @@ class SamsungDriver(TVDriver):
 
     async def play(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_PLAY")
+        await r.send_command(SendRemoteKey.click("KEY_PLAY"))
 
     async def pause(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_PAUSE")
+        await r.send_command(SendRemoteKey.click("KEY_PAUSE"))
 
     async def stop(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_STOP")
+        await r.send_command(SendRemoteKey.click("KEY_STOP"))
 
     # -- Status & Info --------------------------------------------------------
 
@@ -173,8 +184,8 @@ class SamsungDriver(TVDriver):
 
     async def channel_up(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_CHUP")
+        await r.send_command(SendRemoteKey.click("KEY_CHUP"))
 
     async def channel_down(self) -> None:
         r = await self._ensure()
-        await r.send_key("KEY_CHDOWN")
+        await r.send_command(SendRemoteKey.click("KEY_CHDOWN"))
