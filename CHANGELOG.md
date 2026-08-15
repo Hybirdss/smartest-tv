@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-16
+
 ### Fixed
 
 - **Config corruption on legacy→multi-TV migration (issue #15 "did not
