@@ -17,12 +17,20 @@
         "data": {
           "tv_index": "TV"
         }
+      },
+      "pair": {
+        "title": "Pair with your TV",
+        "description": "A 6-digit PIN is shown on {name}. Enter it to finish pairing.",
+        "data": {
+          "pin": "PIN shown on the TV"
+        }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect to TV. Check the IP address.",
       "discovery_failed": "No TVs found on the network. Try manual setup.",
-      "unknown": "Unexpected error."
+      "unknown": "Unexpected error.",
+      "invalid_pin": "Wrong PIN. Check the code on the TV and try again."
     },
     "abort": {
       "already_configured": "This TV is already configured."

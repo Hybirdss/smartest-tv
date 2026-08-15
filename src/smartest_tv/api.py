@@ -50,15 +50,16 @@ def _get_driver() -> TVDriver:
 def _run_async(coro):
     """Run an async function from sync context."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result(timeout=30)
-        return loop.run_until_complete(coro)
+        asyncio.get_running_loop()
     except RuntimeError:
+        # No running loop (sync context) — asyncio.run creates one.
         return asyncio.run(coro)
+    # Called from inside a running loop (e.g. MCP server thread that
+    # shares our loop): run in a worker thread with its own loop.
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        future = pool.submit(asyncio.run, coro)
+        return future.result(timeout=30)
 
 
 def generate_api_key() -> str:

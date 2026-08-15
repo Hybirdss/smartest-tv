@@ -120,14 +120,14 @@ async def _adb_scan(timeout: float = 3.0) -> list[dict]:
         except Exception:
             return None
 
-    # Run in batches of 50 to avoid too many open sockets
+    # Run in batches of 50 to avoid too many open sockets. Scan every
+    # batch: stopping at the first hit hid additional Android TVs on the
+    # same network (multi-TV households got partial discovery results).
     found = []
     for i in range(0, len(candidates), 50):
         batch = candidates[i : i + 50]
         results = await asyncio.gather(*[_check(ip) for ip in batch])
         found.extend(r for r in results if r is not None)
-        if found:
-            break  # Stop after first batch that finds something
 
     return found
 

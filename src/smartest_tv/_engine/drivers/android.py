@@ -9,15 +9,18 @@ Migrated from adb-shell which required Developer Options → ADB debugging.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
 try:
     from androidtvremote2 import AndroidTVRemote, CannotConnect, InvalidAuth
-except ImportError:
-    raise ImportError("Install Android driver: pip install 'smartest-tv[android]'")
+except ImportError as e:
+    raise ImportError(
+        "Android driver requires androidtvremote2.\n"
+        "  pipx inject stv androidtvremote2         (recommended)\n"
+        "  pip install 'stv[android]'               (alternative)"
+    ) from e
 
 
 # Android TV key codes (KEYCODE_* from KeyEvent)
@@ -58,11 +61,14 @@ class AndroidDriver(TVDriver):
     platform = "android"
 
     def __init__(self, ip: str, port: int = 6466, cert_dir: str = ""):
+        from smartest_tv.config import CONFIG_DIR
+
         self.ip = ip
         self.port = port
-        self.cert_dir = cert_dir or os.path.expanduser(
-            "~/.config/smartest-tv/android-cert"
-        )
+        # Default to the shared config dir so STV_CONFIG_DIR (e.g. a
+        # persistent /config volume in Home Assistant) is honored — pairing
+        # certs must survive container rebuilds (#15).
+        self.cert_dir = cert_dir or str(CONFIG_DIR / "android-cert")
         self.certfile = str(Path(self.cert_dir) / "cert.pem")
         self.keyfile = str(Path(self.cert_dir) / "key.pem")
         self._remote: AndroidTVRemote | None = None
@@ -100,7 +106,9 @@ class AndroidDriver(TVDriver):
         except InvalidAuth:
             self._remote = None
             raise RuntimeError(
-                "Not paired with this TV. Run: stv setup"
+                "Not paired with this TV. Pair it via 'stv setup', or — under "
+                "Home Assistant — remove and re-add the TV in Settings → "
+                "Devices & Services to run the pairing step."
             )
         except CannotConnect as e:
             self._remote = None
@@ -108,6 +116,11 @@ class AndroidDriver(TVDriver):
         self._remote.add_current_app_updated_callback(self._on_app)
         self._remote.add_volume_info_updated_callback(self._on_volume)
         self._remote.add_is_on_updated_callback(self._on_power)
+
+    @property
+    def paired(self) -> bool:
+        """Whether the driver currently holds a connected (paired) remote."""
+        return self._remote is not None
 
     async def disconnect(self) -> None:
         if self._remote:

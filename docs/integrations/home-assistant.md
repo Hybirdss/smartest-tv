@@ -28,9 +28,20 @@ The integration will scan your network for TVs and walk you through pairing. Man
 
 ## Requirements
 
-The HA host must be able to install `stv[all]` (pulled automatically by the manifest). Python 3.11+ is required for the stv package itself — Home Assistant OS 2024.1+ ships with a compatible Python.
+The HA host must be able to install `stv[lg,samsung,android,roku]` (pulled automatically by the manifest; the MCP server extra is not needed inside HA). Python 3.11+ is required for the stv package itself — Home Assistant OS 2024.1+ ships with a compatible Python.
 
-For LG webOS TVs you'll see a pairing popup on the TV the first time HA tries to connect; approve it once and the client key is saved to `~/.homeassistant/.storage/smartest_tv_keys/` (or the equivalent under your HA config dir).
+## Pairing
+
+Pairing credentials are stored under stv's config dir — `~/.config/smartest-tv/` by default, or wherever `STV_CONFIG_DIR` points. **In HA OS / HA Container, set `STV_CONFIG_DIR` to a path inside your persistent `/config` volume** (e.g. `/config/smartest-tv`), otherwise pairing keys live under `/root` and are lost on container rebuilds — after which the TV rejects commands with "Not paired".
+
+Per platform:
+
+- **Android TV / Fire TV**: the setup flow now includes a pairing step — a 6-digit PIN appears on the TV, enter it in the HA form. Re-run it any time by removing and re-adding the integration entry.
+- **LG webOS**: a pairing popup appears on the TV the first time HA connects; approve it once and the client key is saved to `lg_key.json` in the config dir above.
+- **Samsung Tizen**: pairing is automatic (token-based); the token is written to `samsung_<ip>.token` in the same dir.
+- **Roku**: no pairing needed.
+
+If a driver dependency fails to import (e.g. a broken `aiofiles` inside HA's site-packages), the setup log now names the actual broken package instead of telling you to install an unrelated one — repair that package in the HA environment and reload the integration.
 
 ## Entities
 

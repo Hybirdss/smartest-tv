@@ -1,13 +1,17 @@
 {
   "domain": "smartest_tv",
   "name": "Smartest TV",
-  "codeowners": ["@Hybirdss"],
+  "codeowners": [
+    "@Hybirdss"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/Hybirdss/smartest-tv",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Hybirdss/smartest-tv/issues",
-  "requirements": ["stv[all]>=1.2.0"],
-  "version": "1.2.0"
+  "requirements": [
+    "stv[lg,samsung,android,roku]>=1.2.0"
+  ],
+  "version": "1.2.1"
 }

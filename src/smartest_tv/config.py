@@ -21,7 +21,19 @@ def load() -> dict[str, Any]:
 
     if CONFIG_FILE.exists():
         import tomllib
-        config = tomllib.loads(CONFIG_FILE.read_text())
+        try:
+            config = tomllib.loads(CONFIG_FILE.read_text())
+        except tomllib.TOMLDecodeError:
+            # A corrupt config (e.g. hand-edited, or written by an old
+            # version with unquoted spaces in section keys) must not take
+            # down every stv command. Preserve the broken file for manual
+            # recovery and continue with an empty config.
+            try:
+                import shutil
+                shutil.copy2(CONFIG_FILE, CONFIG_FILE.with_suffix(".toml.corrupt"))
+            except OSError:
+                pass
+            config = {}
 
     # Env var overrides — only apply in legacy/single-tv mode
     tv = config.get("tv", {})
@@ -189,9 +201,14 @@ def _save_raw_toml(text: str) -> None:
 
 
 def _sanitize_tv_name(name: str) -> str:
-    """Sanitize TV name for use as TOML key. Only allow alphanumeric, dash, underscore."""
+    """Sanitize TV name for use as a TOML key / CLI argument.
+
+    Allows unicode word characters (Korean, Japanese, …) so "거실 TV"
+    becomes "거실-TV" instead of a row of dashes. Keys are additionally
+    quoted when written, so any residual characters stay TOML-safe.
+    """
     import re
-    clean = re.sub(r"[^a-zA-Z0-9_-]", "-", name.strip())
+    clean = re.sub(r"[^\w-]", "-", name.strip(), flags=re.UNICODE).strip("-")
     if not clean:
         raise ValueError("TV name must contain at least one alphanumeric character")
     return clean
@@ -207,14 +224,20 @@ def add_tv(name: str, platform: str, ip: str, mac: str = "", default: bool = Fal
     tv_section = config.get("tv", {})
 
     if _is_legacy(tv_section):
-        # Migrate legacy to multi-TV
-        existing_name = tv_section.get("name", "default") or "default"
+        # Migrate legacy to multi-TV. The legacy display ``name`` may contain
+        # spaces or non-ASCII ("Living Room", "거실 TV") — never use it
+        # verbatim as a TOML section key (writes unparseable TOML and kills
+        # every later config read). Sanitize the key, keep the display name.
+        raw_name = tv_section.get("name", "") or ""
+        existing_name = _sanitize_tv_name(raw_name) if raw_name else "default"
         existing = {
             "platform": tv_section.get("platform", ""),
             "ip": tv_section.get("ip", ""),
         }
         if tv_section.get("mac"):
             existing["mac"] = tv_section["mac"]
+        if raw_name and raw_name != existing_name:
+            existing["name"] = raw_name
         existing["default"] = True  # existing becomes default unless new one is marked default
 
         # If new TV is default, unset old one
@@ -291,8 +314,13 @@ def _write_multi_tv_config(tvs: dict[str, Any], groups: dict[str, list[str]] | N
         "# https://github.com/Hybirdss/smartest-tv",
         "",
     ]
+    import json as _json
+
     for name, tv in tvs.items():
-        lines.append(f"[tv.{name}]")
+        # Quote the key: names may contain spaces/non-ASCII, and a bare
+        # `[tv.Living Room]` header is invalid TOML (issue #15 report of
+        # "did not bind to tv" after config corruption).
+        lines.append(f"[tv.{_json.dumps(name)}]")
         lines.append(f'platform = "{tv.get("platform", "")}"')
         if tv.get("ip"):
             lines.append(f'ip = "{tv["ip"]}"')
@@ -310,7 +338,7 @@ def _write_multi_tv_config(tvs: dict[str, Any], groups: dict[str, list[str]] | N
         lines.append("[groups]")
         for gname, members in groups.items():
             members_str = ", ".join(f'"{m}"' for m in members)
-            lines.append(f"{gname} = [{members_str}]")
+            lines.append(f"{_json.dumps(gname)} = [{members_str}]")
         lines.append("")
 
     _write_config_lines(lines)

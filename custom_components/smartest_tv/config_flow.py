@@ -9,30 +9,10 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.core import HomeAssistant
 
 from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, TV_PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
-
-
-async def _try_connect(hass: HomeAssistant, platform: str, ip: str) -> bool:
-    """Test if we can connect to the TV."""
-    try:
-        from smartest_tv.config import add_tv
-        from smartest_tv.drivers.factory import create_driver
-
-        # Register temporarily so create_driver can find it
-        await hass.async_add_executor_job(
-            add_tv, "__ha_test__", platform, ip, "", False
-        )
-        driver = await hass.async_add_executor_job(create_driver, "__ha_test__")
-        await driver.connect()
-        await driver.disconnect()
-        return True
-    except Exception:
-        _LOGGER.debug("Connection test failed for %s at %s", platform, ip)
-        return False
 
 
 class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -47,6 +27,9 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._discovered: list[dict[str, str]] = []
+        self._pending_tv: dict[str, str] = {}
+        self._pair_driver = None
+        self._pair_remote = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -60,23 +43,11 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(f"{user_input[CONF_IP]}_{tv_name}")
             self._abort_if_unique_id_configured()
 
-            # Register in stv config so the driver can find it
-            await self.hass.async_add_executor_job(
-                _register_tv,
-                tv_name,
-                user_input[CONF_PLATFORM],
-                user_input[CONF_IP],
-                user_input.get(CONF_MAC, ""),
-            )
-
-            return self.async_create_entry(
-                title=tv_name,
-                data={
-                    CONF_TV_NAME: tv_name,
-                    CONF_PLATFORM: user_input[CONF_PLATFORM],
-                    CONF_IP: user_input[CONF_IP],
-                    CONF_MAC: user_input.get(CONF_MAC, ""),
-                },
+            return await self._async_finish_setup(
+                tv_name=tv_name,
+                platform=user_input[CONF_PLATFORM],
+                ip=user_input[CONF_IP],
+                mac=user_input.get(CONF_MAC, ""),
             )
 
         # Try auto-discovery first
@@ -113,22 +84,11 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(f"{tv['ip']}_{tv_name}")
             self._abort_if_unique_id_configured()
 
-            await self.hass.async_add_executor_job(
-                _register_tv,
-                tv_name,
-                tv["platform"],
-                tv["ip"],
-                tv.get("mac", ""),
-            )
-
-            return self.async_create_entry(
-                title=tv_name,
-                data={
-                    CONF_TV_NAME: tv_name,
-                    CONF_PLATFORM: tv["platform"],
-                    CONF_IP: tv["ip"],
-                    CONF_MAC: tv.get("mac", ""),
-                },
+            return await self._async_finish_setup(
+                tv_name=tv_name,
+                platform=tv["platform"],
+                ip=tv["ip"],
+                mac=tv.get("mac", ""),
             )
 
         # Build selection list
@@ -143,6 +103,130 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
                 {vol.Required("tv_index"): vol.In(tv_options)}
             ),
             description_placeholders={"count": str(len(self._discovered))},
+        )
+
+    async def _async_finish_setup(
+        self, tv_name: str, platform: str, ip: str, mac: str
+    ) -> ConfigFlowResult:
+        """Register the TV and, when needed, run on-screen pairing.
+
+        Android TV / Fire TV require an explicit pairing handshake with a
+        PIN shown on the TV screen (issue #15): without it every command
+        fails with "Not paired with this TV. Run: stv setup" — impossible
+        advice inside a Home Assistant container.
+        """
+        self._pending_tv = {
+            CONF_TV_NAME: tv_name,
+            CONF_PLATFORM: platform,
+            CONF_IP: ip,
+            CONF_MAC: mac,
+        }
+
+        if platform in ("android", "firetv"):
+            return await self.async_step_pair()
+
+        await self.hass.async_add_executor_job(_register_tv, tv_name, platform, ip, mac)
+        return self._async_create_entry()
+
+    def _async_create_entry(self) -> ConfigFlowResult:
+        tv = self._pending_tv
+        return self.async_create_entry(
+            title=tv[CONF_TV_NAME],
+            data={
+                CONF_TV_NAME: tv[CONF_TV_NAME],
+                CONF_PLATFORM: tv[CONF_PLATFORM],
+                CONF_IP: tv[CONF_IP],
+                CONF_MAC: tv[CONF_MAC],
+            },
+        )
+
+    async def async_step_pair(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pair with an Android TV / Fire TV.
+
+        First entry: starts pairing — the TV shows a 6-digit PIN.
+        With user_input: completes pairing with the entered PIN, then
+        creates the config entry.
+        """
+        from smartest_tv._engine.drivers.android import (
+            AndroidDriver,
+            CannotConnect,
+            InvalidAuth,
+        )
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            pin = str(user_input.get("pin", "")).strip()
+            try:
+                await self._pair_driver.finish_pairing(self._pair_remote, pin)
+            except InvalidAuth:
+                errors["pin"] = "invalid_pin"
+            except (CannotConnect, ConnectionError, asyncio.TimeoutError, OSError):
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001 — anything else: retry once
+                _LOGGER.exception("Unexpected pairing error for %s", self._pending_tv.get(CONF_IP))
+                errors["base"] = "unknown"
+            else:
+                try:
+                    await self._pair_driver.disconnect()
+                except Exception:  # noqa: BLE001
+                    pass
+                self._pair_driver = None
+                self._pair_remote = None
+                tv = self._pending_tv
+                await self.hass.async_add_executor_job(
+                    _register_tv, tv[CONF_TV_NAME], tv[CONF_PLATFORM], tv[CONF_IP], tv[CONF_MAC]
+                )
+                return self._async_create_entry()
+        else:
+            # Start (or resume) pairing: TV displays the PIN prompt.
+            ip = self._pending_tv[CONF_IP]
+            try:
+                self._pair_driver = AndroidDriver(ip=ip)
+                # Already paired? start_pairing() returns a connected
+                # remote — skip straight to entry creation.
+                try:
+                    await self._pair_driver.connect()
+                except RuntimeError:
+                    pass  # not paired — expected on first setup
+                if self._pair_driver.paired:
+                    try:
+                        await self._pair_driver.disconnect()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    self._pair_driver = None
+                    await self.hass.async_add_executor_job(
+                        _register_tv,
+                        self._pending_tv[CONF_TV_NAME],
+                        self._pending_tv[CONF_PLATFORM],
+                        ip,
+                        self._pending_tv[CONF_MAC],
+                    )
+                    return self._async_create_entry()
+                self._pair_remote = await self._pair_driver.start_pairing()
+            except (CannotConnect, ConnectionError, asyncio.TimeoutError, OSError) as exc:
+                _LOGGER.warning("Cannot reach Android TV at %s: %s", ip, exc)
+                # TV unreachable — register anyway; pairing can be redone
+                # by removing/re-adding the entry. Better than a dead end.
+                await self.hass.async_add_executor_job(
+                    _register_tv,
+                    self._pending_tv[CONF_TV_NAME],
+                    self._pending_tv[CONF_PLATFORM],
+                    ip,
+                    self._pending_tv[CONF_MAC],
+                )
+                return self._async_create_entry()
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Failed to start pairing with %s", ip)
+                errors["base"] = "cannot_connect"
+
+        return self.async_show_form(
+            step_id="pair",
+            data_schema=vol.Schema({vol.Required("pin"): str}),
+            errors=errors,
+            description_placeholders={"name": self._pending_tv.get(CONF_TV_NAME, "TV")},
         )
 
     async def _async_discover(self) -> list[dict[str, str]]:

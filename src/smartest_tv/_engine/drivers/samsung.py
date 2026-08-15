@@ -34,8 +34,12 @@ try:
     from samsungtvws.async_remote import SamsungTVWSAsyncRemote
     from samsungtvws.async_rest import SamsungTVAsyncRest
     from samsungtvws.remote import ChannelEmitCommand, SendRemoteKey
-except ImportError:
-    raise ImportError("Install Samsung driver: pip install 'smartest-tv[samsung]'")
+except ImportError as e:
+    raise ImportError(
+        "Samsung driver requires samsungtvws.\n"
+        "  pipx inject stv 'samsungtvws[encrypted]'   (recommended)\n"
+        "  pip install 'stv[samsung]'                 (alternative)"
+    ) from e
 
 
 # DIAL canonical app names + Samsung app IDs that should route through DIAL.
@@ -54,12 +58,14 @@ class SamsungDriver(TVDriver):
     platform = "samsung"
 
     def __init__(self, ip: str, mac: str = "", port: int = 8002, token_file: str = ""):
+        from smartest_tv.config import CONFIG_DIR
+
         self.ip = ip
         self.mac = mac
         self.port = port
-        self.token_file = token_file or os.path.expanduser(
-            f"~/.config/smartest-tv/samsung_{ip}.token"
-        )
+        # Honor STV_CONFIG_DIR (see android.py — #15): pairing tokens must
+        # live somewhere persistent in containerized setups.
+        self.token_file = token_file or str(CONFIG_DIR / f"samsung_{ip}.token")
         self._remote: SamsungTVWSAsyncRemote | None = None
         self._session: aiohttp.ClientSession | None = None
         # DIAL Application-URL cache. None = not yet looked up; "" = looked up
