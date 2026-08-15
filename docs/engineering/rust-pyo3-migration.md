@@ -93,6 +93,12 @@
 
 ### P0 — 전환 전 반드시 수정 (Python 오라클이어야 신뢰 가능)
 
+> **✅ v1.3.0에서 3건 모두 수정 완료** (PR #17, 태그 `v1.3.0`):
+> ① Android 발견 6466 우선 + 레거시 5555 폴백, Samsung 수동 프로브 8002 우선
+> ② `stv serve` ThreadingHTTPServer + `_run_driver` 직렬화(핑은 락-프리, 실측 11ms)
+> ③ curl 부재 시 urllib 폴백(리다이렉트/gzip/deflate/POST-JSON, `curl -s -L --compressed` 동등성 테스트)
+> 스테일 문서(Android ADB 안내, `run_app()` API)도 함께 정리. 427 테스트 통과.
+
 1. **Android 발견이 ADB 5555만 스캔** (`_engine/discovery.py::_adb_scan`, `setup.py` 포트 프로브).
    드라이버는 Remote Protocol v2(6466/6467)로 이미 전환됐는데, 발견은 ADB 디버깅을 켠 TV만 잡는다 → 대부분의 Android TV가 `stv setup`/HA 검색에서 보이지 않음 (이슈 #15 신고자처럼 수동 IP 입력 강제). **6466/6467 TCP 프로브로 교체**(5555는 레거시로 병행 가능).
 2. **`api.py`가 `HTTPServer`(직렬) 사용**. 느린 TV 명령(Samsung `set_volume` 배치 ≈2.5–5s, connect 타임아웃 10s)이 모든 REST 요청을 블로킹 — remote/파티 모드에서 건강검사까지 멈춘다. `ThreadingHTTPServer`로 교체.
