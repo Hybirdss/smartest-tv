@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-16
+
+### Fixed
+
+- **Android TV discovery probed a dead port.** The scan (and the manual
+  `stv setup --ip` probe) only tested ADB 5555 — but the driver
+  migrated from adb-shell to the Android TV Remote Protocol v2 (port
+  6466) long ago. Stock Android TVs (no ADB debugging) were invisible
+  to `stv setup` and the HA discovery flow, forcing manual IP entry.
+  Discovery now probes 6466 first with 5555 kept as a legacy fallback
+  (reported with the matched port in `raw`). The same audit found the
+  Samsung manual probe testing legacy ws 8001 before the wss 8002 the
+  driver actually uses — fixed to 8002-first.
+- **`stv serve` REST API serialized every request.** The API server
+  used a single-threaded `HTTPServer`, so one slow TV command (Samsung
+  volume batches ≈2.5–5 s, connect timeouts to 10 s) blocked
+  everything — including `/api/ping`, which remote/party-mode health
+  checks rely on. Now a `ThreadingHTTPServer` with driver-touching
+  execution serialized behind a lock (`_run_driver`) so concurrent
+  request threads can never drive one TV driver on two event loops;
+  `/api/ping` stays lock-free.
+- **`curl` binary dependency made resolve fail silently on Home
+  Assistant containers.** HA's slim images ship without `curl`; every
+  resolve / RemoteDriver / community-cache HTTP call failed with no
+  visible cause. `curl()` now falls back to a built-in urllib client
+  with matching semantics (redirects, gzip/deflate decompression,
+  POST+JSON default content type, HTTP-error bodies still returned —
+  `curl -s` parity), logging a one-time warning. The subprocess path is
+  unchanged when curl exists.
+
+### Changed
+
+- **Docs & docstrings de-staled for the post-adb-shell world.**
+  `docs/getting-started/installation.md` still instructed Android TV
+  users to enable ADB debugging ("tap Build 7 times") and claimed
+  `stv[android]` installs adb-shell; the Samsung section documented the
+  `run_app()` API that was removed in v1.2.1 (#6/#7) and the LG section
+  named bscpylgtv. All updated to the current reality: Remote Protocol
+  v2 + on-TV PIN pairing, DIAL-first deep links, aiowebostv /
+  androidtvremote2. Same fixes applied to `CLAUDE.md` and the
+  `TVDriver` docstring.
+
 ## [1.2.1] - 2026-08-16
 
 ### Fixed

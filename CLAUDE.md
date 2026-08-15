@@ -9,7 +9,7 @@ CLI + MCP server for controlling smart TVs with natural language. Play, cast, qu
 - **MCP**: FastMCP (18 tools)
 - **Build**: Hatchling
 - **Tests**: pytest (270+ tests, no TV required)
-- **TV drivers**: bscpylgtv (LG), samsungtvws (Samsung), adb-shell (Android), aiohttp (Roku), RemoteDriver (HTTP)
+- **TV drivers**: aiowebostv (LG), samsungtvws (Samsung), androidtvremote2 (Android/Fire TV), aiohttp (Roku), RemoteDriver (HTTP)
 
 ## Commands
 

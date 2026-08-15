@@ -82,29 +82,26 @@ pip install "stv[samsung]"   # installs samsungtvws[encrypted]
 
 ### Notes
 
-- Samsung uses an encrypted WebSocket (port 8002).
-- Newer 2022+ models require the encrypted driver — `samsungtvws[encrypted]` covers this.
-- Deep linking uses `run_app("DEEP_LINK", meta_tag)` with a platform-specific meta format.
+- Samsung uses a TLS WebSocket on port 8002 with token-based pairing —
+  the token is saved automatically after the first on-screen approval.
+- Deep linking for Netflix/YouTube routes through DIAL first (the
+  Chromecast launch protocol — parameters interpreted by the app, not
+  the OS), falling back to the Tizen `ed.apps.launch` `DEEP_LINK`
+  WebSocket message. On Tizen 9 firmware that ignores `metaTag`, the
+  app still launches — see `docs/reference/deep-link-support.md`.
 
 ---
 
 ## Android TV / Fire TV
 
-### Enable ADB Debugging
-
-**Android TV:**
-1. Go to **Settings → Device Preferences → About → Build** — tap Build 7 times to unlock developer options.
-2. Go to **Settings → Device Preferences → Developer Options → USB Debugging** — enable it.
-3. Also enable **Network Debugging** (ADB over TCP).
-
-**Fire TV:**
-1. Go to **Settings → My Fire TV → About** — tap Build 7 times.
-2. **Settings → My Fire TV → Developer Options → ADB Debugging** — enable.
-3. **Settings → My Fire TV → Developer Options → Apps from Unknown Sources** — enable if needed.
+No developer mode, no ADB debugging, no "tap Build 7 times" — stv uses
+the **Android TV Remote Protocol v2**, the same protocol as the Google TV
+mobile app. The remote service is pre-installed and enabled by default.
 
 ### Find the IP address
 
-**Settings → My Fire TV → About → Network** (Fire TV) or **Settings → Device Preferences → About → Network** (Android TV).
+**Settings → Device Preferences → About → Network** (Android TV) or
+**Settings → My Fire TV → About → Network** (Fire TV).
 
 ### Manual config
 
@@ -117,15 +114,16 @@ ip = "192.168.1.102"
 ### Driver install
 
 ```bash
-pip install "stv[android]"   # installs adb-shell
+pip install "stv[android]"   # installs androidtvremote2
 ```
 
-### Notes
+### Pairing
 
-- No pairing key is needed — ADB TCP connects directly.
-- The first connection prompts an "Allow ADB debugging?" dialog on screen — accept it.
-- Deep links are sent via `am start -d 'netflix://title/{id}'`.
-
+`stv setup` (or the Home Assistant config flow) shows a **6-digit PIN on
+the TV** — enter it when prompted. The generated client certificate is
+stored in the stv config dir and reused, so this is a one-time step per
+TV. If pairing is ever lost, re-run `stv setup` (or remove and re-add the
+integration entry in Home Assistant).
 ---
 
 ## Roku
