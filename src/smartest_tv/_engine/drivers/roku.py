@@ -19,8 +19,12 @@ from urllib.parse import urlencode
 
 try:
     import aiohttp
-except ImportError:
-    raise ImportError("Install Roku driver: pip install 'smartest-tv[roku]'")
+except ImportError as e:
+    raise ImportError(
+        "Roku driver requires aiohttp.\n"
+        "  pipx inject stv aiohttp              (recommended)\n"
+        "  pip install 'stv[roku]'              (alternative)"
+    ) from e
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 

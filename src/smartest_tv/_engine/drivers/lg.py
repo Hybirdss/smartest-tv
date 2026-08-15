@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import socket
 from contextlib import suppress
@@ -25,7 +24,11 @@ try:
         WebOsTvResponseTypeError,
     )
 except ImportError as e:
-    raise ImportError("Install LG driver: pip install 'smartest-tv[lg]'") from e
+    raise ImportError(
+        "LG driver requires aiowebostv.\n"
+        "  pipx inject stv aiowebostv         (recommended)\n"
+        "  pip install 'stv[lg]'              (alternative)"
+    ) from e
 
 
 class _SmarTestWebOsClient(WebOsClient):
@@ -133,10 +136,14 @@ class LGDriver(TVDriver):
     platform = "lg"
 
     def __init__(self, ip: str, mac: str = "", key_file: str = ""):
+        from smartest_tv.config import CONFIG_DIR
+
         self.ip = ip
         self.mac = mac
-        # aiowebostv stores raw client_key string — use .json
-        self.key_file = key_file or os.path.expanduser("~/.config/smartest-tv/lg_key.json")
+        # aiowebostv stores raw client_key string — use .json.
+        # Honor STV_CONFIG_DIR (see android.py — #15) so the pairing key
+        # survives container rebuilds in Home Assistant.
+        self.key_file = key_file or str(CONFIG_DIR / "lg_key.json")
         self._client: WebOsClient | None = None
 
     def _load_client_key(self) -> str | None:
