@@ -470,6 +470,11 @@ Then: Install → Restart HA
 Settings → Integrations → Add → "Smartest TV" → auto-discovers your TVs
 ```
 
+Android TV / Fire TV: the setup flow shows a **6-digit PIN on the TV** —
+enter it in the pairing form to finish. In HA OS / HA Container set
+`STV_CONFIG_DIR=/config/smartest-tv` so pairing survives container
+rebuilds. See [docs/integrations/home-assistant.md](docs/integrations/home-assistant.md).
+
 Then use in automations:
 
 ```yaml

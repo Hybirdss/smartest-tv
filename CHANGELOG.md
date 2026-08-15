@@ -6,6 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Config corruption on legacy→multi-TV migration (issue #15 "did not
+  bind to tv").** A legacy `[tv]` section whose display `name` contains
+  spaces or non-ASCII ("Living Room", "거실 TV") was written back as a
+  bare TOML key (`[tv.Living Room]`) — invalid TOML, so every subsequent
+  config read crashed with `TOMLDecodeError`. Migration now sanitizes the
+  key (keeping the display name as a data field), all section/group keys
+  are written quoted, `_sanitize_tv_name` preserves unicode word
+  characters, and `load()` backs up and survives a corrupt file instead
+  of crashing every command.
+- **Android TV pairing inside Home Assistant (issue #15).** The config
+  flow now has a real pairing step: a 6-digit PIN is shown on the TV and
+  entered in the HA form (wrong PIN → inline error). Previously any
+  Android TV command failed with "Run: stv setup" — impossible advice
+  inside an HA container. Driver pairing errors are now context-aware,
+  and `media_player.play_media` logs actionable guidance instead of a
+  bare traceback.
+- **Pairing credentials now honor `STV_CONFIG_DIR` (issue #15).** All
+  three drivers hardcoded `~/.config/smartest-tv/...` for cert/key/token
+  storage, ignoring `STV_CONFIG_DIR` — so in HA containers pairing data
+  lived under `/root` and vanished on rebuilds. Credentials now live
+  under `config.CONFIG_DIR` (set `STV_CONFIG_DIR=/config/smartest-tv`
+  for persistence).
+- **Misleading driver dependency errors (issue #14).** A broken
+  transitive dependency (mixed-version `aiofiles` in HA site-packages)
+  surfaced as "Android driver requires adb-shell — pipx inject stv
+  adb-shell": wrong package (the driver uses `androidtvremote2`, not the
+  legacy adb-shell path), wrong tool (pipx inside Home Assistant), and it
+  masked the real cause. The factory now inspects `ImportError.name` to
+  distinguish "driver missing" from "driver's dependency broken", names
+  the actually-broken package, and always chains the original exception.
+  The LG message no longer claims the driver needs `bscpylgtv` (it uses
+  `aiowebostv`), and install hints say `stv[...]` — the real PyPI name —
+  not `smartest-tv[...]`.
+- **HA manifest requirements trimmed.** `stv[all]` pulled the MCP server
+  stack (`fastmcp`) into every Home Assistant install — heavy and unused
+  by the integration. Now `stv[lg,samsung,android,roku]`.
+- **ADB discovery stopped at the first subnet batch** that found an
+  Android TV, hiding additional TVs in later batches from `stv setup`
+  and the HA discovery flow. All batches are now scanned.
+- `api._run_async` no longer uses deprecated `asyncio.get_event_loop()`
+  (raises on Python 3.14 without a running loop).
+
+### Added
+
+- `docs/reference/deep-link-support.md` — per-app deep-link support
+  matrix and DIAL/DEEP_LINK routing notes for Samsung (issue #8
+  documentation track).
+- Home Assistant setup docs now cover per-platform pairing and
+  `STV_CONFIG_DIR` persistence for containers.
+
 ## [1.2.0] - 2026-04-26
 
 ### Fixed
