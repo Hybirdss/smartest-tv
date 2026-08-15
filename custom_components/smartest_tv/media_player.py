@@ -267,6 +267,22 @@ class StvMediaPlayer(MediaPlayerEntity):
 
             await launch_content(self._driver, platform, app_id, content_id)
             _LOGGER.info("Playing %s on %s", media_id, self._tv_name)
+        except RuntimeError as exc:
+            # Pairing failures land here (issue #15): the TV rejected the
+            # TLS handshake because this HA instance was never paired.
+            if "not paired" in str(exc).lower():
+                _LOGGER.warning(
+                    "Cannot play %s on %s: this Home Assistant instance is "
+                    "not paired with the TV. Remove the TV entry (Settings → "
+                    "Devices & Services → Smartest TV) and re-add it — the "
+                    "setup flow now shows the TV's pairing PIN. "
+                    "(Original error: %s)",
+                    media_id,
+                    self._tv_name,
+                    exc,
+                )
+            else:
+                _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
         except Exception:
             _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
 
