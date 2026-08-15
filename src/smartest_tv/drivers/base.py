@@ -50,9 +50,9 @@ class TVDriver(ABC):
     """Abstract interface for controlling a smart TV.
 
     Subclasses handle platform-specific protocols:
-    - LG: WebSocket SSAP via bscpylgtv
-    - Samsung: WebSocket via samsungtvws
-    - Android/Fire TV: ADB TCP via adb-shell
+    - LG: WebSocket SSAP via aiowebostv
+    - Samsung: TLS WebSocket via samsungtvws (port 8002)
+    - Android/Fire TV: Remote Protocol v2 via androidtvremote2 (port 6466)
     - Roku: HTTP ECP on port 8060
     """
 

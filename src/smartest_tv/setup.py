@@ -198,10 +198,26 @@ def _pairing_hint(platform: str) -> str:
     return "A popup just appeared on your TV. Press OK."
 
 
+# Platform detection order for manual IP probing. Each entry is
+# (platform, tcp port); first hit wins. Primary ports match what the
+# drivers actually connect to; legacy ports follow as fallbacks:
+#   - samsung 8002 = wss remote (SamsungDriver default), 8001 = legacy ws
+#   - android 6466 = Remote Protocol v2 (AndroidDriver), 5555 = legacy
+#     ADB from the pre-migration adb-shell driver (v1.3.0 — before this
+#     only 5555 was probed, so stock Android TVs were never detected)
+_PROBE_PORTS: list[tuple[str, int]] = [
+    ("lg", 3000),
+    ("samsung", 8002),
+    ("samsung", 8001),
+    ("roku", 8060),
+    ("android", 6466),
+    ("android", 5555),
+]
+
+
 async def _probe_ip(ip: str) -> list[dict]:
     """Probe a specific IP for TV services and detect platform."""
-    # Try each platform driver in order
-    for platform, port in [("lg", 3000), ("samsung", 8001), ("roku", 8060)]:
+    for platform, port in _PROBE_PORTS:
         try:
             _, writer = await asyncio.wait_for(
                 asyncio.open_connection(ip, port),
@@ -213,24 +229,9 @@ async def _probe_ip(ip: str) -> list[dict]:
             except Exception:
                 pass
             name = _make_name(platform, ip)
-            return [{"ip": ip, "name": name, "platform": platform, "raw": ""}]
+            return [{"ip": ip, "name": name, "platform": platform, "raw": f"port:{port}"}]
         except Exception:
             pass
-
-    # Try ADB
-    try:
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(ip, 5555),
-            timeout=2.0,
-        )
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return [{"ip": ip, "name": f"Android TV ({ip})", "platform": "android", "raw": ""}]
-    except Exception:
-        pass
 
     return []
 

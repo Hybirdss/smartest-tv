@@ -3,6 +3,11 @@
 Replaces raw subprocess.run(["curl", ...]) calls with a structured helper
 that provides consistent error handling, configurable timeouts, and logging.
 
+When the curl binary is absent (Home Assistant slim containers ship without
+it), ``curl()`` transparently falls back to a pure-Python urllib client with
+matching semantics — before v1.3.0 those environments failed every resolve
+and RemoteDriver call silently.
+
 Also wraps yt-dlp calls with proper error handling.
 """
 
@@ -34,6 +39,84 @@ class HttpResult:
     error: str | None = None
 
 
+_warned_curl_fallback = False
+
+
+def _urllib_fetch(
+    url: str,
+    headers: dict[str, str] | None = None,
+    method: str = "GET",
+    data: str | None = None,
+    timeout: int | None = None,
+) -> HttpResult:
+    """Pure-Python fallback used when the curl binary is not installed.
+
+    Mirrors the flags ``curl -s -L --compressed --max-time t``:
+      - follows redirects (POST degrades to GET on 301/302, like curl)
+      - sends Accept-Encoding and transparently decompresses gzip/deflate
+      - HTTP error statuses return the body with ok=True (curl without
+        ``-f`` exits 0 and prints the body — callers parse it)
+      - transport errors / timeouts return ok=False
+    """
+    import gzip
+    import urllib.error
+    import urllib.request
+    import zlib
+
+    t = timeout or HTTP_TIMEOUT
+    req_headers = {"User-Agent": _USER_AGENT, "Accept-Encoding": "gzip, deflate"}
+    for k, v in (headers or {}).items():
+        req_headers[k] = v
+    if method == "POST" and data is not None and "Content-Type" not in (headers or {}):
+        req_headers["Content-Type"] = "application/json"
+
+    body_bytes = data.encode() if data is not None else None
+    # Parity with the subprocess path: only POST is special-cased there;
+    # anything else is a plain GET.
+    req_method = "POST" if method == "POST" else "GET"
+    req = urllib.request.Request(url, data=body_bytes, headers=req_headers, method=req_method)
+
+    try:
+        with urllib.request.urlopen(req, timeout=t) as resp:
+            raw = resp.read()
+            encoding = (resp.headers.get("Content-Encoding") or "").lower()
+            status = resp.getcode()
+    except urllib.error.HTTPError as e:
+        # curl -s (no -f) treats HTTP errors as success with the body.
+        try:
+            raw = e.read()
+        except Exception:  # noqa: BLE001 — body may already be consumed
+            raw = b""
+        encoding = ""
+        status = e.code
+    except urllib.error.URLError as e:
+        reason = getattr(e, "reason", e)
+        log.debug("urllib fallback %s failed: %s", url, reason)
+        return HttpResult(ok=False, body="", error=str(reason))
+    except TimeoutError:
+        log.warning("urllib fallback %s timed out after %ds", url, t)
+        return HttpResult(ok=False, body="", error=f"timeout ({t}s)")
+    except OSError as e:
+        log.debug("urllib fallback %s OS error: %s", url, e)
+        return HttpResult(ok=False, body="", error=str(e))
+
+    if encoding == "gzip":
+        try:
+            raw = gzip.decompress(raw)
+        except OSError:
+            pass  # leave as-is; callers treat undecodable bodies as errors
+    elif encoding == "deflate":
+        try:
+            raw = zlib.decompress(raw)
+        except zlib.error:
+            try:
+                raw = zlib.decompress(raw, -zlib.MAX_WBITS)  # raw deflate
+            except zlib.error:
+                pass
+
+    return HttpResult(ok=True, body=raw.decode("utf-8", errors="replace"), status_code=status)
+
+
 def curl(
     url: str,
     headers: dict[str, str] | None = None,
@@ -41,7 +124,7 @@ def curl(
     data: str | None = None,
     timeout: int | None = None,
 ) -> HttpResult:
-    """Make an HTTP request via curl.
+    """Make an HTTP request via curl (urllib fallback if curl is absent).
 
     Args:
         url: The URL to request.
@@ -53,6 +136,16 @@ def curl(
     Returns:
         HttpResult with ok=True on success, ok=False on any failure.
     """
+    if shutil.which("curl") is None:
+        global _warned_curl_fallback
+        if not _warned_curl_fallback:
+            _warned_curl_fallback = True
+            log.warning(
+                "curl binary not found — using the built-in Python HTTP "
+                "fallback (install curl for best performance)"
+            )
+        return _urllib_fetch(url, headers, method, data, timeout)
+
     t = timeout or HTTP_TIMEOUT
     args = [
         "curl", "-s", "-L", "--compressed",

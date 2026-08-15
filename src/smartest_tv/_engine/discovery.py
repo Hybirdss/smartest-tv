@@ -1,4 +1,4 @@
-"""Multi-platform TV discovery via SSDP and ADB port scan."""
+"""Multi-platform TV discovery via SSDP and Android remote-service port scan."""
 
 from __future__ import annotations
 
@@ -21,13 +21,15 @@ async def discover(timeout: float = 3.0) -> list[dict]:
     """Discover smart TVs on the local network.
 
     Sends SSDP M-SEARCH for LG, Samsung, and Roku. Also port-scans for
-    Android/Fire TV ADB (port 5555).
+    the Android TV Remote Protocol v2 service (port 6466 — what the
+    driver actually connects to), with legacy ADB 5555 as a fallback
+    probe for old setups.
 
     Returns a list of dicts with 'ip', 'name', 'platform', 'raw' keys.
     """
     results = await asyncio.gather(
         _ssdp_discover(timeout=timeout),
-        _adb_scan(timeout=timeout),
+        _android_scan(timeout=timeout),
         return_exceptions=True,
     )
 
@@ -94,8 +96,42 @@ async def _ssdp_discover(timeout: float = 3.0) -> list[dict]:
     return list(found.values())
 
 
-async def _adb_scan(timeout: float = 3.0) -> list[dict]:
-    """Scan common subnets for Android/Fire TV ADB port (5555)."""
+# Android TV Remote Protocol v2 — the service the AndroidDriver talks to
+# (TLS on 6466; 6467 is its pairing port). Discovery only needs a TCP
+# connect signal, no handshake. Before v1.3.0 this scan probed ADB 5555
+# only, which the driver stopped using when it migrated from adb-shell
+# to the Remote Protocol — so stock Android TVs (no ADB debugging) were
+# invisible to `stv setup` and the HA discovery flow (issue #15 reports).
+_ANDROID_REMOTE_PORT = 6466
+_ANDROID_LEGACY_ADB_PORT = 5555
+
+
+async def _probe_port(ip: str, port: int, connect_timeout: float) -> bool:
+    """TCP-connect probe one port. True if something is listening."""
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, port),
+            timeout=connect_timeout,
+        )
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+async def _android_scan(timeout: float = 3.0) -> list[dict]:
+    """Scan the local /24 for the Android TV remote service (6466).
+
+    Port order matters: 6466 first — it is what the driver connects to.
+    Legacy ADB 5555 is kept as a second-wave fallback for devices from
+    pre-migration setups; note a 5555-only device cannot actually be
+    driven by the Remote-Protocol driver (it will fail at pairing with a
+    clear error), but surfacing it is still more helpful than silence.
+    """
     local_ip = _get_local_ip()
     if not local_ip:
         return []
@@ -104,32 +140,34 @@ async def _adb_scan(timeout: float = 3.0) -> list[dict]:
     candidates = [f"{prefix}.{i}" for i in range(1, 255)]
 
     connect_timeout = min(1.0, timeout / 2)
-
-    async def _check(ip: str) -> dict | None:
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, 5555),
-                timeout=connect_timeout,
-            )
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
-            return {"ip": ip, "name": f"Android TV ({ip})", "platform": "android", "raw": ""}
-        except Exception:
-            return None
+    found: dict[str, dict] = {}
+    remaining = list(candidates)
 
     # Run in batches of 50 to avoid too many open sockets. Scan every
     # batch: stopping at the first hit hid additional Android TVs on the
     # same network (multi-TV households got partial discovery results).
-    found = []
-    for i in range(0, len(candidates), 50):
-        batch = candidates[i : i + 50]
-        results = await asyncio.gather(*[_check(ip) for ip in batch])
-        found.extend(r for r in results if r is not None)
+    for port in (_ANDROID_REMOTE_PORT, _ANDROID_LEGACY_ADB_PORT):
+        still_remaining: list[str] = []
+        for i in range(0, len(remaining), 50):
+            batch = remaining[i : i + 50]
+            results = await asyncio.gather(
+                *[_probe_port(ip, port, connect_timeout) for ip in batch]
+            )
+            for ip, hit in zip(batch, results):
+                if hit:
+                    found[ip] = {
+                        "ip": ip,
+                        "name": f"Android TV ({ip})",
+                        "platform": "android",
+                        "raw": f"port:{port}",
+                    }
+                else:
+                    still_remaining.append(ip)
+        remaining = still_remaining
+        if not remaining:
+            break
 
-    return found
+    return list(found.values())
 
 
 def _sanitize_name(raw: str, max_len: int = 64) -> str:

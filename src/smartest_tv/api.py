@@ -20,7 +20,7 @@ import json
 import os
 import secrets
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from smartest_tv.apps import resolve_app
@@ -31,6 +31,21 @@ from smartest_tv.drivers.factory import create_driver
 # Module-level driver cache (shared with the API handler)
 _driver: TVDriver | None = None
 _driver_lock = threading.Lock()
+
+# Serializes driver-touching request execution. Every request runs its
+# coroutine on a fresh event loop (`_run_async`); two loops driving one
+# driver instance concurrently would race on its connection state (e.g.
+# interleaved `connect()` calls clobbering `self._client`). `/api/ping`
+# is deliberately lock-free so a multi-second TV command (Samsung volume
+# batches) can never stall health checks — that head-of-line blocking
+# was the bug the single-threaded HTTPServer caused before v1.3.0.
+_driver_exec_lock = threading.Lock()
+
+
+def _run_driver(coro_factory) -> Any:
+    """Build and run a driver coroutine, serialized across threads."""
+    with _driver_exec_lock:
+        return _run_async(coro_factory())
 
 # API key for authentication (optional but recommended for remote access)
 _api_key: str | None = os.environ.get("STV_API_KEY")
@@ -144,7 +159,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         "muted": s.muted,
                         "sound_output": s.sound_output,
                     }
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
             except Exception as e:
                 self._error(500, str(e))
 
@@ -161,7 +176,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         "firmware": i.firmware,
                         "name": i.name,
                     }
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
             except Exception as e:
                 self._error(500, str(e))
 
@@ -172,7 +187,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 async def _do():
                     await d.connect()
                     return {"volume": await d.get_volume(), "muted": await d.get_muted()}
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
             except Exception as e:
                 self._error(500, str(e))
 
@@ -184,7 +199,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.connect()
                     apps = await d.list_apps()
                     return {"apps": [{"id": a.id, "name": a.name} for a in apps]}
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
             except Exception as e:
                 self._error(500, str(e))
 
@@ -223,7 +238,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.launch_app(app_id)
                         return {"launched": name}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/close":
                 app = data.get("app", "")
@@ -234,7 +249,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.close_app(app_id)
                     return {"closed": name}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/volume":
                 async def _do():
@@ -250,7 +265,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         return {"action": "down"}
                     return {"error": "specify level or action"}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/mute":
                 async def _do():
@@ -261,7 +276,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.set_mute(bool(mute))
                     return {"muted": mute}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/power":
                 async def _do():
@@ -273,7 +288,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.power_off()
                     return {"power": action}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/notify":
                 msg = data.get("message", "")
@@ -283,7 +298,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.notify(msg)
                     return {"notified": msg}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/screen":
                 async def _do():
@@ -295,7 +310,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.screen_off()
                     return {"screen": action}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             elif path == "/api/media":
                 async def _do():
@@ -309,7 +324,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.play()
                     return {"media": action}
 
-                self._respond(200, _run_async(_do()))
+                self._respond(200, _run_driver(_do))
 
             else:
                 self._error(404, f"Unknown endpoint: {path}")
@@ -336,7 +351,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
-def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> HTTPServer:
+def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> ThreadingHTTPServer:
     """Start the REST API server in a background thread.
 
     Returns the server instance (call .shutdown() to stop).
@@ -362,7 +377,12 @@ def start_api_server(host: str = "127.0.0.1", port: int = 8911) -> HTTPServer:
             "Set STV_API_KEY env var or bind to 127.0.0.1."
         )
 
-    server = HTTPServer((host, port), ApiHandler)
+    # Threading: one request per thread. Without this, a single slow TV
+    # command (Samsung set_volume batches ≈2.5–5 s, connect timeouts up
+    # to 10 s) blocked every other request — including /api/ping, which
+    # remote/party-mode health checks rely on.
+    server = ThreadingHTTPServer((host, port), ApiHandler)
+    server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
