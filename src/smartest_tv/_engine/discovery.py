@@ -106,21 +106,28 @@ _ANDROID_REMOTE_PORT = 6466
 _ANDROID_LEGACY_ADB_PORT = 5555
 
 
-async def _probe_port(ip: str, port: int, connect_timeout: float) -> bool:
-    """TCP-connect probe one port. True if something is listening."""
+async def probe_port(ip: str, port: int, connect_timeout: float) -> bool:
+    """TCP-connect probe one port. True if something is listening.
+
+    Shared by subnet discovery and ``stv setup --ip`` platform probing,
+    so future changes to probing behavior stay in one place. Only
+    network/timeout conditions count as "no listener" — programming
+    errors propagate instead of being masked as a closed port.
+    """
     try:
         _, writer = await asyncio.wait_for(
             asyncio.open_connection(ip, port),
             timeout=connect_timeout,
         )
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return True
-    except Exception:
+    except (asyncio.TimeoutError, OSError):
         return False
+    try:
+        writer.close()
+        await writer.wait_closed()
+    except (asyncio.TimeoutError, OSError):
+        # Transport already gone mid-close — the listener was still there.
+        pass
+    return True
 
 
 async def _android_scan(timeout: float = 3.0) -> list[dict]:
@@ -151,7 +158,7 @@ async def _android_scan(timeout: float = 3.0) -> list[dict]:
         for i in range(0, len(remaining), 50):
             batch = remaining[i : i + 50]
             results = await asyncio.gather(
-                *[_probe_port(ip, port, connect_timeout) for ip in batch]
+                *[probe_port(ip, port, connect_timeout) for ip in batch]
             )
             for ip, hit in zip(batch, results):
                 if hit:

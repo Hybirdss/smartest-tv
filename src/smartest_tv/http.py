@@ -40,6 +40,15 @@ class HttpResult:
 
 
 _warned_curl_fallback = False
+_have_curl: bool | None = None
+
+
+def _curl_available() -> bool:
+    """Whether the curl binary is on PATH (checked once, then cached)."""
+    global _have_curl
+    if _have_curl is None:
+        _have_curl = shutil.which("curl") is not None
+    return _have_curl
 
 
 def _urllib_fetch(
@@ -82,12 +91,14 @@ def _urllib_fetch(
             encoding = (resp.headers.get("Content-Encoding") or "").lower()
             status = resp.getcode()
     except urllib.error.HTTPError as e:
-        # curl -s (no -f) treats HTTP errors as success with the body.
+        # curl -s (no -f) treats HTTP errors as success with the body —
+        # and --compressed still decompresses it. Preserve the encoding
+        # header so gzipped/deflated error bodies decode identically.
         try:
             raw = e.read()
         except Exception:  # noqa: BLE001 — body may already be consumed
             raw = b""
-        encoding = ""
+        encoding = ((e.headers or {}).get("Content-Encoding") or "").lower()
         status = e.code
     except urllib.error.URLError as e:
         reason = getattr(e, "reason", e)
@@ -136,7 +147,7 @@ def curl(
     Returns:
         HttpResult with ok=True on success, ok=False on any failure.
     """
-    if shutil.which("curl") is None:
+    if not _curl_available():
         global _warned_curl_fallback
         if not _warned_curl_fallback:
             _warned_curl_fallback = True
@@ -185,8 +196,13 @@ def curl(
         return HttpResult(ok=False, body="", error=f"timeout ({SUBPROCESS_TIMEOUT}s)")
 
     except FileNotFoundError:
-        log.error("curl not found in PATH")
-        return HttpResult(ok=False, body="", error="curl not found")
+        # curl disappeared from PATH after the cached check — switch to
+        # the built-in client for the rest of the process rather than
+        # failing the request.
+        global _have_curl
+        _have_curl = False
+        log.warning("curl vanished from PATH — switching to the Python HTTP fallback")
+        return _urllib_fetch(url, headers, method, data, timeout)
 
     except OSError as e:
         log.error("curl %s OS error: %s", url, e)

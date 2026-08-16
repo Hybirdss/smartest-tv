@@ -12,6 +12,7 @@ from __future__ import annotations
 import gzip
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -24,6 +25,8 @@ from smartest_tv.http import curl, curl_json
 def no_curl(monkeypatch):
     """Force the urllib fallback regardless of the host having curl."""
     monkeypatch.setattr(http_mod.shutil, "which", lambda name: None if name == "curl" else name)
+    # curl() caches the which() result — every test starts from a clean probe
+    monkeypatch.setattr(http_mod, "_have_curl", None)
 
 
 @pytest.fixture()
@@ -42,7 +45,19 @@ def local_server():
             self.wfile.write(body)
 
         def do_GET(self):
-            if self.path == "/hello":
+            if self.path == "/deflate":
+                import zlib
+                payload = zlib.compress(json.dumps({"msg": "deflated"}).encode())
+                self._send(200, payload, extra={"Content-Encoding": "deflate"})
+            elif self.path == "/deflate-raw":
+                import zlib
+                c = zlib.compressobj(wbits=-zlib.MAX_WBITS)
+                payload = c.compress(json.dumps({"msg": "raw deflate"}).encode()) + c.flush()
+                self._send(200, payload, extra={"Content-Encoding": "deflate"})
+            elif self.path == "/slow":
+                time.sleep(2.5)
+                self._send(200, b"{}")
+            elif self.path == "/hello":
                 self._send(200, json.dumps({"msg": "hi"}).encode())
             elif self.path == "/gz":
                 payload = gzip.compress(json.dumps({"msg": "compressed"}).encode())
@@ -54,6 +69,9 @@ def local_server():
                 self.end_headers()
             elif self.path == "/missing":
                 self._send(404, b'{"error": "not found"}')
+            elif self.path == "/gz-missing":
+                payload = gzip.compress(b'{"error": "gone"}')
+                self._send(404, payload, extra={"Content-Encoding": "gzip"})
             else:
                 self._send(400, b"bad")
 
@@ -107,6 +125,35 @@ def test_fallback_post_json_default_content_type(no_curl, local_server):
     assert hits and hits[0].startswith("application/json")
 
 
+def test_fallback_deflate_zlib_stream(no_curl, local_server):
+    base, _ = local_server
+    r = curl(f"{base}/deflate")
+    assert r.ok
+    assert json.loads(r.body)["msg"] == "deflated"
+
+
+def test_fallback_deflate_raw_stream(no_curl, local_server):
+    base, _ = local_server
+    r = curl(f"{base}/deflate-raw")
+    assert r.ok
+    assert json.loads(r.body)["msg"] == "raw deflate"
+
+
+def test_fallback_timeout_returns_error(no_curl, local_server):
+    base, _ = local_server
+    r = curl(f"{base}/slow", timeout=1)
+    assert not r.ok
+    assert r.error  # surfaced reason, not an empty failure
+
+
+def test_fallback_gzipped_http_error_body_decompresses(no_curl, local_server):
+    """curl --compressed decompresses error bodies too; so must the fallback."""
+    base, _ = local_server
+    r = curl(f"{base}/gz-missing")
+    assert r.ok and r.status_code == 404
+    assert json.loads(r.body)["error"] == "gone"
+
+
 def test_fallback_http_error_returns_body_like_curl(no_curl, local_server):
     # curl -s (without -f) exits 0 on 404 and prints the body.
     base, _ = local_server
@@ -137,7 +184,23 @@ def test_curl_path_still_used_when_available(local_server, monkeypatch):
         return real_run(args, **kwargs)
 
     monkeypatch.setattr(http_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(http_mod, "_have_curl", True)  # cached, like production
     base, _ = local_server
     r = curl(f"{base}/hello")
     assert calls and calls[0][0] == "curl"
     assert r.ok
+
+
+def test_curl_vanishing_midprocess_falls_back(local_server, monkeypatch):
+    """Cached "curl present" + binary gone at exec time -> urllib, not an error."""
+    def boom(args, **kwargs):
+        raise FileNotFoundError("curl")
+
+    monkeypatch.setattr(http_mod.subprocess, "run", boom)
+    monkeypatch.setattr(http_mod.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(http_mod, "_have_curl", True)
+
+    base, _ = local_server
+    r = curl(f"{base}/hello")
+    assert r.ok and json.loads(r.body)["msg"] == "hi"
+    assert http_mod._have_curl is False  # cache flipped; next call skips subprocess
