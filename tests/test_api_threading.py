@@ -110,3 +110,113 @@ def test_start_api_server_refuses_wildcard_without_key(monkeypatch):
     monkeypatch.setattr(api, "_api_key", None)
     with pytest.raises(ValueError):
         api.start_api_server(host="0.0.0.0", port=0)
+
+
+# -- DriverBusyError / lock timeout (v1.3.2) -------------------------------
+
+
+def test_run_driver_raises_busy_when_lock_held(monkeypatch):
+    """A stuck command must surface DriverBusyError, not hang the caller."""
+    monkeypatch.setattr(api, "_driver_lock_timeout", lambda: 0.05)
+    api._driver_exec_lock.acquire()
+    try:
+        box = {}
+
+        def call():
+            try:
+                api._run_driver(_never_runs)
+            except api.DriverBusyError as e:
+                box["err"] = str(e)
+            except BaseException as e:  # pragma: no cover — bug guard
+                box["other"] = repr(e)
+
+        th = threading.Thread(target=call, daemon=True)
+        th.start()
+        th.join(timeout=2)
+        assert "err" in box, f"expected DriverBusyError, got {box}"
+        assert "busy" in box["err"].lower()
+    finally:
+        api._driver_exec_lock.release()
+
+
+async def _never_runs():
+    raise AssertionError("coroutine must not run while lock is held")
+
+
+def test_run_driver_recovers_after_release(monkeypatch):
+    monkeypatch.setattr(api, "_driver_lock_timeout", lambda: 0.05)
+    api._driver_exec_lock.acquire()
+    api._driver_exec_lock.release()
+    assert api._run_driver(_ok_coro) == "ok"
+
+
+async def _ok_coro():
+    return "ok"
+
+
+def test_lock_timeout_env_parsing(monkeypatch):
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "7.5")
+    assert api._driver_lock_timeout() == 7.5
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "not-a-number")
+    assert api._driver_lock_timeout() == 30.0  # invalid falls back
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "0")
+    assert api._driver_lock_timeout() == 0.0  # deliberate fail-fast
+
+
+@pytest.mark.parametrize("bad", ["-1", "-0.5", "nan", "inf", "-inf"])
+def test_lock_timeout_rejects_hang_values(monkeypatch, bad):
+    """Negative waits indefinitely in Lock.acquire; NaN/inf raise — both
+    would recreate the very hang the timeout prevents. Must fall back."""
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", bad)
+    assert api._driver_lock_timeout() == 30.0
+
+
+def test_busy_acquire_returns_cleanly_with_validated_timeout(monkeypatch):
+    """The produced timeout must always be a valid acquire() argument."""
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "0.01")
+    t = api._driver_lock_timeout()
+    api._driver_exec_lock.acquire()
+    try:
+        got = api._driver_exec_lock.acquire(timeout=t)
+        assert got is False  # held above; clean False, no raise/hang
+    finally:
+        api._driver_exec_lock.release()
+
+
+def _make_handler():
+    h = api.ApiHandler.__new__(api.ApiHandler)
+    h._out = []
+    h._code = None
+
+    class _W:
+        def write(self, data):
+            h._out.append(data)
+
+    h.wfile = _W()
+    h.rfile = None
+    h.send_response = lambda code: setattr(h, "_code", code)
+    h.send_header = lambda k, v: None
+    h.end_headers = lambda: None
+    return h
+
+
+def test_respond_driver_maps_busy_to_503(monkeypatch):
+    def busy(_):
+        raise api.DriverBusyError("TV driver busy for over 30s")
+
+    h = _make_handler()
+    monkeypatch.setattr(api, "_run_driver", busy)
+    h._respond_driver(None)
+    assert h._code == 503
+    assert "busy" in h._out[0].decode()
+
+
+def test_respond_driver_maps_generic_to_500(monkeypatch):
+    def boom(_):
+        raise ValueError("driver exploded")
+
+    h = _make_handler()
+    monkeypatch.setattr(api, "_run_driver", boom)
+    h._respond_driver(None)
+    assert h._code == 500
+    assert "driver exploded" in h._out[0].decode()

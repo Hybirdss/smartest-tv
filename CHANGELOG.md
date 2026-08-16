@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-16
+
+### Fixed
+
+- **A stuck TV command blocked the REST API forever.** v1.3.0 made the
+  `stv serve` REST server threaded, but the driver-serialization lock
+  was acquired without a timeout: one hung command (pathological TLS handshake, dead
+  socket) held it indefinitely and every subsequent driver request
+  queued forever — head-of-line blocking reintroduced one layer down.
+  The lock is now acquired with a timeout (`STV_DRIVER_LOCK_TIMEOUT`,
+  default 30 s; non-numeric, negative, or non-finite values fall back to
+  the default — a negative timeout waits *indefinitely* in
+  `Lock.acquire`, recreating the hang) and latecomers get an explicit
+  **HTTP 503** `DriverBusyError` instead of hanging.
+  `/api/ping` remains lock-free. Follow-up on the #17/#18 review chain.
+
 ## [1.3.1] - 2026-08-16
 
 ### Fixed
