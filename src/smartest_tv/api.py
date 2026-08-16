@@ -65,8 +65,9 @@ def _run_driver(coro_factory) -> Any:
     """
     timeout = _driver_lock_timeout()
     if not _driver_exec_lock.acquire(timeout=timeout):
+        waited = f"{timeout:g}s"
         raise DriverBusyError(
-            f"TV driver busy for over {timeout:.0f}s — another command "
+            f"TV driver busy for over {waited} — another command "
             "is stuck; retry shortly"
         )
     try:
