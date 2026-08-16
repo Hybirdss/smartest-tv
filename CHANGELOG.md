@@ -27,9 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - The TCP probe used by Android discovery and `stv setup --ip` is now
-  one shared helper (`_engine.discovery.probe_port`) — probing semantics
-  can no longer drift between the two callers, and `setup` no longer
-  carries its own copy of the connect/close dance (review finding).
+  one shared helper — `smartest_tv.net.probe_port`, a public module, so
+  probing semantics can no longer drift between the two callers and
+  `setup` no longer reaches into the private `_engine` package (review
+  findings).
 - `curl()` caches its PATH lookup instead of running `shutil.which` on
   every request (review finding).
 

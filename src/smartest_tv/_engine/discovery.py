@@ -6,6 +6,8 @@ import asyncio
 import re
 import socket
 
+from smartest_tv.net import probe_port
+
 SSDP_ADDR = "239.255.255.250"
 SSDP_PORT = 1900
 SSDP_MX = 3
@@ -104,30 +106,6 @@ async def _ssdp_discover(timeout: float = 3.0) -> list[dict]:
 # invisible to `stv setup` and the HA discovery flow (issue #15 reports).
 _ANDROID_REMOTE_PORT = 6466
 _ANDROID_LEGACY_ADB_PORT = 5555
-
-
-async def probe_port(ip: str, port: int, connect_timeout: float) -> bool:
-    """TCP-connect probe one port. True if something is listening.
-
-    Shared by subnet discovery and ``stv setup --ip`` platform probing,
-    so future changes to probing behavior stay in one place. Only
-    network/timeout conditions count as "no listener" — programming
-    errors propagate instead of being masked as a closed port.
-    """
-    try:
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(ip, port),
-            timeout=connect_timeout,
-        )
-    except (asyncio.TimeoutError, OSError):
-        return False
-    try:
-        writer.close()
-        await writer.wait_closed()
-    except (asyncio.TimeoutError, OSError):
-        # Transport already gone mid-close — the listener was still there.
-        pass
-    return True
 
 
 async def _android_scan(timeout: float = 3.0) -> list[dict]:
