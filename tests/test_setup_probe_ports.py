@@ -59,3 +59,29 @@ async def test_probe_matches_driver_ports(monkeypatch, port, platform):
 async def test_probe_nothing_open(monkeypatch):
     _only_port(monkeypatch, -1)
     assert await setup_mod._probe_ip("10.0.0.7") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("primary", "legacy", "platform"),
+    [
+        (8002, 8001, "samsung"),  # wss beats legacy ws
+        (6466, 5555, "android"),  # Remote Protocol v2 beats legacy ADB
+    ],
+)
+async def test_primary_port_wins_when_both_open(monkeypatch, primary, legacy, platform):
+    """Both generations of the service running: the driver's port is reported."""
+
+    async def fake_open(ip, p):
+        if p in (primary, legacy):
+            return None, _NullWriter()
+        raise OSError("refused")
+
+    monkeypatch.setattr(asyncio, "open_connection", fake_open)
+    result = await setup_mod._probe_ip("10.0.0.7")
+    assert result == [{
+        "ip": "10.0.0.7",
+        "name": setup_mod._make_name(platform, "10.0.0.7"),
+        "platform": platform,
+        "raw": f"port:{primary}",
+    }]

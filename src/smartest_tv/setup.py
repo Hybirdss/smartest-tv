@@ -216,22 +216,17 @@ _PROBE_PORTS: list[tuple[str, int]] = [
 
 
 async def _probe_ip(ip: str) -> list[dict]:
-    """Probe a specific IP for TV services and detect platform."""
+    """Probe a specific IP for TV services and detect platform.
+
+    Reuses the shared ``probe_port`` utility so scanning semantics
+    (connect timeout, exception handling) cannot drift from discovery.
+    """
+    from smartest_tv.net import probe_port
+
     for platform, port in _PROBE_PORTS:
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, port),
-                timeout=2.0,
-            )
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
+        if await probe_port(ip, port, connect_timeout=2.0):
             name = _make_name(platform, ip)
             return [{"ip": ip, "name": name, "platform": platform, "raw": f"port:{port}"}]
-        except Exception:
-            pass
 
     return []
 

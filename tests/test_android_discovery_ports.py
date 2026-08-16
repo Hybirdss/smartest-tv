@@ -110,3 +110,24 @@ async def test_real_socket_6466_listener_is_discovered(monkeypatch):
         assert any(tv["ip"] == "127.0.0.1" and "6466" in tv["raw"] for tv in found)
     finally:
         server.close()
+
+
+@pytest.mark.asyncio
+async def test_one_bad_probe_does_not_abort_scan(monkeypatch):
+    """A probe raising an unexpected exception must not kill discovery.
+
+    Regression guard for the narrowed probe_port: gather isolation keeps
+    the other 250+ candidates scannable (warning logged, scan continues).
+    """
+    local_ip = "192.168.1.100"
+    monkeypatch.setattr(discovery, "_get_local_ip", lambda: local_ip)
+
+    async def flaky_probe(ip, port, connect_timeout):
+        if ip == "192.168.1.7":
+            raise ValueError("unexpected probe bug")
+        return ip == "192.168.1.42"
+
+    monkeypatch.setattr(discovery, "probe_port", flaky_probe)
+
+    found = await discovery._android_scan(timeout=1.0)
+    assert [tv["ip"] for tv in found] == ["192.168.1.42"]

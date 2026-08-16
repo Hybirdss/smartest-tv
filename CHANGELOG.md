@@ -6,6 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-16
+
+### Fixed
+
+- **urllib fallback did not decompress compressed HTTP-error bodies.**
+  `curl --compressed` decompresses 4xx/5xx responses just like 2xx; the
+  v1.3.0 fallback reset `Content-Encoding` on the error path, so a
+  gzipped 404 (common behind CDN/proxy front-ends) came back as binary
+  garbage. The encoding header is now preserved and error bodies decode
+  identically to curl (review finding, PR #17).
+- **curl vanishing from PATH mid-process now routes to the fallback**
+  instead of failing the request — the cached availability check is
+  invalidated when the subprocess raises `FileNotFoundError`, so
+  containers that change underneath us keep working (review finding).
+- **Broad `except Exception` in port probing narrowed** to
+  `(TimeoutError, OSError)`: a genuine bug in probe code now surfaces
+  instead of silently reporting "no TV here" (review finding).
+- **A truncated gzip response could crash `curl()`.** The urllib
+  fallback decompressed advertised-gzip bodies with `except OSError`,
+  but truncation raises `EOFError` (and corruption `zlib.error`), which
+  escaped to the caller. Now caught — the undecoded body is returned
+  and callers see their normal undecodable-body error path (review
+  finding, PR #18).
+- **One misbehaving probe could abort the whole Android scan.** The
+  narrowed exceptions made it possible for an unexpected per-IP error
+  to propagate out of the batch `gather`, discarding the remaining
+  candidates. The gather now isolates exceptions: a warning is logged
+  for the failing IP and discovery of the rest continues (review
+  finding, PR #18).
+
+### Changed
+
+- The TCP probe used by Android discovery and `stv setup --ip` is now
+  one shared helper — `smartest_tv.net.probe_port`, a public module, so
+  probing semantics can no longer drift between the two callers and
+  `setup` no longer reaches into the private `_engine` package (review
+  findings).
+- `curl()` caches its PATH lookup instead of running `shutil.which` on
+  every request (review finding).
+
+### Tests
+
+- +7: setup-probe precedence (both generations open → driver port wins,
+  Samsung 8002/8001 and Android 6466/5555), deflate + raw-deflate
+  decompression, request timeout surfacing, gzipped-404 decompression,
+  curl-vanishing-midprocess fallback.
+
 ## [1.3.0] - 2026-08-16
 
 ### Fixed

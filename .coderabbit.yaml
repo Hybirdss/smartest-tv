@@ -11,7 +11,7 @@ reviews:
     - path: "src/smartest_tv/_engine/**"
       instructions: "Private resolution engine. Not on GitHub, only in PyPI wheel. Reviewers: this code handles content ID resolution for Netflix/YouTube/Spotify."
     - path: "src/smartest_tv/drivers/**"
-      instructions: "TV platform drivers. Each driver wraps a platform SDK (bscpylgtv, samsungtvws, adb-shell, aiohttp). Check for async/await correctness and connection lifecycle."
+      instructions: "TV platform drivers. Each driver wraps a platform SDK (aiowebostv, samsungtvws, androidtvremote2, aiohttp). Check for async/await correctness and connection lifecycle."
     - path: "tests/**"
       instructions: "All tests run without a real TV. Mock-based. No network calls."
 chat:
