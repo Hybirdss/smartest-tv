@@ -169,6 +169,10 @@ def test_fallback_truncated_gzip_does_not_raise(no_curl, local_server):
     base, _ = local_server
     r = curl(f"{base}/gz-truncated")
     assert r.ok  # transport succeeded; body simply stays compressed
+    # And it really stayed compressed: the plaintext never appears, and
+    # a regression that returned an empty body would fail here too.
+    assert "never fully arriv" not in r.body
+    assert r.body
 
 
 def test_fallback_http_error_returns_body_like_curl(no_curl, local_server):

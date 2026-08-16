@@ -40,6 +40,10 @@ async def discover(timeout: float = 3.0) -> list[dict]:
 
     found: dict[str, dict] = {}
     for r in results:
+        if isinstance(r, BaseException):
+            # Discovery must never silently drop a platform: if a scan
+            # path raised, say so instead of just returning fewer TVs.
+            log.warning("discovery branch failed: %r", r)
         if isinstance(r, list):
             for tv in r:
                 ip = tv["ip"]
