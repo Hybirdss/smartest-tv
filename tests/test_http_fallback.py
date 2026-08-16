@@ -36,13 +36,18 @@ def local_server():
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, body: bytes, ctype: str = "application/json",
                   extra: dict[str, str] | None = None):
-            self.send_response(code)
-            self.send_header("Content-Type", ctype)
-            for k, v in (extra or {}).items():
-                self.send_header(k, v)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(code)
+                self.send_header("Content-Type", ctype)
+                for k, v in (extra or {}).items():
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                # Client (e.g. a timed-out /slow request) is gone — that
+                # is the scenario under test, not a failure.
+                pass
 
         def do_GET(self):
             if self.path == "/deflate":
@@ -69,6 +74,11 @@ def local_server():
                 self.end_headers()
             elif self.path == "/missing":
                 self._send(404, b'{"error": "not found"}')
+            elif self.path == "/gz-truncated":
+                # gzip header claims a body twice this size
+                payload = gzip.compress(b'{"msg": "never fully arriv')
+                self._send(200, payload[: len(payload) // 2],
+                           extra={"Content-Encoding": "gzip"})
             elif self.path == "/gz-missing":
                 payload = gzip.compress(b'{"error": "gone"}')
                 self._send(404, payload, extra={"Content-Encoding": "gzip"})
@@ -152,6 +162,13 @@ def test_fallback_gzipped_http_error_body_decompresses(no_curl, local_server):
     r = curl(f"{base}/gz-missing")
     assert r.ok and r.status_code == 404
     assert json.loads(r.body)["error"] == "gone"
+
+
+def test_fallback_truncated_gzip_does_not_raise(no_curl, local_server):
+    """A truncated gzip body must return undecoded bytes, never raise."""
+    base, _ = local_server
+    r = curl(f"{base}/gz-truncated")
+    assert r.ok  # transport succeeded; body simply stays compressed
 
 
 def test_fallback_http_error_returns_body_like_curl(no_curl, local_server):

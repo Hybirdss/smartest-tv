@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import socket
 
 from smartest_tv.net import probe_port
+
+log = logging.getLogger(__name__)
 
 SSDP_ADDR = "239.255.255.250"
 SSDP_PORT = 1900
@@ -136,10 +139,17 @@ async def _android_scan(timeout: float = 3.0) -> list[dict]:
         for i in range(0, len(remaining), 50):
             batch = remaining[i : i + 50]
             results = await asyncio.gather(
-                *[probe_port(ip, port, connect_timeout) for ip in batch]
+                *[probe_port(ip, port, connect_timeout) for ip in batch],
+                return_exceptions=True,
             )
             for ip, hit in zip(batch, results):
-                if hit:
+                if isinstance(hit, Exception):
+                    # A single misbehaving probe (buggy transport, odd
+                    # socket state) must not abort discovery of the
+                    # other candidates — surface it loudly, move on.
+                    log.warning("probe %s:%s raised: %r", ip, port, hit)
+                    still_remaining.append(ip)
+                elif hit:
                     found[ip] = {
                         "ip": ip,
                         "name": f"Android TV ({ip})",

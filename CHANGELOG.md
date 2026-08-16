@@ -23,6 +23,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Broad `except Exception` in port probing narrowed** to
   `(TimeoutError, OSError)`: a genuine bug in probe code now surfaces
   instead of silently reporting "no TV here" (review finding).
+- **A truncated gzip response could crash `curl()`.** The urllib
+  fallback decompressed advertised-gzip bodies with `except OSError`,
+  but truncation raises `EOFError` (and corruption `zlib.error`), which
+  escaped to the caller. Now caught — the undecoded body is returned
+  and callers see their normal undecodable-body error path (review
+  finding, PR #18).
+- **One misbehaving probe could abort the whole Android scan.** The
+  narrowed exceptions made it possible for an unexpected per-IP error
+  to propagate out of the batch `gather`, discarding the remaining
+  candidates. The gather now isolates exceptions: a warning is logged
+  for the failing IP and discovery of the rest continues (review
+  finding, PR #18).
 
 ### Changed
 

@@ -114,8 +114,10 @@ def _urllib_fetch(
     if encoding == "gzip":
         try:
             raw = gzip.decompress(raw)
-        except OSError:
-            pass  # leave as-is; callers treat undecodable bodies as errors
+        except (OSError, EOFError, zlib.error):
+            # Truncated (EOFError) or corrupt (zlib.error) bodies stay
+            # as-is; callers treat undecodable bodies as errors.
+            pass
     elif encoding == "deflate":
         try:
             raw = zlib.decompress(raw)
