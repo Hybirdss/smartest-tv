@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import math
 import os
 import secrets
 import threading
@@ -47,11 +48,21 @@ class DriverBusyError(RuntimeError):
 
 
 def _driver_lock_timeout() -> float:
-    """How long a request may wait for the driver lock (env-overridable)."""
+    """How long a request may wait for the driver lock (env-overridable).
+
+    Values must be finite and >= 0 (0 = deliberate fail-fast). Negative
+    or non-finite input falls back to the default: ``Lock.acquire``
+    treats a negative timeout as *indefinite* and NaN/inf raise, either
+    of which would recreate exactly the hang this timeout exists to
+    prevent.
+    """
     try:
-        return float(os.environ.get("STV_DRIVER_LOCK_TIMEOUT", "30"))
+        value = float(os.environ.get("STV_DRIVER_LOCK_TIMEOUT", "30"))
     except ValueError:
         return 30.0
+    if not math.isfinite(value) or value < 0:
+        return 30.0
+    return value
 
 
 def _run_driver(coro_factory) -> Any:

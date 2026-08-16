@@ -159,6 +159,28 @@ def test_lock_timeout_env_parsing(monkeypatch):
     assert api._driver_lock_timeout() == 7.5
     monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "not-a-number")
     assert api._driver_lock_timeout() == 30.0  # invalid falls back
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "0")
+    assert api._driver_lock_timeout() == 0.0  # deliberate fail-fast
+
+
+@pytest.mark.parametrize("bad", ["-1", "-0.5", "nan", "inf", "-inf"])
+def test_lock_timeout_rejects_hang_values(monkeypatch, bad):
+    """Negative waits indefinitely in Lock.acquire; NaN/inf raise — both
+    would recreate the very hang the timeout prevents. Must fall back."""
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", bad)
+    assert api._driver_lock_timeout() == 30.0
+
+
+def test_busy_acquire_returns_cleanly_with_validated_timeout(monkeypatch):
+    """The produced timeout must always be a valid acquire() argument."""
+    monkeypatch.setenv("STV_DRIVER_LOCK_TIMEOUT", "0.01")
+    t = api._driver_lock_timeout()
+    api._driver_exec_lock.acquire()
+    try:
+        got = api._driver_exec_lock.acquire(timeout=t)
+        assert got is False  # held above; clean False, no raise/hang
+    finally:
+        api._driver_exec_lock.release()
 
 
 def _make_handler():
