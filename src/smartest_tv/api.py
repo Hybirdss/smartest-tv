@@ -42,10 +42,37 @@ _driver_lock = threading.Lock()
 _driver_exec_lock = threading.Lock()
 
 
+class DriverBusyError(RuntimeError):
+    """The driver is busy with another command for too long (HTTP 503)."""
+
+
+def _driver_lock_timeout() -> float:
+    """How long a request may wait for the driver lock (env-overridable)."""
+    try:
+        return float(os.environ.get("STV_DRIVER_LOCK_TIMEOUT", "30"))
+    except ValueError:
+        return 30.0
+
+
 def _run_driver(coro_factory) -> Any:
-    """Build and run a driver coroutine, serialized across threads."""
-    with _driver_exec_lock:
+    """Build and run a driver coroutine, serialized across threads.
+
+    A hung TV command (pathological TLS handshake, dead socket) must not
+    turn every subsequent request into an infinite wait — the lock is
+    acquired with a timeout and latecomers get DriverBusyError (HTTP 503)
+    instead of piling up. This is the second half of the v1.3.0
+    head-of-line fix: ping stays fast, busy is now visible too.
+    """
+    timeout = _driver_lock_timeout()
+    if not _driver_exec_lock.acquire(timeout=timeout):
+        raise DriverBusyError(
+            f"TV driver busy for over {timeout:.0f}s — another command "
+            "is stuck; retry shortly"
+        )
+    try:
         return _run_async(coro_factory())
+    finally:
+        _driver_exec_lock.release()
 
 # API key for authentication (optional but recommended for remote access)
 _api_key: str | None = os.environ.get("STV_API_KEY")
@@ -131,6 +158,18 @@ class ApiHandler(BaseHTTPRequestHandler):
     def _error(self, code: int, msg: str) -> None:
         self._respond(code, {"error": msg})
 
+    def _respond_driver(self, coro_factory) -> None:
+        """Run a serialized driver command and respond with its status.
+
+        Busy driver -> 503 (retryable), other failures -> 500.
+        """
+        try:
+            self._respond(200, _run_driver(coro_factory))
+        except DriverBusyError as e:
+            self._error(503, str(e))
+        except Exception as e:
+            self._error(500, str(e))
+
     # -- Routes ---------------------------------------------------------------
 
     def do_GET(self):
@@ -159,7 +198,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         "muted": s.muted,
                         "sound_output": s.sound_output,
                     }
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
             except Exception as e:
                 self._error(500, str(e))
 
@@ -176,7 +215,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         "firmware": i.firmware,
                         "name": i.name,
                     }
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
             except Exception as e:
                 self._error(500, str(e))
 
@@ -187,7 +226,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 async def _do():
                     await d.connect()
                     return {"volume": await d.get_volume(), "muted": await d.get_muted()}
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
             except Exception as e:
                 self._error(500, str(e))
 
@@ -199,7 +238,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.connect()
                     apps = await d.list_apps()
                     return {"apps": [{"id": a.id, "name": a.name} for a in apps]}
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
             except Exception as e:
                 self._error(500, str(e))
 
@@ -238,7 +277,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.launch_app(app_id)
                         return {"launched": name}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/close":
                 app = data.get("app", "")
@@ -249,7 +288,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.close_app(app_id)
                     return {"closed": name}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/volume":
                 async def _do():
@@ -265,7 +304,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         return {"action": "down"}
                     return {"error": "specify level or action"}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/mute":
                 async def _do():
@@ -276,7 +315,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.set_mute(bool(mute))
                     return {"muted": mute}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/power":
                 async def _do():
@@ -288,7 +327,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.power_off()
                     return {"power": action}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/notify":
                 msg = data.get("message", "")
@@ -298,7 +337,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                     await d.notify(msg)
                     return {"notified": msg}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/screen":
                 async def _do():
@@ -310,7 +349,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.screen_off()
                     return {"screen": action}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             elif path == "/api/media":
                 async def _do():
@@ -324,7 +363,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                         await d.play()
                     return {"media": action}
 
-                self._respond(200, _run_driver(_do))
+                self._respond_driver(_do)
 
             else:
                 self._error(404, f"Unknown endpoint: {path}")
