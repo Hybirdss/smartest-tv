@@ -8,24 +8,26 @@ not `send_key`/`run_app` (those live on the sync class). We dispatch via the
 `SendRemoteKey` and `ChannelEmitCommand` payload builders from
 `samsungtvws.remote`.
 
-Deep link path:
-  Netflix / YouTube: try DIAL (issue #8) first, then fall back to
-    ed.apps.launch DEEP_LINK. Tizen 9 firmware has been observed
-    silently ignoring metaTag for Netflix and Disney+ apps; routing
-    through DIAL bypasses Tizen entirely because the launch parameters
-    are interpreted by the app, not the OS.
-  Other apps: ed.apps.launch DEEP_LINK with meta_tag (Spotify
-    "spotify:{type}:{id}", etc.). DIAL is opt-in per-app — most Samsung
-    apps are not DIAL receivers.
+Deep link ladder (launch_app_deep returns a LaunchResult, see drivers/base):
+  1. Netflix / YouTube: DIAL first (issue #8) — parameters are interpreted
+     by the app, not the OS, so Tizen metaTag quirks don't apply.
+  2. ed.apps.launch DEEP_LINK with meta_tag, then VERIFY via the REST
+     app-status endpoint — Tizen 9 firmware has been observed silently
+     ignoring the command, and the old code trusted it blindly (issue #20).
+  3. If the app provably did not start: REST applications/{id} POST, then
+     plain NATIVE_LAUNCH — the paths the TV honors when DEEP_LINK drops.
+  Other apps: enter the ladder at rung 2 (most are not DIAL receivers).
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import socket
 from typing import Any, Final
 
-from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
+from smartest_tv.drivers.base import App, LaunchResult, TVDriver, TVInfo, TVStatus
 
 from .. import dial
 
@@ -40,6 +42,31 @@ except ImportError as e:
         "  pipx inject stv 'samsungtvws[encrypted]'   (recommended)\n"
         "  pip install 'stv[samsung]'                 (alternative)"
     ) from e
+
+_LOG = logging.getLogger(__name__)
+
+
+def _status_says_running(status: Any) -> bool | None:
+    """Interpret a REST app-status payload.
+
+    True/False when a recognizable running/visible key is present; None
+    when the payload carries no verdict either way (older firmwares
+    return metadata only) so callers treat it as unknown, not "stopped".
+    """
+    if not isinstance(status, dict):
+        return None
+    scopes = [status]
+    inner = status.get("app")
+    if isinstance(inner, dict):
+        scopes.append(inner)
+    for scope in scopes:
+        for key in ("running", "visible"):
+            value = scope.get(key)
+            if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+                return value.strip().lower() == "true"
+            if isinstance(value, bool):
+                return value
+    return None
 
 
 # DIAL canonical app names + Samsung app IDs that should route through DIAL.
@@ -71,17 +98,43 @@ class SamsungDriver(TVDriver):
         # DIAL Application-URL cache. None = not yet looked up; "" = looked up
         # and not present (so we don't M-SEARCH on every launch).
         self._dial_app_url: str | None = None
+        # Seconds to wait before the first post-launch app-status poll and
+        # between retries. Attribute (not constant) so tests can zero it.
+        self._verify_delay: float = 1.5
 
     async def connect(self) -> None:
-        os.makedirs(os.path.dirname(self.token_file), exist_ok=True)
+        # samsungtvws reads and writes the token file with blocking IO
+        # inside its async open() (connection.py:91). Home Assistant's
+        # strict mode flags exactly that (issue #20's log warning), so we
+        # own the file here: read it in a worker thread, hand the token
+        # to the remote directly, and persist any newly granted token
+        # through the thread pool afterwards.
+        def _load_token() -> str | None:
+            os.makedirs(os.path.dirname(self.token_file), exist_ok=True)
+            try:
+                with open(self.token_file) as f:
+                    return f.readline().strip() or None
+            except OSError:
+                return None
+
+        token = await asyncio.to_thread(_load_token)
         self._remote = SamsungTVWSAsyncRemote(
             host=self.ip,
             port=self.port,
-            token_file=self.token_file,
+            token=token,
+            token_file=None,
             timeout=10.0,
             name="SmartestTV",
         )
         await self._remote.open()
+
+        granted = (getattr(self._remote, "token", None) or "").strip() or None
+        if granted and granted != token:
+            await asyncio.to_thread(self._save_token, granted)
+
+    def _save_token(self, token: str) -> None:
+        with open(self.token_file, "w") as f:
+            f.write(token)
 
     async def disconnect(self) -> None:
         if self._remote:
@@ -149,21 +202,131 @@ class SamsungDriver(TVDriver):
         r = await self._ensure()
         await r.send_command(ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH", ""))
 
-    async def launch_app_deep(self, app_id: str, content_id: str) -> None:
-        if app_id in _DIAL_NETFLIX_IDS:
-            if await self._try_dial("Netflix", dial.netflix_body(content_id)):
-                return
-        elif app_id in _DIAL_YOUTUBE_IDS:
-            if await self._try_dial("YouTube", dial.youtube_body(content_id)):
-                return
-        # DIAL didn't apply or didn't reach the TV. Fall back to the Tizen
-        # WebSocket DEEP_LINK path — the same payload PR #7 fixed. On Tizen
-        # 9 firmware that ignores metaTag this still launches the app so
-        # the user can pick manually; that's strictly better than nothing.
-        r = await self._ensure()
-        await r.send_command(
-            ChannelEmitCommand.launch_app(app_id, "DEEP_LINK", content_id)
-        )
+    async def launch_app_deep(
+        self, app_id: str, content_id: str
+    ) -> LaunchResult | None:
+        """Launch content and *report what the TV actually did* (issues #8, #20).
+
+        Ladder, best-first:
+        1. DIAL REST for Netflix/YouTube — interpreted by the app, immune
+           to Tizen metaTag quirks.
+        2. WS ``ed.apps.launch`` DEEP_LINK, then VERIFY via the REST app
+           status endpoint instead of trusting the fire-and-forget send.
+        3. If verification says the app never started (the Tizen 9
+           behavior — silently ignored), escalate through the REST
+           ``applications/{id}`` POST the TV honors, then plain
+           NATIVE_LAUNCH.
+
+        Returns a LaunchResult so callers can tell "playing the title"
+        from "opened the app" from "nothing happened" — the difference
+        issue #20's reporter could not see at all.
+        """
+        if content_id:
+            if app_id in _DIAL_NETFLIX_IDS:
+                if await self._try_dial("Netflix", dial.netflix_body(content_id)):
+                    return LaunchResult.DIAL
+            elif app_id in _DIAL_YOUTUBE_IDS:
+                if await self._try_dial("YouTube", dial.youtube_body(content_id)):
+                    return LaunchResult.DIAL
+            # DIAL didn't apply or didn't reach the TV. Fall back to the
+            # Tizen WebSocket DEEP_LINK path — the same payload PR #7 fixed.
+            # A WS send failure must not end the ladder: the REST paths
+            # below run on a different port and may still work.
+            try:
+                r = await self._ensure()
+                await r.send_command(
+                    ChannelEmitCommand.launch_app(app_id, "DEEP_LINK", content_id)
+                )
+            except Exception:  # noqa: BLE001 — verification decides next
+                _LOG.debug("DEEP_LINK send failed for %s", app_id, exc_info=True)
+        else:
+            # Nothing to deep-link into — resolve() failed upstream. Open
+            # the app itself so the user is one click away, never nothing.
+            r = await self._ensure()
+            await r.send_command(
+                ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH", "")
+            )
+
+        verified = await self._verify_app_running(app_id)
+        if verified is True:
+            # Started. With a content_id we can't distinguish "playing the
+            # title" from "app opened at its home screen" without app-side
+            # feedback — deep-link optimism, callers phrase the rest.
+            return LaunchResult.DEEP_LINK if content_id else LaunchResult.APP_ONLY
+        if verified is None:
+            # Model exposes no usable REST status endpoint — don't guess.
+            return (
+                LaunchResult.DEEP_LINK_UNVERIFIED
+                if content_id
+                else LaunchResult.NATIVE
+            )
+
+        # Explicitly not running: the TV ignored the deep link (issue #8
+        # behavior). Escalate through the paths the TV does honor —
+        # issue #20's TV ignores DEEP_LINK but honors REST app-run.
+        if await self._rest_run_app(app_id):
+            if await self._verify_app_running(app_id) is not False:
+                _LOG.warning(
+                    "DEEP_LINK for app %s was ignored by the TV; started the "
+                    "app via REST instead (issue #8) — pick the title manually",
+                    app_id,
+                )
+                return LaunchResult.APP_ONLY
+            return LaunchResult.FAILED
+
+        try:
+            r = await self._ensure()
+            await r.send_command(
+                ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH", "")
+            )
+        except Exception:  # noqa: BLE001 — last rung failed; report, don't raise
+            return LaunchResult.FAILED
+        return LaunchResult.NATIVE
+
+    async def _verify_app_running(
+        self, app_id: str, attempts: int = 3
+    ) -> bool | None:
+        """Poll the REST app-status endpoint.
+
+        Returns True (app running), False (app definitely not running) or
+        None (this model's REST API is unusable — status unverifiable).
+        Tolerant to the two response shapes seen in the wild (top-level
+        ``running``/``visible`` keys, or wrapped under ``app``) and to
+        string ("true") vs boolean values.
+        """
+        try:
+            if self._session is None:
+                self._session = aiohttp.ClientSession()
+            rest = SamsungTVAsyncRest(
+                host=self.ip, session=self._session, port=self.port, timeout=5.0
+            )
+            await asyncio.sleep(self._verify_delay)
+            for attempt in range(attempts):
+                try:
+                    status = await rest.rest_app_status(app_id)
+                except Exception:  # noqa: BLE001 — REST unusable → unknown
+                    return None
+                verdict = _status_says_running(status)
+                if verdict is not None:
+                    return verdict
+                if attempt < attempts - 1:
+                    await asyncio.sleep(self._verify_delay)
+            return False
+        except Exception:  # noqa: BLE001
+            return None
+
+    async def _rest_run_app(self, app_id: str) -> bool:
+        """POST applications/{id} — the launch path Tizen reliably honors."""
+        try:
+            if self._session is None:
+                self._session = aiohttp.ClientSession()
+            rest = SamsungTVAsyncRest(
+                host=self.ip, session=self._session, port=self.port, timeout=5.0
+            )
+            await rest.rest_app_run(app_id)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
 
     async def _try_dial(self, app_name: str, body: str) -> bool:
         """Attempt a DIAL launch for one of the DIAL-aware apps.

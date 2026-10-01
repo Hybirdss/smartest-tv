@@ -31,9 +31,34 @@ def _payload(call) -> dict:
     return json.loads(cmd.get_payload())
 
 
+class _FakeRest:
+    """Stands in for SamsungTVAsyncRest so tests never touch the network."""
+
+    running: bool | None = True
+
+    def __init__(self, *args, **kwargs):
+        self.status_calls: list[str] = []
+        self.run_calls: list[str] = []
+
+    async def rest_app_status(self, app_id):
+        self.status_calls.append(app_id)
+        if self.running is None:
+            raise OSError("REST unavailable on this model")
+        return {"app": {"running": self.running}}
+
+    async def rest_app_run(self, app_id):
+        self.run_calls.append(app_id)
+        return {}
+
+
 @pytest.fixture
-def driver() -> SamsungDriver:
+def driver(monkeypatch) -> SamsungDriver:
+    import smartest_tv._engine.drivers.samsung as samsung_mod
+
+    monkeypatch.setattr(samsung_mod, "SamsungTVAsyncRest", _FakeRest)
+    monkeypatch.setattr(samsung_mod.aiohttp, "ClientSession", MagicMock)
     d = SamsungDriver(ip="192.0.2.10", mac="aa:bb:cc:dd:ee:ff")
+    d._verify_delay = 0
     remote = MagicMock()
     remote.send_command = AsyncMock()
     remote.send_commands = AsyncMock()
@@ -48,7 +73,8 @@ async def test_launch_app_deep_emits_deep_link_payload(driver):
     # Disney+ is not in _DIAL_*_IDS so it should not attempt DIAL — it falls
     # straight through to the WebSocket DEEP_LINK path.
     driver._dial_app_url = ""  # force "no DIAL" so we don't M-SEARCH in tests
-    await driver.launch_app_deep("3201901017640", "81002370")
+    result = await driver.launch_app_deep("3201901017640", "81002370")
+    assert result.value == "deep_link"
     driver._remote.send_command.assert_awaited_once()
     payload = _payload(driver._remote.send_command.await_args)
     assert payload["method"] == "ms.channel.emit"

@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Samsung `play_media` no longer fails silently (issue #20).** Three
+  launch paths fired and none was verified or reported: HA's action
+  "briefly reported completion" while the TV stayed on its HDMI input.
+  The driver now walks a best-first ladder — DIAL → WS `DEEP_LINK`
+  **verified via the REST app-status endpoint** → REST
+  `applications/{id}` POST (the path #20's TV honors when DEEP_LINK is
+  silently ignored) → plain `NATIVE_LAUNCH` — and returns a
+  `LaunchResult`. The HA integration logs every outcome at the right
+  severity and **fails the service call** when nothing started;
+  unresolvable content opens the app with a warning instead of
+  deep-linking garbage.
+- **`launch_app_deep` outcome is now a first-class value (issue #8).**
+  `LaunchResult` (DIAL / DEEP_LINK / DEEP_LINK_UNVERIFIED / APP_ONLY /
+  NATIVE / FAILED) flows through `launch_content`, the CLI (`stv play`
+  prints the path, warns on APP_ONLY), and HA. No more guessing whether
+  a fire-and-forget send worked.
+- **Samsung token-file IO moved off the event loop** (issue #20's
+  blocking-call warning): `samsungtvws` reads/writes the token file
+  with blocking IO inside its async `open()`; the driver now owns the
+  file, reads it in a worker thread, passes the token inline, and
+  persists newly granted tokens through the pool.
+
+### Fixed
+
 - **A DHCP re-lease no longer bricks the CLI with a raw traceback.**
   Routers routinely hand the TV a new address (measured 2026-10-01: the
   living-room webOS TV moved 192.168.200.101 → .107 overnight); every
