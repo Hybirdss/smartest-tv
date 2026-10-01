@@ -328,6 +328,8 @@ def _write_multi_tv_config(tvs: dict[str, Any], groups: dict[str, list[str]] | N
             lines.append(f'url = "{tv["url"]}"')
         if tv.get("mac"):
             lines.append(f'mac = "{tv["mac"]}"')
+        if tv.get("api_key"):
+            lines.append(f'api_key = "{tv["api_key"]}"')
         if tv.get("name"):
             lines.append(f'name = "{tv["name"]}"')
         if tv.get("default"):
@@ -342,6 +344,53 @@ def _write_multi_tv_config(tvs: dict[str, Any], groups: dict[str, list[str]] | N
         lines.append("")
 
     _write_config_lines(lines)
+
+
+def update_tv_ip(tv_name: str | None, old_ip: str, new_ip: str) -> bool:
+    """Update a TV's IP after a DHCP re-lease (stale-IP self-heal).
+
+    Routers routinely re-lease TV addresses (measured 2026-10-01: the
+    living-room webOS TV moved 192.168.200.101 → .107 overnight and every
+    stv command failed with a raw ``OSError`` until the config was fixed
+    by hand). Called by the LG driver after it re-resolves the TV by MAC
+    via the ARP cache.
+
+    Matching rules:
+    - Multi-TV config with ``tv_name``: that section is updated (its
+      current ip must equal ``old_ip`` — a mismatch means the caller is
+      healing against a stale driver instance, so we do nothing).
+    - Without ``tv_name`` (or legacy single-TV config): every entry whose
+      ip equals ``old_ip``.
+
+    Returns True when the file was rewritten, False when nothing matched.
+    """
+    config = load()
+    tv_section = config.get("tv", {})
+
+    if _is_legacy(tv_section):
+        if tv_section.get("ip") != old_ip:
+            return False
+        save(
+            tv_section.get("platform", ""),
+            new_ip,
+            tv_section.get("mac", ""),
+            tv_section.get("name", ""),
+        )
+        return True
+
+    tvs = {k: v for k, v in tv_section.items() if isinstance(v, dict)}
+    if tv_name is not None:
+        targets = [tv_name] if tv_name in tvs else []
+    else:
+        targets = [k for k, tv in tvs.items() if tv.get("ip") == old_ip]
+    targets = [k for k in targets if tvs[k].get("ip") == old_ip]
+    if not targets:
+        return False
+
+    for k in targets:
+        tvs[k]["ip"] = new_ip
+    _write_multi_tv_config(tvs)
+    return True
 
 
 # ---------------------------------------------------------------------------

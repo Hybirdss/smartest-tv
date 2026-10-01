@@ -11,6 +11,7 @@ import asyncio
 import json
 import re
 import socket
+import sys
 from contextlib import suppress
 from pathlib import Path
 
@@ -86,7 +87,14 @@ class _SmarTestWebOsClient(WebOsClient):
             with suppress(WebOsTvResponseTypeError):
                 self.tv_info.system = await self.get_system_info()
 
-        self.tv_info.software = await self.get_software_info()
+        # Upstream guards get_system_info but awaits get_software_info
+        # bare. A key paired under a narrower permission grant (any TV
+        # set up before aiowebostv, or webOS 24/25's tightened services)
+        # answers 401 here and — unsuppressed — kills connect() exactly
+        # like the subscriptions below, reintroducing issue #4 one line
+        # earlier. Software info is cosmetic for stv: degrade, don't die.
+        with suppress(WebOsTvCommandError):
+            self.tv_info.software = await self.get_software_info()
 
         subscribe_state_updates = {
             self.subscribe_power_state(self.set_power_state),
@@ -135,11 +143,14 @@ class LGDriver(TVDriver):
 
     platform = "lg"
 
-    def __init__(self, ip: str, mac: str = "", key_file: str = ""):
+    def __init__(
+        self, ip: str, mac: str = "", key_file: str = "", tv_name: str = ""
+    ):
         from smartest_tv.config import CONFIG_DIR
 
         self.ip = ip
         self.mac = mac
+        self.tv_name = tv_name
         # aiowebostv stores raw client_key string — use .json.
         # Honor STV_CONFIG_DIR (see android.py — #15) so the pairing key
         # survives container rebuilds in Home Assistant.
@@ -183,6 +194,20 @@ class LGDriver(TVDriver):
         if self._client is not None and self._client.is_connected():
             return
 
+        try:
+            await self._connect_once()
+        except (OSError, asyncio.TimeoutError):
+            # Host unreachable at the configured IP. The single most common
+            # cause is a DHCP re-lease (measured 2026-10-01: TV moved
+            # .101 → .107 overnight). Re-resolve by MAC via the ARP cache
+            # and retry once; if that also fails the original error
+            # propagates — a truly off/asleep TV must fail loudly.
+            healed_ip = await self._heal_stale_ip()
+            if healed_ip is None:
+                raise
+            await self._connect_once()
+
+    async def _connect_once(self) -> None:
         client_key = self._load_client_key()
         self._client = _SmarTestWebOsClient(self.ip, client_key=client_key)
         await self._client.connect()
@@ -190,6 +215,55 @@ class LGDriver(TVDriver):
         # Persist the key if it was freshly obtained via pairing
         if self._client.client_key and self._client.client_key != client_key:
             self._save_client_key(self._client.client_key)
+
+    async def _heal_stale_ip(self) -> str | None:
+        """Re-resolve the TV by MAC when the configured IP stopped answering.
+
+        Returns the new IP and repoints ``self.ip`` on success, None when
+        healing is impossible (no MAC on record, MAC not in the ARP
+        cache, or nothing listening on webOS ports at the candidate IP —
+        that last guard stops us from adopting a stranger's device that
+        inherited the old lease).
+        """
+        if not self.mac:
+            return None
+
+        from smartest_tv.net import lookup_ip_by_mac, probe_port
+
+        new_ip = await asyncio.to_thread(lookup_ip_by_mac, self.mac)
+        if not new_ip or new_ip == self.ip:
+            return None
+        # Confirm before touching config: webOS listens on 3001 (wss,
+        # current firmware) or 3000 (ws, older sets).
+        listening = False
+        for port in (3001, 3000):
+            if await probe_port(new_ip, port, connect_timeout=2.0):
+                listening = True
+                break
+        if not listening:
+            return None
+
+        old_ip = self.ip
+        self.ip = new_ip
+        self._client = None
+        self._persist_healed_ip(old_ip, new_ip)
+        return new_ip
+
+    def _persist_healed_ip(self, old_ip: str, new_ip: str) -> None:
+        print(
+            f"[stv] TV IP changed {old_ip} → {new_ip} "
+            f"(re-resolved by MAC {self.mac}; config updated)",
+            file=sys.stderr,
+        )
+        try:
+            from smartest_tv.config import update_tv_ip
+
+            update_tv_ip(self.tv_name or None, old_ip, new_ip)
+        except Exception:  # noqa: BLE001 — config must never kill playback
+            print(
+                "[stv] warning: could not persist healed IP to config",
+                file=sys.stderr,
+            )
 
     async def disconnect(self) -> None:
         if self._client:
