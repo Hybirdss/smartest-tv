@@ -8,7 +8,31 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
+
+
+class LaunchResult(str, Enum):
+    """What actually happened when we asked a TV to play content.
+
+    Drivers that cannot verify report ``None`` from ``launch_app_deep``
+    (pre-change behavior). Samsung reports a concrete outcome so callers
+    can tell "playing" from "opened the app but ignored the title" —
+    the difference behind issue #8's silent deep-link drops.
+    """
+
+    # Launched through DIAL REST — bypasses Tizen's ed.apps.launch pipe.
+    DIAL = "dial"
+    # WS deep link sent and the app verified running afterwards.
+    DEEP_LINK = "deep_link"
+    # WS deep link sent; this model exposes no way to verify it.
+    DEEP_LINK_UNVERIFIED = "deep_link_unverified"
+    # App verified running, but the title was not deep-linked (issue #8).
+    APP_ONLY = "app_only"
+    # Fell back to a plain app launch after deep link was ignored.
+    NATIVE = "native"
+    # Nothing is running on the TV after every launch path was tried.
+    FAILED = "failed"
 
 
 @dataclass
@@ -111,7 +135,9 @@ class TVDriver(ABC):
         """Launch an app by its platform-specific ID."""
 
     @abstractmethod
-    async def launch_app_deep(self, app_id: str, content_id: str) -> None:
+    async def launch_app_deep(
+        self, app_id: str, content_id: str
+    ) -> LaunchResult | None:
         """Launch an app with deep link to specific content.
 
         The content_id format is platform-specific — the driver handles

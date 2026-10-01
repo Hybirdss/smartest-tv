@@ -14,6 +14,7 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_IP, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, SCAN_INTERVAL
@@ -251,40 +252,71 @@ class StvMediaPlayer(MediaPlayerEntity):
         season = int(match.group("season")) if match.group("season") else None
         episode = int(match.group("episode")) if match.group("episode") else None
 
-        try:
-            from smartest_tv.apps import resolve_app
-            from smartest_tv.playback import launch_content
-            from smartest_tv.resolve import resolve
+        from smartest_tv.apps import resolve_app
+        from smartest_tv.drivers.base import LaunchResult
+        from smartest_tv.playback import describe_launch, launch_content
+        from smartest_tv.resolve import resolve
 
-            content_id = await self.hass.async_add_executor_job(
-                resolve, platform, query, season, episode
-            )
+        try:
+            content_id = None
+            try:
+                content_id = await self.hass.async_add_executor_job(
+                    resolve, platform, query, season, episode
+                )
+            except Exception as exc:  # noqa: BLE001 — resolution is best-effort
+                _LOGGER.warning(
+                    "Could not resolve '%s' on %s (%s: %s) — opening the %s "
+                    "app instead of deep-linking the title",
+                    query,
+                    platform,
+                    type(exc).__name__,
+                    exc,
+                    platform.capitalize(),
+                )
+
             app_id, _ = resolve_app(platform, self._platform)
 
             if not self._connected:
                 await self._driver.connect()
                 self._connected = True
 
-            await launch_content(self._driver, platform, app_id, content_id)
-            _LOGGER.info("Playing %s on %s", media_id, self._tv_name)
+            result = await launch_content(self._driver, platform, app_id, content_id)
+            level, message = describe_launch(
+                result, platform=platform, query=query, tv_name=self._tv_name
+            )
+            log = _LOGGER.error if level == "error" else getattr(_LOGGER, level)
+            log("%s (media_id: %s)", message, media_id)
+
+            if result is LaunchResult.FAILED:
+                # Issue #20: the action used to "briefly report completion"
+                # while the TV did nothing. Now the service call fails when
+                # the TV provably ignored every launch path.
+                raise HomeAssistantError(
+                    f"{self._tv_name}: {message} Try `stv doctor` from the "
+                    "CLI, or power-cycle the TV."
+                )
+        except HomeAssistantError:
+            raise
         except RuntimeError as exc:
             # Pairing failures land here (issue #15): the TV rejected the
             # TLS handshake because this HA instance was never paired.
             if "not paired" in str(exc).lower():
-                _LOGGER.warning(
-                    "Cannot play %s on %s: this Home Assistant instance is "
-                    "not paired with the TV. Remove the TV entry (Settings → "
-                    "Devices & Services → Smartest TV) and re-add it — the "
-                    "setup flow now shows the TV's pairing PIN. "
-                    "(Original error: %s)",
-                    media_id,
-                    self._tv_name,
-                    exc,
-                )
-            else:
-                _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
-        except Exception:
+                raise HomeAssistantError(
+                    f"Cannot play {media_id} on {self._tv_name}: this Home "
+                    "Assistant instance is not paired with the TV. Remove "
+                    "the TV entry (Settings → Devices & Services → Smartest "
+                    "TV) and re-add it — the setup flow shows the pairing "
+                    f"PIN. (Original error: {exc})"
+                ) from exc
             _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
+            raise HomeAssistantError(
+                f"Failed to play {media_id} on {self._tv_name}: {exc}"
+            ) from exc
+        except Exception as exc:
+            _LOGGER.exception("Failed to play %s on %s", media_id, self._tv_name)
+            raise HomeAssistantError(
+                f"Failed to play {media_id} on {self._tv_name}: {exc}"
+            ) from exc
 
     async def async_will_remove_from_hass(self) -> None:
         """Disconnect driver and cancel interruption listeners when entity is removed."""

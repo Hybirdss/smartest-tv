@@ -31,7 +31,7 @@ from smartest_tv.config import (
     set_default_tv,
 )
 from smartest_tv.drivers.base import TVDriver
-from smartest_tv.playback import launch_content
+from smartest_tv.playback import describe_launch, launch_content
 from smartest_tv.sync import broadcast, connect_all
 from smartest_tv.ui import console as _ui_console
 from smartest_tv.ui import render as _ui
@@ -1046,8 +1046,12 @@ def play(ctx, platform, query, season, episode, title_id):
 
         async def _play_on(d):
             app_id, name = resolve_app(platform, d.platform)
-            await launch_content(d, platform, app_id, content_id)
-            return f"{ICONS['play']} {desc} on {name} ({content_id})"
+            result = await launch_content(d, platform, app_id, content_id)
+            level, message = describe_launch(
+                result, platform=platform, query=desc, tv_name=name
+            )
+            mark = ICONS["play"] if level != "error" else "✗"
+            return f"{mark} {message} ({content_id})"
 
         results = _run(_broadcast_action(targets, _play_on))
         _print_results(results, ctx.obj["fmt"])
@@ -1062,11 +1066,19 @@ def play(ctx, platform, query, season, episode, title_id):
                 raise click.ClickException(
                     "Could not connect to TV within 10s. Is it on? Run: stv doctor"
                 )
-            await launch_content(d, platform, app_id, content_id)
+            return await launch_content(d, platform, app_id, content_id)
 
-        _run(_do())
+        result = _run(_do())
+        level, message = describe_launch(
+            result, platform=platform, query=desc, tv_name=name
+        )
         replay_suffix = "  (replay)" if _replay else ""
-        _success(f"{icon} Playing {desc} on {name}  ({content_id}){replay_suffix}")
+        if level == "error":
+            _fail(message)
+        else:
+            _success(f"{icon} {message}  ({content_id}){replay_suffix}")
+            if level == "warning":
+                click.echo(f"[stv] {message}", err=True)
 
     # Record to history
     from smartest_tv import cache as _cache
