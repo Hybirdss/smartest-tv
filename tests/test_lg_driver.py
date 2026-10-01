@@ -35,6 +35,7 @@ from aiowebostv import WebOsClient  # noqa: E402
 from aiowebostv.exceptions import (  # noqa: E402
     WebOsTvCommandError,
     WebOsTvCommandTimeoutError,
+    WebOsTvResponseTypeError,
 )
 
 from smartest_tv._engine.drivers.lg import _SmarTestWebOsClient  # noqa: E402
@@ -93,6 +94,40 @@ def _build_client() -> _SmarTestWebOsClient:
     for setter in _UPSTREAM_SETTERS:
         setattr(client, setter, AsyncMock())
     return client
+
+
+@pytest.mark.asyncio
+async def test_connect_survives_401_on_get_software_info(monkeypatch):
+    """Issue #4, one line earlier: the prologue getter.
+
+    Keys paired under a narrower permission grant (any TV configured
+    before the aiowebostv migration) answer 401 to
+    ``getSystemSettings``. Upstream awaits ``get_software_info`` bare,
+    so the 401 killed connect() before a single subscription ran.
+    Measured on a real living-room set 2026-10-01: stv status died at
+    ``GET_SOFTWARE_INFO`` with ``WebOsTvResponseTypeError``.
+    """
+
+    software_401 = WebOsTvResponseTypeError(
+        {"type": "error", "id": 1, "error": "401 insufficient permissions"}
+    )
+
+    async def sub_401(self, callback):
+        raise WebOsTvCommandError("{'type': 'error', 'error': '401 insufficient permissions'}")
+
+    for name in _UPSTREAM_SUBSCRIPTIONS:
+        monkeypatch.setattr(f"aiowebostv.WebOsClient.{name}", sub_401)
+
+    client = _build_client()
+    # _build_client installs a succeeding instance mock; override it so
+    # the TV-side 401 actually fires (instance attrs shadow class patches).
+    client.get_software_info = AsyncMock(side_effect=software_401)
+    client.do_state_update = False  # set true at end of override
+
+    await client._get_states_and_subscribe_state_updates()
+
+    assert client.do_state_update is True  # connect proceeds, software=None
+    assert client.tv_info.software is None
 
 
 @pytest.mark.asyncio

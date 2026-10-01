@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A DHCP re-lease no longer bricks the CLI with a raw traceback.**
+  Routers routinely hand the TV a new address (measured 2026-10-01: the
+  living-room webOS TV moved 192.168.200.101 → .107 overnight); every
+  `stv` command then died with `OSError: [Errno 113]` until the config
+  was fixed by hand. The LG driver now catches unreachable-host errors,
+  re-resolves the TV **by MAC via the ARP cache** (`/proc/net/arp` →
+  `ip neigh` → `arp -a`), confirms a webOS port (3001/3000) is actually
+  listening at the candidate IP — so we never adopt a stranger who
+  inherited the old lease — retries once, and persists the healed IP
+  back to `config.toml` (with a stderr notice). Remaining connect
+  failures surface as a clean one-line error naming the recovery
+  commands (`stv doctor`, `stv setup`) instead of a stack trace.
+- **`stv doctor`** now reports the MAC-resolved address when the
+  configured IP is stale, and suggests `stv on` when the ports are
+  closed (TV asleep).
+- **Connect no longer dies on a 401 from `getSystemSettings`.** The
+  v1.1.2 fix (#5) widened the suppress around the eight post-connect
+  *subscriptions* but left the prologue getter
+  ``get_software_info()`` bare. Keys paired under a narrower permission
+  grant (any TV configured before the aiowebostv migration) answer 401
+  there, killing connect() one line before #4's reproducer. Measured on
+  the living-room set while validating the self-heal above. Software
+  info now degrades to None like its sibling `get_system_info`.
+- **Multi-TV config rewrites no longer drop `api_key`.**
+  `_write_multi_tv_config` wrote `url` but not `api_key`, so a rewrite
+  (e.g. adding a TV) silently erased remote-TV credentials.
+
 ## [1.3.2] - 2026-08-16
 
 ### Fixed

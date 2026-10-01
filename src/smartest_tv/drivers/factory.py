@@ -133,7 +133,7 @@ def create_driver(tv_name: str | None = None) -> TVDriver:
             from smartest_tv._engine.drivers.lg import LGDriver
         except ImportError as exc:
             _driver_import_error("LG", "aiowebostv", "lg", exc)
-        return LGDriver(ip=ip, mac=mac)
+        return LGDriver(ip=ip, mac=mac, tv_name=tv_name or "")
 
     elif platform == "samsung":
         try:

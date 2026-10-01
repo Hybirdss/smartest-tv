@@ -47,8 +47,22 @@ def _get_driver(tv_name: str | None = None) -> TVDriver:
 
 
 def _run(coro):
-    """Run an async function."""
-    return asyncio.run(coro)
+    """Run an async function, translating connect failures into hints.
+
+    A raw ``OSError``/``TimeoutError`` traceback is developer noise for
+    the #1 user-facing failure: the TV is off, asleep, or its DHCP lease
+    changed (the LG driver self-heals the IP by MAC when it can — see
+    ``LGDriver._heal_stale_ip``). What survives is surfaced as a clean
+    one-line error with the two recovery commands instead of a stack.
+    """
+    try:
+        return asyncio.run(coro)
+    except (OSError, asyncio.TimeoutError) as e:
+        raise click.ClickException(
+            f"Connection failed: {e}\n"
+            "  The TV may be off or asleep, or its IP changed (DHCP).\n"
+            "  Diagnose: stv doctor    Rediscover: stv setup"
+        ) from e
 
 
 def _output(data, fmt: str):
@@ -321,7 +335,22 @@ def doctor(ctx):
         _run(d.connect())
         checks.append({"name": "TV reachable", "status": "ok", "detail": tv['ip']})
     except Exception as e:
-        checks.append({"name": "TV reachable", "status": "fail", "detail": str(e)[:60]})
+        detail = str(e)[:60]
+        # With the LG self-heal in place a failure here usually means the
+        # TV is off — but if the MAC still resolves elsewhere, say so.
+        if tv.get("mac"):
+            try:
+                from smartest_tv.net import lookup_ip_by_mac
+
+                found = lookup_ip_by_mac(tv["mac"])
+            except Exception:
+                found = None
+            if found and found != tv.get("ip"):
+                detail = (
+                    f"unreachable at {tv['ip']}, but MAC resolves to {found} "
+                    "(IP changed, ports closed — TV asleep? try: stv on)"
+                )
+        checks.append({"name": "TV reachable", "status": "fail", "detail": detail})
         _print(_ui.render_doctor(checks, tv_label=tv_label))
         return
 
