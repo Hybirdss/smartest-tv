@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-10-01
+
 ### Fixed
 
 - **Samsung `play_media` no longer fails silently (issue #20).** Three
