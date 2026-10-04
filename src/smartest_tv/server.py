@@ -9,6 +9,7 @@ import asyncio
 from datetime import datetime, timezone
 
 from fastmcp import Context, FastMCP
+from fastmcp.utilities.types import Image
 
 from smartest_tv.apps import resolve_app
 from smartest_tv.drivers.base import TVDriver
@@ -346,6 +347,19 @@ async def tv_status(tv_name: str | None = None) -> dict:
         "volume": s.volume,
         "muted": s.muted,
     }
+
+
+@mcp.tool()
+async def tv_screenshot(tv_name: str | None = None) -> Image:
+    """Capture the current TV screen as an image (LG webOS supported).
+
+    Streaming video protected by DRM may appear black, even when menus are visible.
+
+    Args:
+        tv_name: Target TV name. Omit for default TV.
+    """
+    d = await _get_driver(tv_name)
+    return Image(data=await d.screenshot(), format="jpeg")
 
 
 # -- Live State (unified snapshot helper) ------------------------------------

@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-lg = ["aiowebostv>=0.7.0"]
+lg = ["aiowebostv>=0.7.0", "aiohttp>=3.9.0"]
 samsung = ["samsungtvws[encrypted]>=3.0.0"]
 android = ["androidtvremote2>=0.2.0"]
 roku = ["aiohttp>=3.9.0"]

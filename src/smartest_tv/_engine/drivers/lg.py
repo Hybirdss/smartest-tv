@@ -14,6 +14,9 @@ import socket
 import sys
 from contextlib import suppress
 from pathlib import Path
+from urllib.parse import urlsplit
+
+import aiohttp
 
 from smartest_tv.drivers.base import App, TVDriver, TVInfo, TVStatus
 
@@ -455,3 +458,27 @@ class LGDriver(TVDriver):
     async def screen_on(self) -> None:
         c = await self._ensure()
         await c.request(ep.TURN_ON_SCREEN)
+
+    async def screenshot(self) -> bytes:
+        """Capture the visible webOS screen through its one-shot image endpoint."""
+        c = await self._ensure()
+        response = await c.request("tv/executeOneShot")
+        image_uri = response.get("imageUri")
+        if not isinstance(image_uri, str):
+            raise RuntimeError("TV did not return a screenshot image URI")
+
+        url = urlsplit(image_uri)
+        # The TV supplies this URL. Keep the download on the paired device.
+        if url.scheme != "https" or url.hostname != self.ip or url.port != 3001 or url.username or url.password:
+            raise RuntimeError("TV returned an unexpected screenshot image URI")
+
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(image_uri, ssl=False, allow_redirects=False) as result:
+                result.raise_for_status()
+                if result.content_length is not None and result.content_length > 10_000_000:
+                    raise RuntimeError("TV screenshot exceeds 10 MB")
+                image = await result.content.read(10_000_001)
+        if len(image) > 10_000_000 or not image.startswith(b"\xff\xd8\xff"):
+            raise RuntimeError("TV did not return a valid JPEG screenshot")
+        return image

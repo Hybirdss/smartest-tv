@@ -211,3 +211,7 @@ class TVDriver(ABC):
     async def screen_on(self) -> None:
         """Turn on screen."""
         raise NotImplementedError
+
+    async def screenshot(self) -> bytes:
+        """Capture the visible screen as JPEG bytes, when supported."""
+        raise NotImplementedError(f"{self.platform} does not support screenshots")
