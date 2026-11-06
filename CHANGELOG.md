@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Apple TV+ deep links point at the episode.** Both the Android and the
+  browser templates used a `/show/` path with the *episode* id the
+  resolver returns: the Android app accepted the URL and then did
+  nothing, and the browser landed on "This show is no longer available".
+  Android now sends the episode path plus `?action=play`, which is what
+  the app's own widget sends and starts playback (verified on a TCL
+  Google TV); the browser opens the episode page. `stv launch appletv
+  <url>` strips a pasted tv.apple.com URL down to its id like the
+  Netflix / YouTube / Spotify forms.
+
 ## [1.3.3] - 2026-10-01
 
 ### Fixed

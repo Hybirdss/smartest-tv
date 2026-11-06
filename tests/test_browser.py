@@ -22,6 +22,13 @@ async def test_launch_netflix(driver):
 
 
 @pytest.mark.asyncio
+async def test_launch_appletv_opens_the_episode(driver):
+    with patch("smartest_tv.drivers.browser.webbrowser.open") as mock_open:
+        await driver.launch_app_deep("appletv", "umc.cmc.52paqbqoy5648w4e81k0lrqqh")
+        mock_open.assert_called_once_with("https://tv.apple.com/episode/umc.cmc.52paqbqoy5648w4e81k0lrqqh")
+
+
+@pytest.mark.asyncio
 async def test_launch_youtube(driver):
     with patch("smartest_tv.drivers.browser.webbrowser.open") as mock_open:
         await driver.launch_app_deep("youtube", "dQw4w9WgXcQ")

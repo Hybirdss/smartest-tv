@@ -50,7 +50,11 @@ _DEEP_LINKS: dict[str, str] = {
     "com.spotify.music": "spotify:{id}",
     "com.disney.disneyplus": "https://www.disneyplus.com/video/{id}",
     "com.amazon.amazonvideo.livingroom": "https://www.primevideo.com/detail/{id}",
-    "com.apple.atve.androidtv.appletv": "https://tv.apple.com/us/show/{id}",
+    # The Apple resolver returns an *episode* id. The app claims every
+    # tv.apple.com URL, but only the episode path with ?action=play (what
+    # its own widget sends) starts playback; the /show/ form just opens
+    # the app. Verified on a TCL Google TV.
+    "com.apple.atve.androidtv.appletv": "https://tv.apple.com/us/episode/{id}?action=play",
     "com.hulu.livingroomplus": "https://www.hulu.com/watch/{id}",
 }
 
@@ -244,6 +248,10 @@ class AndroidDriver(TVDriver):
             )
             if m:
                 return f"spotify:{m.group(1)}:{m.group(2)}"
+        if "apple" in app_id and "tv.apple.com" in content_id:
+            m = re.search(r"(umc\.cmc\.[a-z0-9]+)", content_id)
+            if m:
+                return m.group(1)
         return content_id
 
     async def close_app(self, app_id: str) -> None:
