@@ -11,6 +11,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 
 from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN, TV_PLATFORMS
+from .stv_env import ensure_stv_env
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the initial step — choose discover or manual."""
+        ensure_stv_env(self.hass)
         if user_input is not None:
             # Manual entry submitted
             tv_name = user_input[CONF_TV_NAME]
@@ -76,6 +78,7 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle discovery step — select from found TVs."""
+        ensure_stv_env(self.hass)
         if user_input is not None:
             idx = int(user_input["tv_index"])
             tv = self._discovered[idx]
@@ -149,6 +152,7 @@ class SmarTestTVConfigFlow(ConfigFlow, domain=DOMAIN):
         With user_input: completes pairing with the entered PIN, then
         creates the config entry.
         """
+        ensure_stv_env(self.hass)
         from smartest_tv._engine.drivers.android import (
             AndroidDriver,
             CannotConnect,

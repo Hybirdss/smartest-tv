@@ -32,7 +32,7 @@ The HA host must be able to install `stv[lg,samsung,android,roku]` (pulled autom
 
 ## Pairing
 
-Pairing credentials are stored under stv's config dir — `~/.config/smartest-tv/` by default, or wherever `STV_CONFIG_DIR` points. **In HA OS / HA Container, set `STV_CONFIG_DIR` to a path inside your persistent `/config` volume** (e.g. `/config/smartest-tv`), otherwise pairing keys live under `/root` and are lost on container rebuilds — after which the TV rejects commands with "Not paired".
+Pairing credentials and the TV list are stored under stv's config dir. The integration sets it to `/config/smartest-tv` (HA's persistent config volume) by itself, so they survive core updates and are included in backups; an explicit `STV_CONFIG_DIR` in the environment still wins. Earlier versions kept them under `/root` inside the core container, which every core update wipes: the TV then disappeared from stv's config and the entity silently fell back to a "browser" driver (`app_name: browser`, commands do nothing). On the first start after upgrading, whatever is still in the old location is copied over; if the old location was already wiped, the TV is re-registered from the config entry and only the pairing has to be done again (remove and re-add the entry).
 
 Per platform:
 
