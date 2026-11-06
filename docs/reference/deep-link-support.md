@@ -60,6 +60,7 @@ issue #8.
 | `DEEP_LINK` | WS deep link, app verified running | info line |
 | `DEEP_LINK_UNVERIFIED` | Sent, but this model can't be queried | warning |
 | `APP_ONLY` | App running, title not deep-linked | warning (issue #8) |
+| `UNRESOLVED` | Title could not be resolved to an id; app opened bare (Samsung reports `APP_ONLY`/`FAILED` instead, through its own ladder) | warning |
 | `NATIVE` | Fell back to a plain app launch | warning |
 | `FAILED` | TV refused every path | error; HA action fails |
 
