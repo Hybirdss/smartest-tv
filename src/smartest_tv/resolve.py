@@ -10,10 +10,13 @@ The cache is the real product. Once any ID is discovered, it's cached forever.
 
 from __future__ import annotations
 
+import logging
 import re
 
 from smartest_tv import cache
 from smartest_tv.http import curl_json
+
+log = logging.getLogger("smartest-tv")
 
 # ---------------------------------------------------------------------------
 # Check if the engine is available (PyPI install vs GitHub clone)
@@ -93,6 +96,96 @@ def resolve_spotify(query: str) -> str:
 # Apple TV+
 # ---------------------------------------------------------------------------
 
+# Apple TV+ server-renders the Episodes shelf of a show page with the first
+# six episodes only (the rest of the shelf is pagination placeholders), and
+# the shelf carries no season/episode numbers. The web page fills the rest
+# in from this route with the parameters it embeds in the page
+# (``requiredParamsMap.Default``: utsk, utscf, sf, v; the utsk token is
+# short-lived, so it is read at resolve time). Episodes come back ten per
+# page, all seasons in order, each with ``seasonNumber`` / ``episodeNumber``.
+_APPLETV_EPISODES_URL = "https://tv.apple.com/api/uts/v3/shows/{show_id}/episodes"
+_APPLETV_PAGE_SIZE = 10
+_APPLETV_MAX_PAGES = 100  # 1000 episodes; the walk stops early once past the wanted season
+# What the web client adds on top of the page's own parameter block.
+_APPLETV_ROUTE_PARAMS = {
+    "includeSeasonSummary": "false",
+    "selectedSeasonEpisodesOnly": "false",
+}
+_APPLETV_HEADERS = {"Referer": "https://tv.apple.com/", "Accept": "application/json"}
+
+
+def _appletv_page_params(server_data: dict) -> dict | None:
+    """The ``requiredParamsMap.Default`` block of a tv.apple.com page, or None."""
+    try:
+        for entry in server_data["data"]:
+            params = entry.get("data", {}).get("uts", {}).get("requiredParamsMap", {}).get("Default")
+            if isinstance(params, dict) and params:
+                return dict(params)
+    except (KeyError, AttributeError, TypeError):
+        pass
+    return None
+
+
+def _appletv_shelves(server_data: dict) -> list:
+    """The ``shelves`` list of a tv.apple.com show page, wherever it sits in ``data``."""
+    try:
+        for entry in server_data["data"]:
+            shelves = entry.get("data", {}).get("shelves")
+            if isinstance(shelves, list):
+                return shelves
+    except (KeyError, AttributeError, TypeError):
+        pass
+    return []
+
+
+def _appletv_episode_from_api(show_id: str, params: dict, season: int, episode: int) -> tuple[str | None, bool]:
+    """Walk the show's episode list until (season, episode) turns up.
+
+    Returns ``(episode_id, answered)``: ``answered`` is False when the route
+    could not be read at all (transport error, unexpected body), True when
+    it listed the show's episodes, whether or not the wanted one was there.
+    """
+    import json as _json
+    from urllib.parse import urlencode
+
+    from smartest_tv.http import curl as _curl
+
+    # The page's block as-is (storefront, locale, token …) plus the route's own
+    # switches; the web client sends exactly this combination.
+    query = {str(k): str(v) for k, v in params.items()}
+    query.update(_APPLETV_ROUTE_PARAMS)
+
+    # Episodes come back season by season; once the route is past the wanted
+    # season there is nothing left to find.
+    skip = 0
+    for _ in range(_APPLETV_MAX_PAGES):
+        query["nextToken"] = f"{skip}:{_APPLETV_PAGE_SIZE}"
+        page = _curl(_APPLETV_EPISODES_URL.format(show_id=show_id) + "?" + urlencode(query), headers=_APPLETV_HEADERS)
+        if not page.ok or not page.body:
+            log.debug("appletv episodes page %d for %s failed: %s", skip, show_id, page.error)
+            return None, False
+        try:
+            episodes = _json.loads(page.body)["data"]["episodes"]
+        except (_json.JSONDecodeError, KeyError, TypeError):
+            episodes = None
+        if not isinstance(episodes, list):
+            log.debug("appletv episodes page %d for %s unreadable", skip, show_id)
+            return None, False
+        if not episodes:
+            return None, True
+        for ep in episodes:
+            if not isinstance(ep, dict):
+                continue
+            ep_id = str(ep.get("id", ""))
+            ep_season = ep.get("seasonNumber")
+            if ep_season == season and ep.get("episodeNumber") == episode and ep_id.startswith("umc.cmc."):
+                return ep_id, True
+            if isinstance(ep_season, int) and ep_season > season:
+                return None, True
+        skip += len(episodes)
+    return None, True
+
+
 def resolve_appletv(
     query: str,
     season: int | None = None,
@@ -100,14 +193,17 @@ def resolve_appletv(
 ) -> str:
     """Resolve an Apple TV+ show to an episode ID.
 
-    Apple TV+ server-renders episode metadata in a ``serialized-server-data``
-    script tag. The show page contains a ``shelves`` array whose second entry
-    lists episodes with ``umc.cmc.*`` IDs.  No authentication required.
+    Apple TV+ server-renders show metadata in a ``serialized-server-data``
+    script tag: the show's season list and the first six episodes of the
+    Episodes shelf.  The rest of the episodes come from the same paging
+    route the web page uses, with the parameters embedded in that tag.
+    No authentication required.
 
     Resolution chain:
       1. Local cache (instant)
-      2. curl show page → parse serialized-server-data → episode ID
-      3. API fallback
+      2. curl show page → parse serialized-server-data → episode route → episode ID
+      3. The six server-rendered episodes, by position (route unavailable)
+      4. API fallback
     """
     slug = _slugify(query)
     cache_key = f"{slug}:s{season or 1}e{episode or 1}"
@@ -147,13 +243,29 @@ def resolve_appletv(
 
     try:
         server_data = _json.loads(m.group(1))
-        shelves = server_data["data"][1]["data"]["shelves"]
 
-        # Find the episode shelf (items with umc.cmc.* IDs)
+        # Step 3: the episode route, matched on season/episode number
+        want_season = int(season) if season is not None else 1
+        want_episode = int(episode) if episode is not None else 1
+        params = _appletv_page_params(server_data)
+        answered = False
+        if params:
+            ep_id, answered = _appletv_episode_from_api(show_id, params, want_season, want_episode)
+            if ep_id:
+                cache.put("appletv", cache_key, ep_id)
+                return ep_id
+
+        # Step 4: the server-rendered shelf, by position. Only the first six
+        # episodes of the first season are rendered and the shelf carries no
+        # season numbers, so this is a last resort for when the route could
+        # not be read; when the route listed the show and the episode was
+        # not there, the shelf has nothing better to say.
+        if answered or want_season != 1:
+            return _api_resolve("appletv", query, season, episode)
+
         episodes: list[dict] = []
-        for shelf in shelves:
-            items = shelf.get("items", [])
-            for item in items:
+        for shelf in _appletv_shelves(server_data):
+            for item in shelf.get("items", []):
                 item_id = item.get("id", "")
                 if item_id.startswith("umc.cmc.") and item.get("title"):
                     episodes.append(item)
@@ -161,21 +273,13 @@ def resolve_appletv(
         if not episodes:
             return _api_resolve("appletv", query, season, episode)
 
-        # Select the right episode by index
-        # Apple TV+ doesn't include season/episode numbers in the server data,
-        # so we use position: episodes are ordered chronologically.
-        target_idx = 0
-        if season is not None and episode is not None:
-            # Estimate index: (season-1)*episodes_per_season + (episode-1)
-            # For now, simple: first 6 episodes are server-rendered per page
-            target_idx = max(0, (episode or 1) - 1)
-
+        target_idx = max(0, want_episode - 1)
         if target_idx < len(episodes):
             ep_id = episodes[target_idx]["id"]
             cache.put("appletv", cache_key, ep_id)
             return ep_id
 
-    except (KeyError, IndexError, _json.JSONDecodeError):
+    except (KeyError, IndexError, AttributeError, TypeError, ValueError):
         pass
 
     return _api_resolve("appletv", query, season, episode)
