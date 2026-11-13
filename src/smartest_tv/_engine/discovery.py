@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import socket
+import urllib.request
 
 from smartest_tv.net import probe_port
 
@@ -35,6 +37,7 @@ async def discover(timeout: float = 3.0) -> list[dict]:
     results = await asyncio.gather(
         _ssdp_discover(timeout=timeout),
         _android_scan(timeout=timeout),
+        _fallback_tv_scan(timeout=timeout),
         return_exceptions=True,
     )
 
@@ -50,6 +53,7 @@ async def discover(timeout: float = 3.0) -> list[dict]:
                 if ip not in found:
                     found[ip] = tv
 
+    await _enrich_cast_names(found)
     return list(found.values())
 
 
@@ -115,35 +119,42 @@ _ANDROID_REMOTE_PORT = 6466
 _ANDROID_LEGACY_ADB_PORT = 5555
 
 
-async def _android_scan(timeout: float = 3.0) -> list[dict]:
-    """Scan the local /24 for the Android TV remote service (6466).
+async def _scan_subnet(
+    port_specs: tuple[tuple[int, str, str], ...],
+    timeout: float = 3.0,
+    *,
+    skip_local: bool = False,
+    connect_timeout: float | None = None,
+    batch_size: int = 50,
+) -> list[dict]:
+    """Scan the local /24 subnet across ``port_specs`` in batched waves.
 
-    Port order matters: 6466 first — it is what the driver connects to.
-    Legacy ADB 5555 is kept as a second-wave fallback for devices from
-    pre-migration setups; note a 5555-only device cannot actually be
-    driven by the Remote-Protocol driver (it will fail at pairing with a
-    clear error), but surfacing it is still more helpful than silence.
+    Each tuple is ``(port, platform, default_name_template)``. Once a host
+    matches an earlier port, later fallback ports skip that host.
     """
     local_ip = _get_local_ip()
     if not local_ip:
         return []
 
     prefix = ".".join(local_ip.split(".")[:3])
-    candidates = [f"{prefix}.{i}" for i in range(1, 255)]
+    candidates = [
+        f"{prefix}.{i}"
+        for i in range(1, 255)
+        if not (skip_local and f"{prefix}.{i}" == local_ip)
+    ]
 
-    connect_timeout = min(1.0, timeout / 2)
+    per_probe_timeout = (
+        connect_timeout if connect_timeout is not None else min(1.0, timeout / 2)
+    )
     found: dict[str, dict] = {}
     remaining = list(candidates)
 
-    # Run in batches of 50 to avoid too many open sockets. Scan every
-    # batch: stopping at the first hit hid additional Android TVs on the
-    # same network (multi-TV households got partial discovery results).
-    for port in (_ANDROID_REMOTE_PORT, _ANDROID_LEGACY_ADB_PORT):
+    for port, platform, default_name in port_specs:
         still_remaining: list[str] = []
-        for i in range(0, len(remaining), 50):
-            batch = remaining[i : i + 50]
+        for i in range(0, len(remaining), batch_size):
+            batch = remaining[i : i + batch_size]
             results = await asyncio.gather(
-                *[probe_port(ip, port, connect_timeout) for ip in batch],
+                *[probe_port(ip, port, per_probe_timeout) for ip in batch],
                 return_exceptions=True,
             )
             for ip, hit in zip(batch, results):
@@ -156,8 +167,8 @@ async def _android_scan(timeout: float = 3.0) -> list[dict]:
                 elif hit:
                     found[ip] = {
                         "ip": ip,
-                        "name": f"Android TV ({ip})",
-                        "platform": "android",
+                        "name": default_name.format(ip=ip),
+                        "platform": platform,
                         "raw": f"port:{port}",
                     }
                 else:
@@ -167,6 +178,96 @@ async def _android_scan(timeout: float = 3.0) -> list[dict]:
             break
 
     return list(found.values())
+
+
+async def _android_scan(timeout: float = 3.0) -> list[dict]:
+    """Scan the local /24 for the Android TV remote service (6466).
+
+    Port order matters: 6466 first — it is what the driver connects to.
+    Legacy ADB 5555 is kept as a second-wave fallback for devices from
+    pre-migration setups; note a 5555-only device cannot actually be
+    driven by the Remote-Protocol driver (it will fail at pairing with a
+    clear error), but surfacing it is still more helpful than silence.
+    """
+    return await _scan_subnet(
+        (
+            (_ANDROID_REMOTE_PORT, "android", "Android TV ({ip})"),
+            (_ANDROID_LEGACY_ADB_PORT, "android", "Android TV ({ip})"),
+        ),
+        timeout=timeout,
+    )
+
+
+async def _fallback_tv_scan(timeout: float = 3.0) -> list[dict]:
+    """Port-scan fallback for LG/Samsung/Roku when SSDP replies are blocked.
+
+    Firewalls (e.g., Linux UFW) often drop unicast UDP replies to a
+    multicast SSDP M-SEARCH socket. Skipping ``local_ip`` avoids matching
+    local developer servers on port 3000/3001.
+    """
+    per_probe = min(0.4, timeout / 2)
+    platform_specs = (
+        ((3001, "lg", "LG TV ({ip})"), (3000, "lg", "LG TV ({ip})")),
+        ((8002, "samsung", "Samsung TV ({ip})"), (8001, "samsung", "Samsung TV ({ip})")),
+        ((8060, "roku", "Roku TV ({ip})"),),
+    )
+    groups = await asyncio.gather(
+        *[
+            _scan_subnet(
+                specs,
+                timeout=timeout,
+                skip_local=True,
+                connect_timeout=per_probe,
+                batch_size=128,
+            )
+            for specs in platform_specs
+        ],
+        return_exceptions=True,
+    )
+    found: dict[str, dict] = {}
+    for group in groups:
+        if isinstance(group, list):
+            for tv in group:
+                found.setdefault(tv["ip"], tv)
+    return list(found.values())
+
+
+def _fetch_cast_name_sync(ip: str, timeout: float = 1.0) -> str | None:
+    try:
+        with urllib.request.urlopen(
+            f"http://{ip}:8008/setup/eureka_info",
+            timeout=timeout,
+        ) as resp:
+            if resp.status != 200:
+                return None
+            data = json.loads(resp.read(8192).decode("utf-8", errors="ignore"))
+    except Exception:
+        return None
+    name = data.get("name")
+    return name if isinstance(name, str) else None
+
+
+async def _fetch_cast_name(ip: str, timeout: float = 1.0) -> str | None:
+    """Query Google Cast eureka_info on port 8008 for a friendly TV name."""
+    return await asyncio.to_thread(_fetch_cast_name_sync, ip, timeout)
+
+
+async def _enrich_cast_names(found: dict[str, dict]) -> None:
+    """Replace generic port-scan names with sanitized Cast friendly names."""
+    targets = [
+        tv for tv in found.values() if str(tv.get("raw", "")).startswith("port:")
+    ]
+    if not targets:
+        return
+    names = await asyncio.gather(
+        *(_fetch_cast_name(tv["ip"]) for tv in targets),
+        return_exceptions=True,
+    )
+    for tv, raw_name in zip(targets, names):
+        if isinstance(raw_name, str) and raw_name:
+            clean = _sanitize_name(raw_name)
+            if clean:
+                tv["name"] = clean
 
 
 def _sanitize_name(raw: str, max_len: int = 64) -> str:

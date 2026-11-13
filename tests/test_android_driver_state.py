@@ -89,3 +89,18 @@ async def test_connection_lost_during_connect_leaves_no_remote_behind(driver):
     with pytest.raises(RuntimeError, match="Cannot connect"):
         await driver.connect()
     assert driver._remote is None  # the next connect() tries again instead of returning early
+
+
+@pytest.mark.asyncio
+async def test_info_reads_sw_version_from_device_info(driver):
+    driver.fake_remote.device_info = {
+        "manufacturer": "KaonMedia",
+        "model": "K1200UA",
+        "sw_version": "12",
+    }
+    await driver.connect()
+    info = await driver.info()
+    assert info.platform == "android"
+    assert info.model == "K1200UA"
+    assert info.firmware == "12"
+    assert info.name == "KaonMedia"

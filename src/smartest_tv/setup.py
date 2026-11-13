@@ -207,6 +207,7 @@ def _pairing_hint(platform: str) -> str:
 #     only 5555 was probed, so stock Android TVs were never detected)
 _PROBE_PORTS: list[tuple[str, int]] = [
     ("lg", 3000),
+    ("lg", 3001),
     ("samsung", 8002),
     ("samsung", 8001),
     ("roku", 8060),
@@ -251,9 +252,19 @@ async def _pair_tv(tv: dict) -> str:
     ip = tv["ip"]
 
     if platform == "lg":
+        import aiowebostv.webos_client as webos_client
+
         from smartest_tv.drivers.lg import LGDriver
+
         driver = LGDriver(ip=ip)
-        await driver.connect()
+        # aiowebostv defaults RECEIVE_TIMEOUT to 10s, which is often too brief
+        # for a user to find the TV remote and confirm the pairing prompt.
+        prev_timeout = webos_client.RECEIVE_TIMEOUT
+        webos_client.RECEIVE_TIMEOUT = max(prev_timeout, 60)
+        try:
+            await driver.connect()
+        finally:
+            webos_client.RECEIVE_TIMEOUT = prev_timeout
         info = await driver.info()
         await driver.disconnect()
         return info.mac or ""

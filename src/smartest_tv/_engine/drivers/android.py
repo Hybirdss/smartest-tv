@@ -284,7 +284,7 @@ class AndroidDriver(TVDriver):
         return TVInfo(
             platform="android",
             model=dev.get("model", ""),
-            firmware=dev.get("build_type", ""),
+            firmware=dev.get("sw_version") or dev.get("build_type", ""),
             ip=self.ip,
             name=dev.get("manufacturer", "Android TV"),
         )

@@ -99,26 +99,37 @@ class _SmarTestWebOsClient(WebOsClient):
         with suppress(WebOsTvCommandError):
             self.tv_info.software = await self.get_software_info()
 
+        if hasattr(self, "get_connection_info"):
+            with suppress(WebOsTvCommandError):
+                self.tv_info.connection = await self.get_connection_info()
+
+        volume_sub = (
+            self.subscribe_volume_status(self.set_volume_status_state)
+            if hasattr(self, "subscribe_volume_status")
+            else self.subscribe_volume(self.set_volume_state)
+        )
         subscribe_state_updates = {
             self.subscribe_power_state(self.set_power_state),
             self.subscribe_current_app(self.set_current_app_state),
             self.subscribe_muted(self.set_muted_state),
-            self.subscribe_volume(self.set_volume_state),
+            volume_sub,
             self.subscribe_apps(self.set_apps_state),
             self.subscribe_inputs(self.set_inputs_state),
             self.subscribe_sound_output(self.set_sound_output_state),
             self.subscribe_media_foreground_app(self.set_media_state),
         }
-        subscribe_tasks = set()
-        for state_update in subscribe_state_updates:
-            subscribe_tasks.add(asyncio.create_task(state_update))
-        await asyncio.wait(subscribe_tasks)
-        for task in subscribe_tasks:
-            # Upstream uses suppress(WebOsTvServiceNotFoundError). Widened
-            # to WebOsTvCommandError so webOS 24/25 permission rejections
-            # (401, 403, WebOsTvResponseTypeError) do not kill connect.
-            with suppress(WebOsTvCommandError):
-                task.result()
+        # Match upstream's gather pattern so sibling tasks are cancelled if
+        # connect itself is cancelled, while still suppressing webOS 24/25
+        # permission/timeout rejections (WebOsTvCommandError covers 401,
+        # 403, WebOsTvServiceNotFoundError, and WebOsTvResponseTypeError).
+        results = await asyncio.gather(*subscribe_state_updates, return_exceptions=True)
+        errors = [
+            exc
+            for exc in results
+            if isinstance(exc, Exception) and not isinstance(exc, WebOsTvCommandError)
+        ]
+        if errors:
+            raise errors[0]
         self.do_state_update = True
         await self.do_state_update_callbacks()
 
@@ -413,10 +424,18 @@ class LGDriver(TVDriver):
     async def info(self) -> TVInfo:
         c = await self._ensure()
         si = await c.get_system_info()
+        firmware = si.get("firmwareVersion", "")
+        if not firmware:
+            sw = getattr(getattr(c, "tv_info", None), "software", None)
+            if not sw:
+                with suppress(Exception):
+                    sw = await c.get_software_info()
+            if isinstance(sw, dict):
+                firmware = f"{sw.get('major_ver', '')}.{sw.get('minor_ver', '')}".strip(".")
         return TVInfo(
             platform="lg",
             model=si.get("modelName", ""),
-            firmware=si.get("firmwareVersion", ""),
+            firmware=firmware,
             ip=self.ip,
             mac=self.mac,
             name=si.get("receiverType", "LG TV"),

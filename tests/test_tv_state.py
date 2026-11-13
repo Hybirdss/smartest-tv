@@ -12,6 +12,8 @@ import pytest
 # Stub fastmcp before importing server so the optional dep isn't required.
 if "fastmcp" not in sys.modules:
     _fmcp = types.ModuleType("fastmcp")
+    _fmcp_utils = types.ModuleType("fastmcp.utilities")
+    _fmcp_types = types.ModuleType("fastmcp.utilities.types")
 
     class _FastMCP:
         def __init__(self, *a, **kw): pass
@@ -22,9 +24,17 @@ if "fastmcp" not in sys.modules:
     class _Context:
         pass
 
+    class _Image:
+        def __init__(self, *a, **kw): pass
+
     _fmcp.FastMCP = _FastMCP
     _fmcp.Context = _Context
+    _fmcp_types.Image = _Image
+    _fmcp_utils.types = _fmcp_types
+    _fmcp.utilities = _fmcp_utils
     sys.modules["fastmcp"] = _fmcp
+    sys.modules["fastmcp.utilities"] = _fmcp_utils
+    sys.modules["fastmcp.utilities.types"] = _fmcp_types
 
 from smartest_tv import server  # noqa: E402
 from smartest_tv.drivers.base import TVStatus  # noqa: E402

@@ -42,11 +42,16 @@ from smartest_tv._engine.drivers.lg import _SmarTestWebOsClient  # noqa: E402
 
 # Subscriptions upstream fires from _get_states_and_subscribe_state_updates.
 # Used by both the override-mirror test and the all-401 simulation.
+_HAS_VOLUME_STATUS = hasattr(WebOsClient, "subscribe_volume_status")
+_VOLUME_SUBSCRIPTION = (
+    "subscribe_volume_status" if _HAS_VOLUME_STATUS else "subscribe_volume"
+)
+
 _UPSTREAM_SUBSCRIPTIONS = (
     "subscribe_power_state",
     "subscribe_current_app",
     "subscribe_muted",
-    "subscribe_volume",
+    _VOLUME_SUBSCRIPTION,
     "subscribe_apps",
     "subscribe_inputs",
     "subscribe_sound_output",
@@ -56,7 +61,7 @@ _UPSTREAM_SETTERS = (
     "set_power_state",
     "set_current_app_state",
     "set_muted_state",
-    "set_volume_state",
+    "set_volume_status_state" if _HAS_VOLUME_STATUS else "set_volume_state",
     "set_apps_state",
     "set_inputs_state",
     "set_sound_output_state",
@@ -67,6 +72,7 @@ _UPSTREAM_SETTERS = (
 class _FakeTvInfo:
     system: dict | None = None
     software: dict | None = None
+    connection: dict | None = None
 
 
 class _FakeTvState:
@@ -77,11 +83,11 @@ def _build_client() -> _SmarTestWebOsClient:
     """Return a client wired with the minimum state the upstream method touches.
 
     Bypasses ``WebOsClient.__init__`` (no sockets, no event loop). Stubs:
-    - ``tv_info`` with empty system/software
+    - ``tv_info`` with empty system/software/connection
     - ``state_update_callbacks = []`` so ``do_state_update_callbacks``
       short-circuits before touching ``tv_state``
     - ``do_state_update`` writable
-    - ``get_system_info`` / ``get_software_info`` as AsyncMocks
+    - ``get_system_info`` / ``get_software_info`` / ``get_connection_info`` as AsyncMocks
     - all 8 ``set_*_state`` callbacks as AsyncMocks
     """
     client = _SmarTestWebOsClient.__new__(_SmarTestWebOsClient)
@@ -91,6 +97,7 @@ def _build_client() -> _SmarTestWebOsClient:
     client.do_state_update = True
     client.get_system_info = AsyncMock(return_value={"modelName": "fake"})
     client.get_software_info = AsyncMock(return_value={"version": "fake"})
+    client.get_connection_info = AsyncMock(return_value={})
     for setter in _UPSTREAM_SETTERS:
         setattr(client, setter, AsyncMock())
     return client
@@ -202,13 +209,13 @@ async def test_connect_swallows_subscription_timeout(monkeypatch):
     async def time_out(self, callback):
         raise WebOsTvCommandTimeoutError("timeout waiting for response")
 
-    monkeypatch.setattr("aiowebostv.WebOsClient.subscribe_volume", time_out)
+    monkeypatch.setattr(f"aiowebostv.WebOsClient.{_VOLUME_SUBSCRIPTION}", time_out)
 
     async def ok(self, callback):
         return {"subscribed": True}
 
     for name in _UPSTREAM_SUBSCRIPTIONS:
-        if name != "subscribe_volume":
+        if name != _VOLUME_SUBSCRIPTION:
             monkeypatch.setattr(f"aiowebostv.WebOsClient.{name}", ok)
 
     client = _build_client()
@@ -263,4 +270,10 @@ def test_override_mirrors_upstream_subscribe_flow():
     assert upstream_subs == set(_UPSTREAM_SUBSCRIPTIONS), (
         f"upstream changed: {upstream_subs} vs known {_UPSTREAM_SUBSCRIPTIONS}"
     )
-    assert override_subs == upstream_subs, f"override drifted: {override_subs} missing {upstream_subs - override_subs}"
+    assert upstream_subs <= override_subs, (
+        f"override drifted: {override_subs} missing {upstream_subs - override_subs}"
+    )
+    extra_subs = override_subs - upstream_subs
+    assert extra_subs <= {"subscribe_volume", "subscribe_volume_status"}, (
+        f"override has unexpected subscriptions: {extra_subs}"
+    )
