@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Apple TV+ episodes past the sixth, and seasons past the first, now
+  resolve.** `resolve_appletv` read the Episodes shelf out of the show
+  page's `serialized-server-data`, which server-renders only the first
+  six episodes (the rest of the shelf is pagination placeholders) and
+  carries no season numbers, so it picked by shelf position and ignored
+  the season. `stv play appletv "Dark Matter" s1e7` fell through to the
+  hosted resolver and came back with an id the app could not play: the
+  app opened and stopped. The resolver now asks the same paging route
+  the web page uses (`/api/uts/v3/shows/{id}/episodes`, ten per page,
+  with the `utsk` / `utscf` / `sf` / `v` parameters the page embeds) and
+  matches on `seasonNumber` + `episodeNumber`. The rendered shelf is kept
+  as a last resort for the first season when the route cannot be read;
+  when the route lists the show and the episode is not there, the chain
+  goes straight to the API fallback instead of answering with S1E1.
+
 ## [1.3.3] - 2026-10-01
 
 ### Fixed
