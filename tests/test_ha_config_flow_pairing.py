@@ -88,8 +88,25 @@ def _install_ha_stubs(monkeypatch):
     sys.modules["homeassistant"].const = const
 
 
+class _FakeHassConfig:
+    """hass.config as stv_env.ensure_stv_env() sees it."""
+
+    country = "US"
+
+    def __init__(self, root):
+        self._root = root
+
+    def path(self, *parts):
+        return str(self._root.joinpath(*parts))
+
+
 class _FakeHass:
-    """Only what the flow uses: executor delegation."""
+    """Only what the flow uses: executor delegation and hass.config."""
+
+    root = None  # set by the `cf` fixture to its tmp_path
+
+    def __init__(self):
+        self.config = _FakeHassConfig(_FakeHass.root)
 
     async def async_add_executor_job(self, fn, *args):
         return fn(*args)
@@ -130,9 +147,17 @@ def cf(monkeypatch, tmp_path):
 
     FakeAndroidDriver.calls = []
     monkeypatch.setattr(android_mod, "AndroidDriver", FakeAndroidDriver)
-    # Never touch the developer's real ~/.config/smartest-tv/config.toml
+    # Never touch the developer's real ~/.config/smartest-tv/config.toml.
+    # The flow now calls stv_env.ensure_stv_env(), which honors an explicit
+    # STV_CONFIG_DIR, so pin it to tmp_path as well.
     monkeypatch.setattr(config_mod, "CONFIG_DIR", tmp_path)
     monkeypatch.setattr(config_mod, "CONFIG_FILE", tmp_path / "config.toml")
+    monkeypatch.setenv("STV_CONFIG_DIR", str(tmp_path))
+    # ensure_stv_env() writes STV_REGION itself; setenv first so monkeypatch
+    # records the original (absent) state and restores it afterwards.
+    monkeypatch.setenv("STV_REGION", "")
+    monkeypatch.delenv("STV_REGION")
+    _FakeHass.root = tmp_path
 
     sys.path.insert(0, str(REPO_ROOT))
     try:

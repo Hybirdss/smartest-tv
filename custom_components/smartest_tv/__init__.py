@@ -8,7 +8,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_PLATFORM, CONF_TV_NAME, DOMAIN
+from .const import CONF_IP, CONF_MAC, CONF_PLATFORM, CONF_TV_NAME, DOMAIN
+from .stv_env import ensure_stv_env, ensure_tv_registered, migrate_legacy_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,12 +18,24 @@ PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Smartest TV from a config entry."""
+    # Before the first stv import: its file paths are computed at import time.
+    ensure_stv_env(hass)
     from smartest_tv.drivers.factory import create_driver
 
     tv_name = entry.data[CONF_TV_NAME]
 
     try:
-        driver = await hass.async_add_executor_job(create_driver, tv_name)
+        # A config.toml lost to a container rebuild would otherwise make
+        # create_driver() silently return the browser driver.
+        await hass.async_add_executor_job(migrate_legacy_state)
+        stv_key = await hass.async_add_executor_job(
+            ensure_tv_registered,
+            tv_name,
+            entry.data.get(CONF_PLATFORM, ""),
+            entry.data.get(CONF_IP, ""),
+            entry.data.get(CONF_MAC, ""),
+        )
+        driver = await hass.async_add_executor_job(create_driver, stv_key)
     except ImportError as exc:
         # Driver package missing, or — more commonly — one of its
         # dependencies is broken in this HA install (issue #14: a mixed

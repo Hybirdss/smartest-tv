@@ -31,6 +31,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Google TV); the browser opens the episode page. `stv launch appletv
   <url>` strips a pasted tv.apple.com URL down to its id like the
   Netflix / YouTube / Spotify forms.
+- **Home Assistant: stv's state no longer lives inside the core container.**
+  The integration now points `STV_CONFIG_DIR` at `/config/smartest-tv`
+  itself (issue #15 told HA OS users to set it, which the core container
+  cannot do) and re-registers the TV from the config entry when
+  config.toml is missing. Before, every core update wiped
+  `/root/.config/smartest-tv`, after which `create_driver()` silently
+  returned the browser driver: the entity stayed `on` with
+  `app_name: browser` and `play_media` opened a browser on the HA host
+  instead of the TV. State still sitting in the old location is copied
+  over once, an explicit `STV_CONFIG_DIR` still wins, and `STV_REGION`
+  defaults to the HA country for JustWatch lookups. The entry's TV name
+  is now looked up the way `add_tv` stored it (sanitised: dots and
+  spaces become dashes), so a discovered TV named after its IP no longer
+  misses its own config entry.
 
 ## [1.3.3] - 2026-10-01
 
