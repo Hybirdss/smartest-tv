@@ -46,8 +46,10 @@ def test_describe_launch_levels():
         (LaunchResult.DEEP_LINK_UNVERIFIED, "warning"),
         (LaunchResult.APP_ONLY, "warning"),
         (LaunchResult.NATIVE, "warning"),
+        (LaunchResult.UNRESOLVED, "warning"),
         (LaunchResult.FAILED, "error"),
     ]
+    assert {r for r, _ in cases if r is not None} == set(LaunchResult)  # every member listed
     for result, level in cases:
         got_level, message = describe_launch(
             result, platform="netflix", query="Dark", tv_name="Living Room"

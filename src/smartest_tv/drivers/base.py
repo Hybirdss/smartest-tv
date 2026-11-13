@@ -33,6 +33,9 @@ class LaunchResult(str, Enum):
     NATIVE = "native"
     # Nothing is running on the TV after every launch path was tried.
     FAILED = "failed"
+    # The title could not be resolved to an id; the app was opened bare
+    # instead of deep-linking garbage (or crashing on a None id).
+    UNRESOLVED = "unresolved"
 
 
 @dataclass

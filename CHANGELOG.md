@@ -53,6 +53,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   fills during `async_connect()`. A connection lost while connecting
   (`ConnectionClosed`) no longer leaves a half-connected remote behind
   that pinned every later `status()` to the same empty answer.
+- **Unresolvable titles no longer crash the launch.** `launch_content`
+  with a `None` content id (resolution failed, which the Home Assistant
+  `play_media` path treats as best-effort) handed `None` to the driver's
+  `launch_app_deep`; the LG and Android drivers raised `'NoneType' object
+  has no attribute ...` and Roku sent a deep link with `None` in it. The
+  app is now opened bare, without the Netflix cold-start restart, and the
+  new `LaunchResult.UNRESOLVED` is reported through `describe_launch` as
+  a warning naming the app and the title. Samsung keeps its own verified
+  empty-id ladder (`APP_ONLY` / `FAILED`), so the HA action still fails
+  there when the TV ignores the launch.
 
 ## [1.3.3] - 2026-10-01
 

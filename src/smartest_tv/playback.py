@@ -8,14 +8,27 @@ from smartest_tv.drivers.base import LaunchResult
 
 
 async def launch_content(
-    driver, platform: str, app_id: str, content_id: str
+    driver, platform: str, app_id: str, content_id: str | None
 ) -> LaunchResult | None:
     """Launch content on a TV driver, handling Netflix close->relaunch.
+
+    An empty ``content_id`` means resolution failed. The LG, Android and
+    Roku drivers format the id straight into a deep link (``None`` crashed
+    them, ``""`` sent a bogus link), so the app is opened bare instead and
+    :attr:`LaunchResult.UNRESOLVED` is returned. The Samsung driver has
+    its own verified ladder for an empty id (NATIVE_LAUNCH, then check the
+    app is running), which is kept: it reports APP_ONLY or FAILED.
 
     Returns the driver's :class:`LaunchResult` when the driver reports one
     (Samsung), ``None`` otherwise — callers use :func:`describe_launch` to
     turn it into a human-facing line instead of guessing.
     """
+    if not content_id:
+        if getattr(driver, "platform", "") == "samsung":
+            return await driver.launch_app_deep(app_id, "")
+        await driver.launch_app(app_id)
+        return LaunchResult.UNRESOLVED
+    # Netflix only picks up a deep link from a cold start.
     if platform.lower() == "netflix":
         try:
             await driver.close_app(app_id)
@@ -58,6 +71,12 @@ def describe_launch(
             "warning",
             f"Opened {app} for {label}, but the TV ignored the deep link "
             "(Samsung firmware quirk, issue #8) — pick the title manually.",
+        )
+    if result is LaunchResult.UNRESOLVED:
+        return (
+            "warning",
+            f"Opened {app} for {label} without a title: '{query}' could not "
+            "be resolved to an id, so pick it manually.",
         )
     if result is LaunchResult.NATIVE:
         return (
