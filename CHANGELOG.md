@@ -45,6 +45,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   is now looked up the way `add_tv` stored it (sanitised: dots and
   spaces become dashes), so a discovered TV named after its IP no longer
   misses its own config entry.
+- **Android: power, app and volume are known right after connecting.**
+  `status()` copied its state from the `*_updated` callbacks, which
+  androidtvremote2 fires on changes only, so it reported `powered=None`
+  and no app (Home Assistant: off, nothing playing) until the TV changed
+  app or power. It now reads the remote's own state, which the library
+  fills during `async_connect()`. A connection lost while connecting
+  (`ConnectionClosed`) no longer leaves a half-connected remote behind
+  that pinned every later `status()` to the same empty answer.
 
 ## [1.3.3] - 2026-10-01
 
