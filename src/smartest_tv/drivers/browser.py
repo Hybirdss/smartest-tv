@@ -18,7 +18,9 @@ _DEEP_LINKS: dict[str, str] = {
     "disney": "https://www.disneyplus.com/play/{content_id}",
     "prime": "https://www.amazon.com/dp/{content_id}",
     "max": "https://play.max.com/show/{content_id}",
-    "appletv": "https://tv.apple.com/show/{content_id}",
+    # The resolver returns an episode id; the locale-less episode path
+    # redirects to the viewer's storefront page for it.
+    "appletv": "https://tv.apple.com/episode/{content_id}",
     "crunchyroll": "https://www.crunchyroll.com/watch/{content_id}",
     "paramount": "https://www.paramountplus.com/shows/video/{content_id}",
 }
